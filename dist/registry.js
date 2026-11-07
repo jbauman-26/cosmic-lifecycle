@@ -222,7 +222,7 @@ export function validateRegistry(dir, opts = {}) {
             if (!existsSync(target))
                 problems.push({ kit: name, problem: `AGENT.md points at ${rel}, which does not exist.` });
         }
-        if (/[–—]/.test(agent + readFileSync(join(kitDir, 'kit.yaml'), 'utf8')))
+        if (/[\u2013\u2014]/.test(agent + readFileSync(join(kitDir, 'kit.yaml'), 'utf8')))
             problems.push({ kit: name, problem: 'Contains an em or en dash.' });
         built.push({ name: m.name, version: m.version, path: `kits/${name}`, title: m.title, summary: m.summary, keywords: m.keywords, needs: m.needs, writes: m.writes });
     }

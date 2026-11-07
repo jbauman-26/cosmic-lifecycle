@@ -21,7 +21,7 @@ import { addKit, ensureRegistry, listKits, searchKits, showKit, validateRegistry
 import { skillsStatus, syncSkills, uninstallSkills } from './skills.js';
 import { feedbackUrl, openUrl } from './feedback.js';
 import { findMetric, formatValue, listMetrics, runMetric } from './metrics.js';
-import { CATALOG, kitPrompt, sourceStatus } from './sources-catalog.js';
+import { CATALOG, CUSTOM_SOURCE_NOTE, kitPrompt, sourceStatus } from './sources-catalog.js';
 import { startMcp } from './mcp.js';
 import { runDemo } from './demo.js';
 import { deploy, deployLogs, deployPlan, deployRun, deployStatus, writeProject } from './deploy.js';
@@ -32,6 +32,13 @@ import { checkForUpdate, UPDATE_COMMAND } from './update.js';
 import { trustLine } from './reconcile.js';
 import { metricCandidates } from './metrics.js';
 import { recordCustomQuery } from './query.js';
+import { basename } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { saveArtifact, filesDir, listFiles, readFile, getFile, putFile, pullCloud } from './files.js';
+import { customTables, importCsv } from './custom-sources.js';
+import { defaultToolContext, getRun, listRuns, runTool, toolCatalog } from './tools.js';
+import { serve, ROUTES } from './serve.js';
+import { envName, SECRET_NAMES as ALL_SECRETS } from './secrets.js';
 import { auditFlows, auditHtml, revenueHtml, revenuePerFlow, writeHtml } from './reports.js';
 import { applyPlan, buildPlan, readPlan, suggestLapsedDays, writePlan } from './segments.js';
 const program = new Command('lifecycle')
@@ -120,8 +127,9 @@ program.command('reconcile').description('Prove the numbers agree across sources
 program.command('schema').argument('[table]').description('List tables and columns').action(run(async (table) => {
     const db = await openDb();
     try {
-        const names = table ? [table] : [...PUBLIC_TABLES];
-        if (table && !PUBLIC_TABLES.includes(table))
+        const known = [...PUBLIC_TABLES, ...(await customTables(db))];
+        const names = table ? [table] : known;
+        if (table && !known.includes(table))
             throw new CliError(`Unknown table ${table}.`, 'lifecycle schema');
         const out = {};
         for (const n of names) {
@@ -187,7 +195,7 @@ metrics.command('candidates').description('Custom queries run more than once: ca
 const SECRET_FOR = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret' };
 const sources = program.command('sources').description('What can be connected, and what is connected');
 sources.command('catalog').description('Sources this CLI supports, with how to connect each one').action(run(async () => {
-    emit(format(), CATALOG, () => CATALOG.map((s) => [`${s.name} (${s.slug}), about ${s.setupMinutes} minutes`, `  Syncs: ${s.syncs}`, `  Needs: ${s.credential}`, `  Connect: ${s.connect}`, `  Tested: ${s.tested}`].join('\n')).join('\n\n') + '\n\nFull steps: lifecycle docs setup. Want another source? lifecycle feedback "please add ..."');
+    emit(format(), CATALOG, () => CATALOG.map((s) => [`${s.name} (${s.slug}), about ${s.setupMinutes} minutes`, `  Syncs: ${s.syncs}`, `  Needs: ${s.credential}`, `  Connect: ${s.connect}`, `  Tested: ${s.tested}`].join('\n')).join('\n\n') + `\n\n${CUSTOM_SOURCE_NOTE}\nFull steps: lifecycle docs setup. Want a native connector? lifecycle feedback "please add ..."`);
 }));
 sources.command('list').description('Which sources are connected, and when each last synced').action(run(async () => {
     let config = null;
@@ -212,8 +220,11 @@ report.command('revenue-per-flow').option('--days <n>', 'window in days', '90').
     try {
         await migrate(db);
         const r = await revenuePerFlow(db, Number(opts.days));
-        if (opts.html)
-            writeHtml(opts.html, revenueHtml(r));
+        if (opts.html) {
+            const html = revenueHtml(r);
+            writeHtml(opts.html, html);
+            saveArtifact(basename(opts.html), html);
+        }
         emit(format(), r, () => [r.trust.line, ...r.flows.map((f) => `${f.name}: ${f.recipients} recipients, $${f.revenue}, $${f.revenuePerRecipient} per recipient`), r.flows.length ? '' : 'No flow data yet.', ...r.notes].join('\n'));
     }
     finally {
@@ -225,8 +236,11 @@ program.command('audit').description('Find what to fix').command('flows').option
     try {
         await migrate(db);
         const a = await auditFlows(db);
-        if (opts.html)
-            writeHtml(opts.html, auditHtml(a));
+        if (opts.html) {
+            const html = auditHtml(a);
+            writeHtml(opts.html, html);
+            saveArtifact(basename(opts.html), html);
+        }
         emit(format(), a, () => [a.trust.line, `${a.flowsReviewed} flows reviewed, ${a.liveFlows} live.`, ...a.findings.map((f) => `[${f.severity}] ${f.title}\n  ${f.evidence}\n  Next: ${f.action}`), ...a.notes].join('\n'));
     }
     finally {
@@ -249,6 +263,7 @@ segments.command('propose').argument('<kind>', 'winback').option('--out <file>',
         const s = opts.days ? { days: Number(opts.days), basis: `Set by hand to ${opts.days} days.` } : await suggestLapsedDays(db);
         const plan = buildPlan({ lapsedAfterDays: s.days, basis: s.basis, metricId });
         writePlan(opts.out, plan);
+        saveArtifact(basename(opts.out), JSON.stringify(plan, null, 2));
         emit(format(), { plan, file: opts.out }, () => `Plan written to ${opts.out}. Nothing was created.\nSegment: ${plan.name}\nWhy: ${plan.reason}\nReview it, then run: lifecycle segments apply ${opts.out} --confirm`);
     }
     finally {
@@ -444,8 +459,117 @@ program.command('dashboard').description('Write one local HTML page: trust line,
     const db = await openDb();
     try {
         const d = await buildDashboard(db, Number(opts.days));
-        writeHtml(opts.html, dashboardHtml(d));
+        const html = dashboardHtml(d);
+        writeHtml(opts.html, html);
+        saveArtifact(basename(opts.html), html);
         emit(format(), { ...d, file: opts.html }, () => `${d.trust.line}\nWrote ${opts.html}. It stays on this machine.`);
+    }
+    finally {
+        await db.close();
+    }
+}));
+// Tools: read-only Klaviyo and Shopify calls on your own keys. No credits, no middleman.
+const tools = program.command('tools').description('Read-only Klaviyo and Shopify API tools, run on your own keys');
+tools.command('catalog').description('List every tool and its inputs').action(run(async () => {
+    const c = toolCatalog();
+    emit(format(), c, () => c.map((t) => `${t.id}${t.input.length ? ` (${t.input.join(', ')})` : ''}\n  ${t.description}`).join('\n'));
+}));
+tools.command('run').argument('<tool>').option('--input <json>', 'tool input as JSON', '{}').description('Run a tool and save the result').action(run(async (id, opts) => {
+    let input;
+    try {
+        input = JSON.parse(opts.input);
+    }
+    catch {
+        throw new CliError('--input is not valid JSON.', `lifecycle tools run ${id} --input '{"start":"2026-10-01","end":"2026-10-31"}'`, 'bad_input');
+    }
+    const r = await runTool(id, input, defaultToolContext());
+    emit(format(), r, () => (r.status === 'succeeded' ? `${JSON.stringify(r.output, null, 2)}\nRun ${r.id} saved. lifecycle tools get ${r.id}` : `Run ${r.id} failed: ${r.error}`));
+    if (r.status === 'failed')
+        process.exitCode = 1;
+}));
+tools.command('get').argument('<run>').option('--out <file>', 'write the output to a file').description('Print a saved run, or write its output to a file').action(run(async (id, opts) => {
+    const r = getRun(id);
+    if (opts.out)
+        writeHtml(opts.out, JSON.stringify(r.output ?? null, null, 2));
+    emit(format(), r, () => (opts.out ? `Wrote run ${r.id} output to ${opts.out}` : JSON.stringify(r, null, 2)));
+}));
+tools.command('runs').option('--limit <n>', 'runs to show', '20').description('Recent tool runs').action(run(async (opts) => {
+    const r = listRuns(Number(opts.limit));
+    emit(format(), r, () => (r.length ? r.map((x) => `${x.id}  ${x.startedAt.slice(0, 16).replace('T', ' ')}  ${x.status.padEnd(9)} ${x.tool}`).join('\n') : 'No tool runs yet.'));
+}));
+// Exec: like `graphed dev run`. Runs any command with your keys in its environment,
+// so a script or agent can use them without the keys ever being printed or pasted.
+program.command('exec').argument('<command...>').description('Run a command with your Lifecycle keys and settings in its environment').allowUnknownOption().action(run(async (command) => {
+    const env = { ...process.env };
+    const provided = [];
+    for (const name of ALL_SECRETS) {
+        const v = getSecret(name);
+        if (v) {
+            env[envName(name)] = v;
+            provided.push(envName(name));
+        }
+    }
+    try {
+        const config = readConfig();
+        if (config.shopify)
+            Object.assign(env, { LIFECYCLE_SHOPIFY_STORE: config.shopify.store, LIFECYCLE_SHOPIFY_CLIENT_ID: config.shopify.clientId });
+        if (config.database.kind === 'postgres' && env.LIFECYCLE_DATABASE_URL)
+            env.DATABASE_URL = env.LIFECYCLE_DATABASE_URL;
+    }
+    catch {
+        // Not set up: pass only what exists.
+    }
+    if (format() === 'text')
+        console.error(`lifecycle exec: passing ${provided.length ? provided.join(', ') : 'no keys'}`);
+    const r = spawnSync(command[0], command.slice(1), { stdio: 'inherit', env });
+    if (r.error)
+        throw new CliError(`Could not run ${command[0]}: ${r.error.message}`, 'Check the command name.', 'exec_failed');
+    process.exitCode = r.status ?? 1;
+}));
+// Serve: the dashboard and a JSON API on 127.0.0.1, read-only.
+program.command('serve').description('Serve the dashboard and a read-only JSON API on this machine').option('--port <n>', 'port', '4173').action(run(async (opts) => {
+    const db = await openDb();
+    const s = await serve(db, Number(opts.port));
+    emit(format(), { url: s.url, routes: ROUTES }, () => `Serving ${s.url}  (read-only, this machine only)\nRoutes: ${ROUTES.join(', ')}\nStop with Ctrl+C.`);
+    const stop = async () => {
+        await s.close();
+        await db.close();
+        process.exit(0);
+    };
+    process.on('SIGINT', stop);
+    process.on('SIGTERM', stop);
+}));
+// Files: every report, dashboard and plan, kept by date. Storage commands match Graphed's names.
+const files = program.command('files').description('Reports, dashboards and plans this CLI has written, plus the daily cloud dashboard');
+files.command('ls').argument('[path]', 'folder inside the store, such as cloud or a date', '').action(run(async (path) => {
+    const f = listFiles(path);
+    emit(format(), { dir: filesDir(), files: f }, () => (f.length ? f.map((x) => `${x.modified.slice(0, 16).replace('T', ' ')}  ${String(x.bytes).padStart(8)}  ${x.path}`).join('\n') : `No files yet in ${filesDir()}`));
+}));
+files.command('cat').argument('<path>').action(run(async (path) => {
+    const text = readFile(path);
+    emit(format(), { path, content: text }, () => text);
+}));
+files.command('get').argument('<path>').argument('[dir]', 'where to copy it', '.').description('Copy a stored file to a folder').action(run(async (path, dir) => {
+    const dest = getFile(path, dir);
+    emit(format(), { path, dest }, () => `Copied to ${dest}`);
+}));
+files.command('put').argument('<file>').argument('[name]').description('Keep a local file in the store, under today').action(run(async (file, name) => {
+    const path = putFile(file, name);
+    emit(format(), { path }, () => `Stored as ${path}`);
+}));
+files.command('path').description('Print where the store lives').action(run(async () => {
+    emit(format(), { dir: filesDir() }, () => filesDir());
+}));
+files.command('pull').option('--repo <owner/name>').description('Download the dashboard from the latest successful daily sync').action(run(async (opts) => {
+    const r = pullCloud(opts.repo ?? readConfig().deploy?.repo);
+    emit(format(), r, () => `Pulled run ${r.run} (${r.createdAt}):\n${r.files.map((f) => `  ${f}`).join('\n')}`);
+}));
+sources.command('import').argument('<name>').requiredOption('--csv <file>', 'CSV of daily totals').option('--date-column <name>', 'the date column', 'date').description('Import daily totals from any other tool as a custom source').action(run(async (name, opts) => {
+    const db = await openDb();
+    try {
+        await migrate(db);
+        const r = await importCsv(db, name, opts.csv, opts.dateColumn);
+        emit(format(), r, () => `Imported ${r.days} days (${r.from} to ${r.to}) into ${r.table}: ${r.columns.join(', ')}\nQuery it with lifecycle query "SELECT * FROM ${r.table} ORDER BY date DESC"`);
     }
     finally {
         await db.close();

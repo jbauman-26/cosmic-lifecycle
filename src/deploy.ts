@@ -35,6 +35,16 @@ ${ga4}      LIFECYCLE_HOME: .lifecycle
           node-version: 22
       - run: npm install --no-save ${PACKAGE}
       - run: npx lifecycle sync
+      # A dashboard of totals, kept in this private repo for 30 days. lifecycle files pull downloads it.
+      - run: npx lifecycle dashboard --html lifecycle-dashboard.html
+        if: always()
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lifecycle-dashboard
+          path: lifecycle-dashboard.html
+          retention-days: 30
+          if-no-files-found: ignore
 `
 }
 

@@ -130,7 +130,19 @@ lifecycle secrets list # where each key comes from, never its value
 lifecycle config list  # registry.uri, deploy.repo, update.check
 ```
 
-How each command lines up with the Graphed CLI, and what is left out on purpose: [docs/PARITY.md](docs/PARITY.md).
+## More from the command line
+
+```sh
+lifecycle serve                                  # dashboard and a read-only JSON API on 127.0.0.1
+lifecycle tools catalog                          # read-only Klaviyo and Shopify API tools, on your own keys
+lifecycle tools run shopify.order_count
+lifecycle exec -- node my-report.js              # run a script with your keys in its environment
+lifecycle sources import meta_ads --csv ads.csv  # any other tool's daily totals
+lifecycle files ls                               # every saved report, dashboard and plan
+lifecycle files pull                             # the dashboard from the last daily sync
+```
+
+How each command lines up with the Graphed CLI: [docs/PARITY.md](docs/PARITY.md).
 
 ## Where this is today
 

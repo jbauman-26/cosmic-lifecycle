@@ -106,7 +106,9 @@ If the tool is not set up yet, follow \`lifecycle docs quickstart\` instead.
 3. For a standard number, use a verified metric: \`lifecycle metrics list\`, then \`lifecycle metrics run NAME --format json\`. The same metric always runs the same SQL, so answers stay comparable over time. Quote the metric name with the number.
 4. Write your own SQL only when no metric fits. Run \`lifecycle schema --format json\` first and never guess column names. Query with \`lifecycle query "SELECT ..." --format json\`. Queries are read-only and capped at 1,000 rows. Tell the user the number came from custom SQL, and show it.
 5. Report the sync warnings. Do not hide them from the user.
-6. For a named job, such as a flow audit, use a kit: \`lifecycle kits search "flow audit"\`, then \`lifecycle kits add NAME\`, then follow its AGENT.md through the Verify checklist.
+6. For a fact only the live API has, such as the current flow list or Shopify's own order count, use a tool: \`lifecycle tools catalog\`, then \`lifecycle tools run TOOL --format json\`. Tools are read-only and return no personal data.
+7. Saved reports, dashboards and plans are in \`lifecycle files ls\`. Read one with \`lifecycle files cat PATH\`.
+8. For a named job, such as a flow audit, use a kit: \`lifecycle kits search "flow audit"\`, then \`lifecycle kits add NAME\`, then follow its AGENT.md through the Verify checklist.
 
 Rules:
 - The database holds totals only. It has no customer names, emails, phones or addresses.
@@ -161,7 +163,11 @@ lifecycle sync [--since DATE]
 lifecycle schema [TABLE]
 lifecycle query "SELECT ..."
 lifecycle metrics list|show NAME|run NAME... [--days N]|candidates
-lifecycle sources list|catalog
+lifecycle sources list|catalog|import NAME --csv FILE [--date-column NAME]
+lifecycle tools catalog|run TOOL [--input JSON]|get RUN [--out FILE]|runs
+lifecycle exec -- COMMAND [ARGS]
+lifecycle serve [--port N]
+lifecycle files ls [PATH]|cat PATH|get PATH [DIR]|put FILE [NAME]|path|pull
 lifecycle reconcile
 lifecycle report revenue-per-flow [--html FILE]
 lifecycle audit flows [--html FILE]

@@ -7,13 +7,16 @@ import { reconcile } from './reconcile.js';
 import { auditFlows, revenuePerFlow } from './reports.js';
 import { PUBLIC_TABLES } from './schema.js';
 import { VERSION } from './version.js';
+import { customTables } from './custom-sources.js';
+import { defaultToolContext, runTool, toolCatalog, TOOLS } from './tools.js';
+import { listFiles, readFile } from './files.js';
 import { DOCS } from './docs.js';
 import { listMetrics, metricCandidates, METRICS, runMetric } from './metrics.js';
 import { CATALOG } from './sources-catalog.js';
 const text = (data) => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
 export async function schemaInfo(db) {
     const out = {};
-    for (const t of PUBLIC_TABLES) {
+    for (const t of [...PUBLIC_TABLES, ...(await customTables(db))]) {
         const rows = await db.query(`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`, [t]);
         out[t] = rows.map((r) => `${r.column_name} ${r.data_type}`);
     }
@@ -32,6 +35,14 @@ export async function startMcp() {
         annotations: readOnly,
     }, async ({ name, days }) => text(await runMetric(db, name, days)));
     server.registerTool('list_source_catalog', { description: 'Sources this CLI can connect, what each syncs, and the command to connect it.', annotations: readOnly }, async () => text(CATALOG));
+    server.registerTool('list_tool_catalog', { description: 'Read-only Klaviyo and Shopify API tools that run on the user\'s own keys.', annotations: readOnly }, async () => text(toolCatalog()));
+    server.registerTool('run_tool', {
+        description: 'Run one read-only Klaviyo or Shopify tool on the user\'s own keys. Returns no personal data. The run is saved locally.',
+        inputSchema: { tool: z.enum(TOOLS.map((t) => t.id)), input: z.record(z.string(), z.unknown()).default({}) },
+        annotations: { readOnlyHint: true, openWorldHint: true },
+    }, async ({ tool, input }) => text(await runTool(tool, input, defaultToolContext())));
+    server.registerTool('list_files', { description: 'Reports, dashboards and plans this CLI has saved, newest first.', annotations: readOnly }, async () => text(listFiles()));
+    server.registerTool('read_file', { description: 'Read one saved report, dashboard or plan by its path from list_files.', inputSchema: { path: z.string() }, annotations: readOnly }, async ({ path }) => text({ path, content: readFile(path) }));
     server.registerTool('explore_schema', { description: 'List tables and columns. Call this before writing SQL.', annotations: readOnly }, async () => text(await schemaInfo(db)));
     server.registerTool('query', { description: 'Run one read-only SELECT, capped at 1,000 rows. Use only when no verified metric fits. The SQL text is logged locally so repeated questions can become verified metrics.', inputSchema: { sql: z.string() }, annotations: { openWorldHint: false } }, async ({ sql }) => {
         const r = await runQuery(db, sql);

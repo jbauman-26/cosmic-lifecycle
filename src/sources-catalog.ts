@@ -56,7 +56,7 @@ export async function sourceStatus(config: Config | null, hasKey: (slug: string)
       // No sync table yet: nothing has synced.
     }
   }
-  return CATALOG.map((s) => {
+  const native = CATALOG.map((s) => {
     const configured = s.slug === 'klaviyo' ? Boolean(config?.klaviyo) : s.slug === 'shopify' ? Boolean(config?.shopify) : Boolean(config?.ga4)
     const connected = configured && hasKey(s.slug)
     const l = last.get(s.slug)
@@ -69,7 +69,15 @@ export async function sourceStatus(config: Config | null, hasKey: (slug: string)
       next: !config ? 'lifecycle init' : !connected ? s.connect : !l ? 'lifecycle sync' : null,
     }
   })
+  // Custom sources exist once a CSV has been imported, and are refreshed by importing again.
+  const custom = [...last.entries()]
+    .filter(([source]) => source.startsWith('custom:'))
+    .map(([source, l]) => ({ slug: source, name: `${source.slice(7)} (custom CSV)`, connected: true, lastSync: l.at, lastStatus: l.status, next: null }))
+  return [...native, ...custom]
 }
+
+// Any tool not in the catalog can still be brought in as daily totals.
+export const CUSTOM_SOURCE_NOTE = 'Any other source: export daily totals to CSV, then lifecycle sources import NAME --csv FILE. Columns that look like personal data are refused.'
 
 export const INSTALL_URL = 'https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz'
 export const LLMS_URL = 'https://raw.githubusercontent.com/jbauman-26/cosmic-lifecycle/main/llms.txt'
