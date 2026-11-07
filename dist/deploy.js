@@ -5,10 +5,11 @@ import { join } from 'node:path';
 import { CliError } from './errors.js';
 import { VERSION } from './version.js';
 export const PACKAGE = `https://github.com/jbauman-26/cosmic-lifecycle/releases/download/v${VERSION}/cosmic-lifecycle-${VERSION}.tgz`;
-export function workflowYaml(hasGa4) {
+export function workflowYaml(hasGa4, hasStripe = false) {
     const ga4 = hasGa4
         ? `      LIFECYCLE_GA4_CLIENT_SECRET: \${{ secrets.LIFECYCLE_GA4_CLIENT_SECRET }}\n      LIFECYCLE_GA4_REFRESH_TOKEN: \${{ secrets.LIFECYCLE_GA4_REFRESH_TOKEN }}\n`
         : '';
+    const stripe = hasStripe ? `      LIFECYCLE_STRIPE_READ_KEY: \${{ secrets.LIFECYCLE_STRIPE_READ_KEY }}\n` : '';
     return `name: Daily sync
 on:
   schedule:
@@ -24,7 +25,7 @@ jobs:
       LIFECYCLE_DATABASE_URL: \${{ secrets.LIFECYCLE_DATABASE_URL }}
       LIFECYCLE_KLAVIYO_READ_KEY: \${{ secrets.LIFECYCLE_KLAVIYO_READ_KEY }}
       LIFECYCLE_SHOPIFY_CLIENT_SECRET: \${{ secrets.LIFECYCLE_SHOPIFY_CLIENT_SECRET }}
-${ga4}      LIFECYCLE_HOME: .lifecycle
+${ga4}${stripe}      LIFECYCLE_HOME: .lifecycle
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,7 +49,7 @@ export function deployPlan(config, repo) {
     return {
         repo,
         creates: [`Private GitHub repo ${repo}`, 'A daily sync at 09:17 UTC in GitHub Actions'],
-        secrets: ['LIFECYCLE_DATABASE_URL', 'LIFECYCLE_KLAVIYO_READ_KEY', 'LIFECYCLE_SHOPIFY_CLIENT_SECRET', ...(config.ga4 ? ['LIFECYCLE_GA4_CLIENT_SECRET', 'LIFECYCLE_GA4_REFRESH_TOKEN'] : [])],
+        secrets: ['LIFECYCLE_DATABASE_URL', 'LIFECYCLE_KLAVIYO_READ_KEY', 'LIFECYCLE_SHOPIFY_CLIENT_SECRET', ...(config.ga4 ? ['LIFECYCLE_GA4_CLIENT_SECRET', 'LIFECYCLE_GA4_REFRESH_TOKEN'] : []), ...(config.stripe ? ['LIFECYCLE_STRIPE_READ_KEY'] : [])],
         expectedCost: 'Likely $0 on free plans for a small brand: about 150 of 2,000 Actions minutes a month, and summary tables inside Neon Free. Check both plans for your size.',
     };
 }
@@ -57,7 +58,7 @@ const gh = (args, input, cwd) => spawnSync('gh', args, { encoding: 'utf8', input
 export function writeProject(config, dir) {
     mkdirSync(join(dir, '.github', 'workflows'), { recursive: true });
     mkdirSync(join(dir, '.lifecycle'), { recursive: true });
-    writeFileSync(join(dir, '.github', 'workflows', 'sync.yml'), workflowYaml(Boolean(config.ga4)));
+    writeFileSync(join(dir, '.github', 'workflows', 'sync.yml'), workflowYaml(Boolean(config.ga4), Boolean(config.stripe)));
     // The store name and client id are not secret, and the runner needs them.
     const { registry: _r, deploy: _d, update: _u, ...runner } = config;
     writeFileSync(join(dir, '.lifecycle', 'config.json'), JSON.stringify({ ...runner, database: { kind: 'postgres' } }, null, 2) + '\n');

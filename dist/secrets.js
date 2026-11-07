@@ -8,6 +8,7 @@ const ENV = {
     'database-url': 'LIFECYCLE_DATABASE_URL',
     'ga4-client-secret': 'LIFECYCLE_GA4_CLIENT_SECRET',
     'ga4-refresh-token': 'LIFECYCLE_GA4_REFRESH_TOKEN',
+    'stripe-read-key': 'LIFECYCLE_STRIPE_READ_KEY',
 };
 const useKeychain = () => process.platform === 'darwin' && !process.env.LIFECYCLE_NO_KEYCHAIN;
 // `security -i` reads the command from stdin, so the secret never appears in

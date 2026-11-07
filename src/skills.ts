@@ -50,7 +50,7 @@ lifecycle docs agents
 \`\`\`
 
 Then, as the task needs:
-- \`lifecycle docs setup\` connects Klaviyo, Shopify and GA4.
+- \`lifecycle docs setup\` connects Klaviyo, Shopify, GA4 and Stripe.
 - \`lifecycle docs kits\` explains kits.
 - \`lifecycle docs commands\` lists every command.
 

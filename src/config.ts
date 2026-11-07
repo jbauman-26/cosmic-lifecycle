@@ -10,6 +10,7 @@ const Config = z
     shopify: z.object({ store: z.string(), clientId: z.string() }).optional(),
     klaviyo: z.object({ connected: z.literal(true) }).optional(),
     ga4: z.object({ property: z.string(), clientId: z.string() }).optional(),
+    stripe: z.object({ mode: z.enum(['test', 'live']), subscriptions: z.boolean() }).optional(),
     registry: z.object({ uri: z.string() }).partial().optional(),
     deploy: z.object({ repo: z.string() }).partial().optional(),
     update: z.object({ check: z.boolean() }).partial().optional(),

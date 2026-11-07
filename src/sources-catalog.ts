@@ -4,7 +4,7 @@ import type { Tx } from './db.js'
 // What this CLI can connect today. Only sources with a working connector are listed:
 // a source that is planned but not built is not in the catalog.
 export type CatalogSource = {
-  slug: 'klaviyo' | 'shopify' | 'ga4'
+  slug: 'klaviyo' | 'shopify' | 'ga4' | 'stripe'
   name: string
   syncs: string
   credential: string
@@ -41,6 +41,15 @@ export const CATALOG: CatalogSource[] = [
     connect: 'lifecycle connect ga4 --property ID --client-id ID --secret-env NAME --refresh-token-env NAME',
     tested: 'Built and unit tested. Not yet run on live data.',
   },
+  {
+    slug: 'stripe',
+    name: 'Stripe',
+    syncs: 'Daily charges, refunds, failed payments, new and repeat paying customers, subscription starts and ends, MRR. No customer records.',
+    credential: 'Restricted key with Read on Charges and Subscriptions. Nothing else.',
+    setupMinutes: 3,
+    connect: 'lifecycle connect stripe --key-env STRIPE_READ_KEY',
+    tested: 'Run live on a Stripe test-mode account, and every total matched the Stripe API. Refunds and several currencies are unit tested only. Not yet run on a live account.',
+  },
 ]
 
 export type SourceStatus = { slug: string; name: string; connected: boolean; lastSync: string | null; lastStatus: string | null; next: string | null }
@@ -57,7 +66,7 @@ export async function sourceStatus(config: Config | null, hasKey: (slug: string)
     }
   }
   const native = CATALOG.map((s) => {
-    const configured = s.slug === 'klaviyo' ? Boolean(config?.klaviyo) : s.slug === 'shopify' ? Boolean(config?.shopify) : Boolean(config?.ga4)
+    const configured = Boolean(config?.[s.slug])
     const connected = configured && hasKey(s.slug)
     const l = last.get(s.slug)
     return {

@@ -12,6 +12,18 @@ const FLOW_SPAM = `(SELECT coalesce(sum(spam_complaints), 0) FROM fact_flow_dail
 const PLACED = `(SELECT coalesce(sum(placed_orders), 0) FROM fact_klaviyo_orders_daily WHERE date >= $1)`;
 const SESSIONS = `(SELECT coalesce(sum(sessions), 0) FROM fact_ga4_daily WHERE date >= $1)`;
 const PURCHASES = `(SELECT coalesce(sum(purchases), 0) FROM fact_ga4_daily WHERE date >= $1)`;
+// Stripe can hold several currencies. Money metrics use the one with the most
+// charges in the window and say so, rather than adding yen to dollars.
+const MAIN_CCY = `(SELECT currency FROM fact_stripe_daily WHERE date >= $1 GROUP BY currency ORDER BY sum(charges) DESC, currency LIMIT 1)`;
+const STRIPE_NET = `(SELECT coalesce(sum(net), 0) FROM fact_stripe_daily WHERE date >= $1 AND currency = ${MAIN_CCY})`;
+const STRIPE_CHARGES = `(SELECT coalesce(sum(charges), 0) FROM fact_stripe_daily WHERE date >= $1)`;
+const STRIPE_RETURNING = `(SELECT coalesce(sum(returning_charges), 0) FROM fact_stripe_daily WHERE date >= $1)`;
+const STRIPE_FAILED = `(SELECT coalesce(sum(failed_charges), 0) FROM fact_stripe_daily WHERE date >= $1)`;
+const STRIPE_ENDED = `(SELECT coalesce(sum(ended), 0) FROM fact_stripe_subscriptions_daily WHERE date >= $1)`;
+const STRIPE_STARTED = `(SELECT coalesce(sum(started), 0) FROM fact_stripe_subscriptions_daily WHERE date >= $1)`;
+// $1 is unused here, since MRR is a point in time, but every metric takes it.
+const STRIPE_MRR = `(SELECT mrr FROM fact_stripe_mrr WHERE date = (SELECT max(date) FROM fact_stripe_mrr) AND $1::date IS NOT NULL ORDER BY active_subscriptions DESC, currency LIMIT 1)`;
+const CCY_NOTE = 'Stripe amounts are in the account\'s main currency for the window: the one with the most charges. Other currencies are left out, not converted.';
 const single = (expr) => `SELECT ${expr} AS value, NULL::numeric AS numerator, NULL::numeric AS denominator`;
 export const METRICS = [
     { name: 'shopify_orders', title: 'Shopify orders', description: 'Orders placed in Shopify in the window.', unit: 'count', needs: ['shopify'], sql: single(ORDERS) },
@@ -25,10 +37,16 @@ export const METRICS = [
     { name: 'flow_spam_rate', title: 'Flow spam complaint rate', description: 'Spam complaints divided by flow recipients.', unit: 'percent', needs: ['klaviyo'], sql: ratio(FLOW_SPAM, FLOW_RECIPIENTS, 100) },
     { name: 'klaviyo_placed_orders', title: 'Klaviyo Placed Order count', description: "Placed Order events Klaviyo recorded in the window. Compare with shopify_orders: they should be close.", unit: 'count', needs: ['klaviyo'], sql: single(PLACED) },
     { name: 'ga4_sessions', title: 'GA4 sessions', description: 'Sessions GA4 recorded in the window, all channels.', unit: 'count', needs: ['ga4'], sql: single(SESSIONS) },
+    { name: 'stripe_net_revenue', title: 'Stripe net revenue', description: 'Successful Stripe charges minus amounts refunded on them, for charges made in the window.', unit: 'usd', needs: ['stripe'], sql: single(STRIPE_NET), notes: [CCY_NOTE, 'A refund counts against the day of the charge, not the day it was refunded.'] },
+    { name: 'stripe_repeat_charge_share', title: 'Stripe repeat charge share', description: 'Share of successful Stripe charges from customers who had paid before.', unit: 'percent', needs: ['stripe'], sql: ratio(STRIPE_RETURNING, STRIPE_CHARGES, 100), notes: ['Charges with no Stripe customer attached are counted as guests, never as repeat.'] },
+    { name: 'stripe_failed_payment_rate', title: 'Stripe failed payment rate', description: 'Failed Stripe charges divided by all attempted charges.', unit: 'percent', needs: ['stripe'], sql: ratio(STRIPE_FAILED, `(${STRIPE_FAILED} + ${STRIPE_CHARGES})`, 100), notes: ['Each retry is its own attempt, so a card retried three times counts three times.'] },
+    { name: 'stripe_subscriptions_started', title: 'Subscriptions started', description: 'Stripe subscriptions created in the window.', unit: 'count', needs: ['stripe'], sql: single(STRIPE_STARTED) },
+    { name: 'stripe_subscriptions_ended', title: 'Subscriptions ended', description: 'Stripe subscriptions that ended in the window: canceled and gone, not just set to cancel later.', unit: 'count', needs: ['stripe'], sql: single(STRIPE_ENDED) },
+    { name: 'stripe_mrr', title: 'Stripe MRR', description: 'Monthly recurring revenue at the last sync: active and past_due subscriptions at list price, scaled to a month. Ignores the window.', unit: 'usd', needs: ['stripe'], sql: single(STRIPE_MRR), notes: ['Discounts are not applied. Tiered and metered prices are left out; lifecycle sync reports how many.', CCY_NOTE] },
     { name: 'ga4_purchase_rate', title: 'GA4 purchase rate', description: 'GA4 purchases divided by GA4 sessions.', unit: 'percent', needs: ['ga4'], sql: ratio(PURCHASES, SESSIONS, 100) },
 ];
 // Which table proves each source has synced at all.
-const SOURCE_TABLE = { shopify: 'fact_orders_daily', klaviyo: 'fact_flow_daily', ga4: 'fact_ga4_daily' };
+const SOURCE_TABLE = { shopify: 'fact_orders_daily', klaviyo: 'fact_flow_daily', ga4: 'fact_ga4_daily', stripe: 'fact_stripe_daily' };
 export function findMetric(name) {
     const m = METRICS.find((x) => x.name === name);
     if (!m)

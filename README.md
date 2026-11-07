@@ -75,6 +75,7 @@ Then:
 lifecycle init
 lifecycle connect klaviyo --key-env KLAVIYO_READ_KEY
 lifecycle connect shopify --store NAME.myshopify.com --client-id ID --secret-env SHOPIFY_SECRET
+lifecycle connect stripe --key-env STRIPE_READ_KEY   # optional: subscriptions, MRR, repeat payments
 lifecycle sync
 lifecycle reconcile
 lifecycle audit flows --html audit.html
@@ -154,12 +155,14 @@ This is an early release. Here is what has and has not been tested.
 - Klaviyo order counts against Shopify over 90 days: 36 against 36. The Klaviyo side was sample events we sent, because Klaviyo's Shopify app could not be installed on the dev store.
 - Creating a win-back segment in a Klaviyo demo account.
 - Local and Postgres databases, the MCP server, and a clean install.
+- Stripe connect, sync, doctor and metrics on a Stripe test-mode account. Charges, failed payments, MRR and subscription starts all matched the Stripe API.
 
 **Not tested yet**
 - A production Shopify store. A merchant may need a Partner account for one setup step.
 - A real brand's flow revenue, because our test send had no conversions.
 - The `flow_totals` check, because Klaviyo has returned no totals for our test flow yet.
 - GA4 with live data.
+- Stripe on a live account. Refunds, several currencies and tiered prices are covered by unit tests only.
 - `deploy` running for days on end.
 
 If something breaks, `lifecycle doctor` says what is wrong and what to run next. To report a bug, run `lifecycle feedback "what happened" --open`.

@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { CliError } from './errors.js'
 
 const SERVICE = 'lifecycle-cli'
-export type SecretName = 'klaviyo-read-key' | 'shopify-client-secret' | 'database-url' | 'klaviyo-write-key' | 'ga4-client-secret' | 'ga4-refresh-token'
+export type SecretName = 'klaviyo-read-key' | 'shopify-client-secret' | 'database-url' | 'klaviyo-write-key' | 'ga4-client-secret' | 'ga4-refresh-token' | 'stripe-read-key'
 
 const ENV: Record<SecretName, string> = {
   'klaviyo-read-key': 'LIFECYCLE_KLAVIYO_READ_KEY',
@@ -11,6 +11,7 @@ const ENV: Record<SecretName, string> = {
   'database-url': 'LIFECYCLE_DATABASE_URL',
   'ga4-client-secret': 'LIFECYCLE_GA4_CLIENT_SECRET',
   'ga4-refresh-token': 'LIFECYCLE_GA4_REFRESH_TOKEN',
+  'stripe-read-key': 'LIFECYCLE_STRIPE_READ_KEY',
 }
 
 const useKeychain = () => process.platform === 'darwin' && !process.env.LIFECYCLE_NO_KEYCHAIN

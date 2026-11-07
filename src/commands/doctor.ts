@@ -5,6 +5,7 @@ import { getSecret } from '../secrets.js'
 import { openDb, type Db } from '../db.js'
 import { Klaviyo, reportsVerified } from '../sources/klaviyo.js'
 import { shopifyToken } from '../sources/shopify.js'
+import { Stripe } from '../sources/stripe.js'
 
 type Check = { name: string; ok: boolean; detail: string; next?: string }
 
@@ -36,6 +37,18 @@ export async function doctor(): Promise<{ healthy: boolean; checks: Check[] }> {
       checks.push({ name: 'shopify', ok: true, detail: `Token works for ${config.shopify.store}` })
     } catch {
       checks.push({ name: 'shopify', ok: false, detail: 'Token request failed.', next: 'Check the app is installed, then lifecycle connect shopify' })
+    }
+  }
+
+  // Stripe is optional, so it is only checked once connected.
+  const stripeKey = getSecret('stripe-read-key')
+  if (config.stripe && !stripeKey) checks.push({ name: 'stripe', ok: false, detail: 'Connected, but the key is missing.', next: 'lifecycle connect stripe --key-env NAME' })
+  else if (config.stripe && stripeKey) {
+    try {
+      const r = await new Stripe(stripeKey).check()
+      checks.push({ name: 'stripe', ok: true, detail: `Key reads charges in ${config.stripe.mode} mode${r.subscriptions ? ' and subscriptions' : ', not subscriptions'}` })
+    } catch {
+      checks.push({ name: 'stripe', ok: false, detail: 'Key was refused.', next: 'Create a restricted key with Read on Charges and Subscriptions, then lifecycle connect stripe --key-env NAME' })
     }
   }
 

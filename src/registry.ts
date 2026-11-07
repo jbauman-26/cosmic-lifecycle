@@ -25,7 +25,7 @@ export const KitManifest = z.object({
   title: z.string().min(1),
   summary: z.string().min(1),
   keywords: z.array(z.string()).default([]),
-  needs: z.array(z.enum(['klaviyo', 'shopify', 'ga4'])),
+  needs: z.array(z.enum(['klaviyo', 'shopify', 'ga4', 'stripe'])),
   requires_cli: z.string().regex(/^\d+\.\d+\.\d+$/).optional(),
   writes: z.string().min(1),
   secrets: z.array(Secret).default([]),

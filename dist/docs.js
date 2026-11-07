@@ -17,6 +17,12 @@ Shopify, about 15 minutes:
 4. export SHOPIFY_SECRET=your_client_secret
 5. lifecycle connect shopify --store NAME.myshopify.com --client-id ID --secret-env SHOPIFY_SECRET
 
+Stripe, about 3 minutes (optional, for subscriptions and repeat payments):
+1. In Stripe open Developers, API keys, Create restricted key.
+2. Set Charges and Subscriptions to Read. Leave everything else at None.
+3. export STRIPE_READ_KEY=rk_live_...
+4. lifecycle connect stripe --key-env STRIPE_READ_KEY
+
 Then:
   lifecycle sync
   lifecycle reconcile
@@ -160,6 +166,7 @@ lifecycle init [--database-url-env NAME]
 lifecycle connect klaviyo --key-env NAME
 lifecycle connect shopify --store STORE --client-id ID --secret-env NAME
 lifecycle connect ga4 --property ID --client-id ID --secret-env NAME --refresh-token-env NAME
+lifecycle connect stripe --key-env NAME
 lifecycle sync [--since DATE]
 lifecycle schema [TABLE]
 lifecycle query "SELECT ..."
@@ -198,7 +205,8 @@ Add --format json to any command.`,
 
 No keychain, such as on Linux:
   Set these instead: LIFECYCLE_KLAVIYO_READ_KEY, LIFECYCLE_SHOPIFY_CLIENT_SECRET,
-  LIFECYCLE_DATABASE_URL, LIFECYCLE_GA4_CLIENT_SECRET, LIFECYCLE_GA4_REFRESH_TOKEN.
+  LIFECYCLE_DATABASE_URL, LIFECYCLE_GA4_CLIENT_SECRET, LIFECYCLE_GA4_REFRESH_TOKEN,
+  LIFECYCLE_STRIPE_READ_KEY.
 
 Your orders live under a custom Klaviyo metric:
   Set LIFECYCLE_KLAVIYO_ORDER_METRIC to that metric's id.
@@ -206,6 +214,10 @@ Your orders live under a custom Klaviyo metric:
 Klaviyo returns 401:
   The key was revoked or the account changed. Create a Read-Only key and run
   lifecycle connect klaviyo again.
+
+Stripe says the key cannot read subscriptions:
+  Charges still sync. To add MRR and churn, edit the restricted key in the
+  Stripe dashboard, give it Read on Subscriptions, then lifecycle sync.
 
 Flow report warning:
   An account with no sends has nothing to report. The warning clears once

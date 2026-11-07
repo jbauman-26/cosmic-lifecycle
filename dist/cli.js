@@ -2,7 +2,7 @@
 import { Command } from 'commander';
 import { emit, emitError } from './output.js';
 import { init } from './commands/init.js';
-import { connectGa4, connectKlaviyo, connectShopify } from './commands/connect.js';
+import { connectGa4, connectKlaviyo, connectShopify, connectStripe } from './commands/connect.js';
 import { doctor } from './commands/doctor.js';
 import { openDb, migrate } from './db.js';
 import { readConfig } from './config.js';
@@ -12,7 +12,8 @@ import { fetchOrderCount, fetchOrders, shopifyToken } from './sources/shopify.js
 import { fetchGa4Daily, ga4AccessToken } from './sources/ga4.js';
 import { reconcile } from './reconcile.js';
 import { Klaviyo } from './sources/klaviyo.js';
-import { syncGa4, syncKlaviyo, syncShopify } from './sync.js';
+import { Stripe } from './sources/stripe.js';
+import { syncGa4, syncKlaviyo, syncShopify, syncStripe } from './sync.js';
 import { runQuery } from './query.js';
 import { PUBLIC_TABLES } from './schema.js';
 import { VERSION } from './version.js';
@@ -72,6 +73,10 @@ connect.command('ga4').option('--property <id>').option('--client-id <id>').opti
     const r = await connectGa4(opts);
     emit(format(), r, () => `Connected to GA4 property ${r.property}`);
 }));
+connect.command('stripe').description('Read-only: charges, refunds, subscriptions. Totals only.').option('--key-env <name>', 'environment variable holding a restricted key').action(run(async (opts) => {
+    const r = await connectStripe(opts);
+    emit(format(), r, () => [`Connected to Stripe (${r.mode} mode)${r.subscriptions ? '' : '. This key cannot read subscriptions, so MRR is off.'}`, r.note].filter(Boolean).join('\n'));
+}));
 program.command('sync').description('Pull fresh totals from connected sources').option('--since <date>', 'start of the Klaviyo report window').action(run(async (opts) => {
     const config = readConfig();
     const db = await openDb();
@@ -94,6 +99,11 @@ program.command('sync').description('Pull fresh totals from connected sources').
             const start = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
             const end = new Date().toISOString().slice(0, 10);
             results.push(await syncGa4(db, async () => fetchGa4Daily(property, await ga4AccessToken(clientId, ga4Secret, ga4Refresh), start, end)));
+        }
+        const stripeKey = getSecret('stripe-read-key');
+        if (config.stripe && stripeKey) {
+            const stripe = new Stripe(stripeKey);
+            results.push(await syncStripe(db, { charges: () => stripe.charges(), subscriptions: () => stripe.subscriptions() }));
         }
         if (!results.length)
             throw new CliError('No sources connected.', 'lifecycle connect klaviyo --key-env NAME');
@@ -193,7 +203,7 @@ metrics.command('candidates').description('Custom queries run more than once: ca
         await db.close();
     }
 }));
-const SECRET_FOR = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret' };
+const SECRET_FOR = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret', stripe: 'stripe-read-key' };
 const sources = program.command('sources').description('What can be connected, and what is connected');
 sources.command('catalog').description('Sources this CLI supports, with how to connect each one').action(run(async () => {
     emit(format(), CATALOG, () => CATALOG.map((s) => [`${s.name} (${s.slug}), about ${s.setupMinutes} minutes`, `  Syncs: ${s.syncs}`, `  Needs: ${s.credential}`, `  Connect: ${s.connect}`, `  Tested: ${s.tested}`].join('\n')).join('\n\n') + `\n\n${CUSTOM_SOURCE_NOTE}\nFull steps: lifecycle docs setup. Want a native connector? lifecycle feedback "please add ..."`);
@@ -374,7 +384,7 @@ program.command('deploy').description('Run the daily sync from your own GitHub a
         emit(format(), plan, () => [`This would create:`, ...plan.creates.map((c) => `  ${c}`), `Secrets to set: ${plan.secrets.join(', ')}`, `Cost: ${plan.expectedCost}`, `Nothing was created. Add --yes to go ahead.`].join('\n'));
         return;
     }
-    const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token' };
+    const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key' };
     const secrets = {};
     for (const s of plan.secrets) {
         const v = getSecret(names[s]);

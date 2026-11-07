@@ -15,7 +15,7 @@ Graphed's CLI (0.0.24, checked 2026-11-07) runs your marketing on Graphed's clou
 | `services list` | `serve` | The dashboard and a read-only JSON API (`/api/metrics/:name`, `/api/reconcile`, `/api/flows`, `/api/audit`) on 127.0.0.1. |
 | `exec`, `dev run` | `exec -- COMMAND` | Runs any command with your keys and store settings in its environment, so a script or agent can use them without seeing or pasting them. |
 | `secrets set/list/delete` | `secrets set/list/delete` | macOS keychain or `LIFECYCLE_*` variables. `set` reads from an environment variable, never an argument. Values are never printed. |
-| `sources list/catalog` | `sources list/catalog` | Klaviyo, Shopify and GA4 natively, each reconciled against the others. |
+| `sources list/catalog` | `sources list/catalog` | Klaviyo, Shopify, GA4 and Stripe natively. Shopify, Klaviyo and GA4 are reconciled against each other. Stripe adds subscriptions, MRR and repeat payments. |
 | 750+ managed source pipelines | `sources import NAME --csv FILE` | Any other tool comes in as daily totals from its CSV export. Columns that look like personal data, and any non-numeric value, are refused. |
 | `warehouse schema/query`, `databases list/query` | `schema`, `query` | Read-only, one statement, 1,000-row cap, system tables blocked. Custom sources appear in `schema`. |
 | `tools catalog/run/get/abort` | `tools catalog/run/get/runs` | Read-only Klaviyo and Shopify API tools on your own keys. Runs are saved and fetched by id. Calls finish in seconds, so there is nothing to abort. No credits and no markup. |
@@ -38,5 +38,5 @@ Graphed's CLI (0.0.24, checked 2026-11-07) runs your marketing on Graphed's clou
 - **Hosting.** A hosted pilot, Cosmic Cloud, runs the same CLI for brands that want it managed. Each brand gets its own database schema and role, encrypted keys, a daily sync and a dashboard behind sign-in. It is in pilot and onboards brands one at a time under signed terms. Setup starts with a call: https://northsignal.studio/lifecycle
 - **Where things run.** Graphed runs your jobs and services on its servers. Cosmic runs them on your machine and in your GitHub account, so there is no server of ours holding your data.
 - **How tools are paid for.** Graphed charges plan credits per tool call, across 233 tools from 13 providers. Cosmic's tools call Klaviyo and Shopify directly on your own keys, at no cost from us. It covers fewer providers, and only the ones lifecycle work needs.
-- **How sources connect.** Graphed manages 750+ pipelines into its warehouse. Cosmic connects three natively and imports any other tool's daily totals from CSV. It never imports customer records.
+- **How sources connect.** Graphed manages 750+ pipelines into its warehouse. Cosmic connects four natively (Klaviyo, Shopify, GA4, Stripe) and imports any other tool's daily totals from CSV. It never imports customer records.
 - **Price.** The CLI is free and MIT licensed. There is no paid plan.

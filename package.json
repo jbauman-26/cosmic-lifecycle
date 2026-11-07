@@ -1,7 +1,7 @@
 {
   "name": "cosmic-lifecycle",
-  "version": "0.6.0",
-  "description": "Lifecycle marketing data your agent can trust. Syncs Shopify and Klaviyo into your own database, proves the numbers agree, and finds what to fix.",
+  "version": "0.7.0",
+  "description": "Lifecycle marketing data your agent can trust. Syncs Shopify, Klaviyo, GA4 and Stripe into your own database, proves the numbers agree, and finds what to fix.",
   "type": "module",
   "bin": {
     "lifecycle": "dist/cli.js",

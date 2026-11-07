@@ -38,6 +38,17 @@ export const MIGRATIONS = [
     source TEXT NOT NULL, metric TEXT NOT NULL, window_start DATE NOT NULL, window_end DATE NOT NULL, recorded_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (source, metric))`,
     `CREATE TABLE IF NOT EXISTS meta_reconcile_result (
     check_name TEXT PRIMARY KEY, status TEXT NOT NULL, expected NUMERIC, actual NUMERIC, diff_pct NUMERIC, detail TEXT NOT NULL, checked_at TIMESTAMPTZ NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS fact_stripe_daily (
+    date DATE NOT NULL, currency TEXT NOT NULL, charges BIGINT NOT NULL, gross NUMERIC NOT NULL, refunded NUMERIC NOT NULL, net NUMERIC NOT NULL,
+    failed_charges BIGINT NOT NULL, new_customers BIGINT NOT NULL, returning_charges BIGINT NOT NULL, guest_charges BIGINT NOT NULL,
+    source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, currency))`,
+    `CREATE TABLE IF NOT EXISTS fact_stripe_subscriptions_daily (
+    date DATE NOT NULL, currency TEXT NOT NULL, started BIGINT NOT NULL, ended BIGINT NOT NULL,
+    source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, currency))`,
+    // One row per sync day, so MRR history builds up from the first sync on.
+    `CREATE TABLE IF NOT EXISTS fact_stripe_mrr (
+    date DATE NOT NULL, currency TEXT NOT NULL, active_subscriptions BIGINT NOT NULL, mrr NUMERIC NOT NULL, unpriced_items BIGINT NOT NULL,
+    source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, currency))`,
     // Custom SQL that agents ran because no verified metric fit. Repeated ones become new metrics.
     `CREATE TABLE IF NOT EXISTS meta_custom_query (
     sql_hash TEXT PRIMARY KEY, sql TEXT NOT NULL, runs BIGINT NOT NULL DEFAULT 1, first_seen TIMESTAMPTZ NOT NULL, last_seen TIMESTAMPTZ NOT NULL)`,
@@ -45,5 +56,6 @@ export const MIGRATIONS = [
 export const PUBLIC_TABLES = [
     'dim_flow', 'dim_campaign', 'dim_segment', 'fact_flow_daily',
     'fact_orders_daily', 'fact_cohort_monthly', 'fact_klaviyo_orders_daily', 'fact_flow_window', 'fact_ga4_daily',
+    'fact_stripe_daily', 'fact_stripe_subscriptions_daily', 'fact_stripe_mrr',
     'meta_sync_run', 'meta_source_total', 'meta_source_window', 'meta_reconcile_result',
 ];

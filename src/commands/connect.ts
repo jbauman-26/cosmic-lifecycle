@@ -4,6 +4,7 @@ import { CliError } from '../errors.js'
 import { Klaviyo } from '../sources/klaviyo.js'
 import { shopifyToken } from '../sources/shopify.js'
 import { ga4AccessToken, fetchGa4Daily } from '../sources/ga4.js'
+import { Stripe, isRestrictedKey, stripeMode } from '../sources/stripe.js'
 
 const fromEnv = (name?: string) => {
   const value = name ? process.env[name] : undefined
@@ -42,4 +43,20 @@ export async function connectGa4(opts: { property?: string; clientId?: string; s
   if (opts.refreshTokenEnv) setSecret('ga4-refresh-token', refresh)
   writeConfig({ ...readConfig(), ga4: { property: opts.property, clientId: opts.clientId } })
   return { connected: true, property: opts.property }
+}
+
+export async function connectStripe(opts: { keyEnv?: string }) {
+  const key = opts.keyEnv ? fromEnv(opts.keyEnv) : getSecret('stripe-read-key')
+  if (!key) throw new CliError('No Stripe key given.', 'lifecycle connect stripe --key-env STRIPE_READ_KEY', 'missing_secret')
+  if (!/^(sk|rk)_(test|live)_/.test(key)) throw new CliError('That is not a Stripe secret or restricted key.', 'Use a restricted key that starts with rk_live_ or rk_test_.', 'stripe_key')
+  const { subscriptions } = await new Stripe(key).check()
+  const mode = stripeMode(key)
+  if (opts.keyEnv) setSecret('stripe-read-key', key)
+  writeConfig({ ...readConfig(), stripe: { mode, subscriptions } })
+  return {
+    connected: true,
+    mode,
+    subscriptions,
+    note: isRestrictedKey(key) ? null : 'This is a full secret key, which can also write. A restricted key with Read on Charges and Subscriptions is safer.',
+  }
 }

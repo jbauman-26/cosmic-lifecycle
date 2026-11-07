@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { aggregateOrders } from './sources/shopify.js';
+import { aggregateCharges, aggregateSubscriptions } from './sources/stripe.js';
 import { isNoReportData, reportsVerified } from './sources/klaviyo.js';
 const now = () => new Date().toISOString();
 async function recordRun(db, source, fn) {
@@ -130,5 +131,45 @@ export async function syncKlaviyo(db, k, opts = {}) {
                 return { status: 'warning', rows: base, detail: 'Klaviyo has no report data for this metric yet.' };
             throw e;
         }
+    });
+}
+// Recomputes charges and subscription starts from full history in one
+// transaction, like Shopify, because "new customer" needs every earlier charge.
+// MRR is a snapshot, kept per day so its history builds up.
+export async function writeStripe(db, charges, subs, today = now().slice(0, 10)) {
+    const daily = aggregateCharges(charges);
+    const s = subs ? aggregateSubscriptions(subs) : null;
+    const at = now();
+    await db.transaction(async (tx) => {
+        await tx.query('DELETE FROM fact_stripe_daily');
+        for (const d of daily) {
+            await tx.query(`INSERT INTO fact_stripe_daily VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, [d.date, d.currency, d.charges, d.gross, d.refunded, d.net, d.failed, d.newCustomers, d.returningCharges, d.guestCharges, at]);
+        }
+        if (!s)
+            return;
+        await tx.query('DELETE FROM fact_stripe_subscriptions_daily');
+        for (const d of s.daily) {
+            await tx.query(`INSERT INTO fact_stripe_subscriptions_daily VALUES ($1,$2,$3,$4,$5)`, [d.date, d.currency, d.started, d.ended, at]);
+        }
+        await tx.query('DELETE FROM fact_stripe_mrr WHERE date = $1', [today]);
+        for (const m of s.mrr) {
+            await tx.query(`INSERT INTO fact_stripe_mrr VALUES ($1,$2,$3,$4,$5,$6)`, [today, m.currency, m.active, m.mrr, m.unpricedItems, at]);
+        }
+    });
+    return { rows: daily.length + (s ? s.daily.length + s.mrr.length : 0), unpriced: s ? s.mrr.reduce((n, m) => n + m.unpricedItems, 0) : 0 };
+}
+export async function syncStripe(db, load) {
+    return recordRun(db, 'stripe', async () => {
+        const charges = await load.charges();
+        const subs = await load.subscriptions();
+        const { rows, unpriced } = await writeStripe(db, charges, subs);
+        await setTotal(db, 'stripe', 'charges_pulled', charges.length);
+        if (subs)
+            await setTotal(db, 'stripe', 'subscriptions_pulled', subs.length);
+        const notes = [
+            subs ? null : 'This key cannot read subscriptions, so MRR and churn were skipped.',
+            unpriced ? `${unpriced} subscription items use tiered or metered prices and are left out of MRR.` : null,
+        ].filter(Boolean);
+        return { status: notes.length ? 'warning' : 'ok', rows, detail: notes.length ? notes.join(' ') : undefined };
     });
 }

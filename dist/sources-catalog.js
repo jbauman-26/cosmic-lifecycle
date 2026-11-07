@@ -26,6 +26,15 @@ export const CATALOG = [
         connect: 'lifecycle connect ga4 --property ID --client-id ID --secret-env NAME --refresh-token-env NAME',
         tested: 'Built and unit tested. Not yet run on live data.',
     },
+    {
+        slug: 'stripe',
+        name: 'Stripe',
+        syncs: 'Daily charges, refunds, failed payments, new and repeat paying customers, subscription starts and ends, MRR. No customer records.',
+        credential: 'Restricted key with Read on Charges and Subscriptions. Nothing else.',
+        setupMinutes: 3,
+        connect: 'lifecycle connect stripe --key-env STRIPE_READ_KEY',
+        tested: 'Run live on a Stripe test-mode account, and every total matched the Stripe API. Refunds and several currencies are unit tested only. Not yet run on a live account.',
+    },
 ];
 // Connected means configured with a key present. lastSync comes from the database when it is reachable.
 export async function sourceStatus(config, hasKey, db) {
@@ -41,7 +50,7 @@ export async function sourceStatus(config, hasKey, db) {
         }
     }
     const native = CATALOG.map((s) => {
-        const configured = s.slug === 'klaviyo' ? Boolean(config?.klaviyo) : s.slug === 'shopify' ? Boolean(config?.shopify) : Boolean(config?.ga4);
+        const configured = Boolean(config?.[s.slug]);
         const connected = configured && hasKey(s.slug);
         const l = last.get(s.slug);
         return {

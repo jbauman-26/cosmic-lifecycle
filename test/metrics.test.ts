@@ -78,6 +78,9 @@ describe('verified metrics', () => {
     await flow(5, 100, 10)
     await db.query(`INSERT INTO fact_klaviyo_orders_daily (date, placed_orders, placed_value, source_synced_at) VALUES (CURRENT_DATE - 5, 9, 900, now())`)
     await db.query(`INSERT INTO fact_ga4_daily (date, channel, sessions, purchases, revenue, source_synced_at) VALUES (CURRENT_DATE - 5, 'Organic', 1000, 20, 2000, now())`)
+    await db.query(`INSERT INTO fact_stripe_daily VALUES (CURRENT_DATE - 5, 'usd', 10, 500, 50, 450, 2, 4, 6, 0, now())`)
+    await db.query(`INSERT INTO fact_stripe_subscriptions_daily VALUES (CURRENT_DATE - 5, 'usd', 3, 1, now())`)
+    await db.query(`INSERT INTO fact_stripe_mrr VALUES (CURRENT_DATE, 'usd', 7, 210, 0, now())`)
     for (const m of METRICS) expect((await runMetric(db, m.name, 90)).status, m.name).toBe('ok')
     expect((await runMetric(db, 'ga4_purchase_rate', 90)).value).toBe(2)
   })
@@ -99,7 +102,7 @@ describe('verified metrics', () => {
 
 describe('source catalog and setup prompts', () => {
   it('lists only sources with a working connector', () => {
-    expect(CATALOG.map((s) => s.slug)).toEqual(['klaviyo', 'shopify', 'ga4'])
+    expect(CATALOG.map((s) => s.slug)).toEqual(['klaviyo', 'shopify', 'ga4', 'stripe'])
   })
 
   it('reports connected sources and the next step for the rest', async () => {
