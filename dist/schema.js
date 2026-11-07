@@ -34,11 +34,13 @@ export const MIGRATIONS = [
     source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, channel))`,
     `CREATE TABLE IF NOT EXISTS meta_source_total (
     source TEXT NOT NULL, metric TEXT NOT NULL, value NUMERIC NOT NULL, recorded_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (source, metric))`,
+    `CREATE TABLE IF NOT EXISTS meta_source_window (
+    source TEXT NOT NULL, metric TEXT NOT NULL, window_start DATE NOT NULL, window_end DATE NOT NULL, recorded_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (source, metric))`,
     `CREATE TABLE IF NOT EXISTS meta_reconcile_result (
     check_name TEXT PRIMARY KEY, status TEXT NOT NULL, expected NUMERIC, actual NUMERIC, diff_pct NUMERIC, detail TEXT NOT NULL, checked_at TIMESTAMPTZ NOT NULL)`,
 ];
 export const PUBLIC_TABLES = [
     'dim_flow', 'dim_campaign', 'dim_segment', 'fact_flow_daily',
     'fact_orders_daily', 'fact_cohort_monthly', 'fact_klaviyo_orders_daily', 'fact_flow_window', 'fact_ga4_daily',
-    'meta_sync_run', 'meta_source_total', 'meta_reconcile_result',
+    'meta_sync_run', 'meta_source_total', 'meta_source_window', 'meta_reconcile_result',
 ];

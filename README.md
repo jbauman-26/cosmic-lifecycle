@@ -11,7 +11,7 @@ It is for the person running lifecycle at a Shopify brand who already works in C
 No keys and no accounts. This runs on invented sample data.
 
 ```sh
-npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/download/v0.1.0/cosmic-lifecycle-0.1.0.tgz
+npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/download/v0.1.1/cosmic-lifecycle-0.1.1.tgz
 lifecycle demo
 ```
 
@@ -100,12 +100,14 @@ This is an early release. Here is what has and has not been tested.
 **Tested**
 - Sync, reconcile, reports and read-only SQL on a Shopify dev store with 150 labeled sample orders.
 - The Klaviyo flow report on one real flow send to our own test address.
+- Klaviyo order counts against Shopify over 90 days: 36 against 36. The Klaviyo side was sample events we sent, because Klaviyo's Shopify app could not be installed on the dev store.
 - Creating a win-back segment in a Klaviyo demo account.
 - Local and Postgres databases, the MCP server, and a clean install.
 
 **Not tested yet**
 - A production Shopify store. A merchant may need a Partner account for one setup step.
 - A real brand's flow revenue, because our test send had no conversions.
+- The `flow_totals` check, because Klaviyo has returned no totals for our test flow yet.
 - GA4 with live data.
 - `deploy` running for days on end.
 

@@ -50,6 +50,27 @@ describe('reconcile', () => {
     expect(c.klaviyo_orders?.detail).toContain('may not be connected')
   })
 
+  it('compares Klaviyo only over the days it was synced for', async () => {
+    const old = { ...order('c'), processedAt: new Date(Date.now() - 40 * 86400000).toISOString() }
+    await syncShopify(db, async () => [...orders, old], async () => 4)
+    const ago = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10)
+    await db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status) VALUES ('k', 'klaviyo', now(), now(), 'ok')`)
+    await db.query(`INSERT INTO meta_source_window VALUES ('klaviyo', 'placed_orders', $1, $2, now())`, [ago(7), ago(0)])
+    await db.query(`INSERT INTO fact_klaviyo_orders_daily VALUES ($1, 3, 300, now())`, [ago(3)])
+    const c = await byName(db)
+    expect(c.klaviyo_orders).toMatchObject({ status: 'pass', expected: 3, actual: 3 })
+    expect(c.klaviyo_orders?.detail).toContain('the days Klaviyo was synced for')
+  })
+
+  it('still catches a real gap inside the synced days', async () => {
+    await syncShopify(db, async () => orders, async () => 3)
+    const ago = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10)
+    await db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status) VALUES ('k', 'klaviyo', now(), now(), 'ok')`)
+    await db.query(`INSERT INTO meta_source_window VALUES ('klaviyo', 'placed_orders', $1, $2, now())`, [ago(7), ago(0)])
+    await db.query(`INSERT INTO fact_klaviyo_orders_daily VALUES ($1, 1, 100, now())`, [ago(3)])
+    expect((await byName(db)).klaviyo_orders).toMatchObject({ status: 'fail', expected: 3, actual: 1 })
+  })
+
   it('applies the 3% tolerance to Klaviyo orders', async () => {
     expect(compare('x', 100, 97, 3, 'o').status).toBe('pass')
     expect(compare('x', 100, 96, 3, 'o').status).toBe('fail')

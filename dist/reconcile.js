@@ -30,15 +30,24 @@ export async function runChecks(db) {
         : compare('orders_vs_cohorts', num(d.orders), num(c.orders), 0, 'Customer orders in daily totals against cohorts'));
     // 3. Is Klaviyo seeing the same orders as Shopify?
     const so = await one(db, `SELECT sum(orders) AS orders, sum(net_revenue) AS net FROM fact_orders_daily WHERE date >= $1`, [since]);
-    const ko = await one(db, `SELECT sum(placed_orders) AS orders FROM fact_klaviyo_orders_daily WHERE date >= $1`, [since]);
+    // Compare only the days Klaviyo was actually pulled for. Otherwise a partial
+    // sync reads as missing orders, and the check cries wolf.
+    const kw = await one(db, `SELECT window_start::text AS s, window_end::text AS e FROM meta_source_window WHERE source = 'klaviyo' AND metric = 'placed_orders'`);
+    const kFrom = kw.s && String(kw.s) > since ? String(kw.s) : since;
+    const kTo = kw.e ? String(kw.e) : new Date().toISOString().slice(0, 10);
+    const period = kFrom === since ? `last ${days} days` : `${kFrom} to ${kTo}, the days Klaviyo was synced for`;
+    const sk = await one(db, `SELECT sum(orders) AS orders FROM fact_orders_daily WHERE date >= $1 AND date <= $2`, [kFrom, kTo]);
+    const ko = await one(db, `SELECT sum(placed_orders) AS orders FROM fact_klaviyo_orders_daily WHERE date >= $1 AND date <= $2`, [kFrom, kTo]);
     const klaviyoSynced = (await db.query(`SELECT 1 FROM meta_sync_run WHERE source = 'klaviyo' AND status <> 'failed' LIMIT 1`)).length > 0;
     if (so.orders === null || so.orders === undefined || !klaviyoSynced)
         checks.push(skip('klaviyo_orders', 'Needs both Shopify and Klaviyo synced.'));
+    else if (!num(sk.orders) && !num(ko.orders))
+        checks.push(skip('klaviyo_orders', `Neither source has orders in ${period}.`));
     else if (num(ko.orders) === 0) {
-        checks.push({ name: 'klaviyo_orders', status: 'fail', expected: num(so.orders), actual: 0, diffPct: 100, detail: `Shopify has ${num(so.orders)} orders in the last ${days} days, and Klaviyo has none. The store may not be connected to this Klaviyo account.` });
+        checks.push({ name: 'klaviyo_orders', status: 'fail', expected: num(sk.orders), actual: 0, diffPct: 100, detail: `Shopify has ${num(sk.orders)} orders in ${period}, and Klaviyo has none. The store may not be connected to this Klaviyo account.` });
     }
     else
-        checks.push(compare('klaviyo_orders', num(so.orders), num(ko.orders), TOLERANCE.klaviyoOrders, `Klaviyo Placed Order against Shopify orders, last ${days} days`));
+        checks.push(compare('klaviyo_orders', num(sk.orders), num(ko.orders), TOLERANCE.klaviyoOrders, `Klaviyo Placed Order against Shopify orders, ${period}`));
     // 4. Is GA4 seeing the same purchases?
     const ga = await one(db, `SELECT sum(purchases) AS purchases FROM fact_ga4_daily WHERE date >= $1`, [since]);
     checks.push(ga.purchases === null || ga.purchases === undefined || so.orders === null || so.orders === undefined

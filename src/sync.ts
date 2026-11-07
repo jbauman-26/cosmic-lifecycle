@@ -129,6 +129,17 @@ export async function syncKlaviyo(db: Db, k: Klaviyo, opts: { since?: string; un
             [p.date, p.orders, p.value, at],
           )
         }
+        // Remember which days this covers. Reconcile needs it, because a day with
+        // no rows could mean no orders or could mean it was never pulled.
+        await tx.query(
+          `INSERT INTO meta_source_window VALUES ('klaviyo', 'placed_orders', $1, $2, $3) ON CONFLICT (source, metric) DO UPDATE SET
+             window_start = CASE WHEN EXCLUDED.window_start <= meta_source_window.window_end AND EXCLUDED.window_end >= meta_source_window.window_start
+               THEN LEAST(meta_source_window.window_start, EXCLUDED.window_start) ELSE EXCLUDED.window_start END,
+             window_end = CASE WHEN EXCLUDED.window_start <= meta_source_window.window_end AND EXCLUDED.window_end >= meta_source_window.window_start
+               THEN GREATEST(meta_source_window.window_end, EXCLUDED.window_end) ELSE EXCLUDED.window_end END,
+             recorded_at = EXCLUDED.recorded_at`,
+          [start.slice(0, 10), end.slice(0, 10), at],
+        )
       })
       base += placed.length
     }
