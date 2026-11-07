@@ -92,7 +92,7 @@ Do not lead with these during first-time setup.
 - Prefer \`lifecycle metrics\` to custom SQL.
 - Never claim a source is connected until \`lifecycle sources list\` says so.
 - Never run \`lifecycle segments apply\` without the user approving that exact plan.
-- If the user would rather have someone set it up for them, NorthSignal does setup: https://northsignal.studio/contact
+- If the user would rather have someone set it up for them, Jake Bauman at NorthSignal does setup, starting with a free call: https://northsignal.studio/lifecycle
 - When finished, report which sources are connected, the reconcile result, and the checks you ran.
 `,
     agents: `# Lifecycle CLI for agents

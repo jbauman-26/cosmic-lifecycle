@@ -280,7 +280,7 @@ withRegistry(kits.command('show').argument('<name>').description("Show a kit's R
   const prompt = kitPrompt(m)
   emit(format(), { ...r, prompt }, () => [r.readme.trim(), '', `Version: ${m.version}`, `Needs: ${m.needs.join(', ')}`, `Writes: ${m.writes}`, `Secrets: ${m.secrets.map((s) => `${s.name}${s.required ? '' : ' (optional)'}`).join(', ') || 'none'}`, '', `Add it: lifecycle kits add ${m.name}`, '', 'Or paste this into your agent:', prompt].join('\n'))
 }))
-withRegistry(kits.command('prompt').argument('<name>').description('Print a setup prompt to paste into Claude Code, Cursor or ChatGPT')).action(run(async (name: string, opts) => {
+withRegistry(kits.command('prompt').argument('<name>').description('Print a setup prompt to paste into Claude Code, Cursor or Codex')).action(run(async (name: string, opts) => {
   const prompt = kitPrompt(showKit(registry(opts), name).manifest)
   emit(format(), { kit: name, prompt }, () => prompt)
 }))

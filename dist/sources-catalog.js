@@ -56,7 +56,7 @@ export async function sourceStatus(config, hasKey, db) {
 }
 export const INSTALL_URL = 'https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz';
 export const LLMS_URL = 'https://raw.githubusercontent.com/jbauman-26/cosmic-lifecycle/main/llms.txt';
-// The text a person pastes into Claude Code, Cursor or ChatGPT to have their agent run a kit.
+// The text a person pastes into Claude Code, Cursor or Codex to have their agent run a kit.
 export function kitPrompt(kit) {
     return [
         `Run the Cosmic Lifecycle "${kit.title}" kit for my store.`,

@@ -24,7 +24,7 @@ FAIL Orders pulled against Shopify's own count: 787 against 801, off by 1.75%.
 
 ## Or let your agent set it up
 
-Paste this into Claude Code, Cursor or ChatGPT:
+Paste this into Claude Code, Cursor or Codex:
 
 ```
 Set up Cosmic Lifecycle using https://raw.githubusercontent.com/jbauman-26/cosmic-lifecycle/main/llms.txt
@@ -116,7 +116,21 @@ Kits today: `flow-audit`, `revenue-per-flow`, `winback-segment`. `lifecycle kits
 ```sh
 lifecycle init --database-url-env DATABASE_URL
 lifecycle deploy --repo YOU/lifecycle-sync
+lifecycle jobs list        # recent runs and the success streak
+lifecycle logs --cloud     # the last run's log
 ```
+
+## Check on it
+
+```sh
+lifecycle status       # setup, sources, trust line, daily sync, updates
+lifecycle dashboard    # one local HTML page with every check, metric and fix
+lifecycle logs         # recent syncs on this machine
+lifecycle secrets list # where each key comes from, never its value
+lifecycle config list  # registry.uri, deploy.repo, update.check
+```
+
+How each command lines up with the Graphed CLI, and what is left out on purpose: [docs/PARITY.md](docs/PARITY.md).
 
 ## Where this is today
 
@@ -144,7 +158,7 @@ Node 20 or newer. macOS keeps keys in the keychain. On other systems, set the `L
 
 ## Have it set up for you
 
-Rather not wire up Shopify and Klaviyo yourself? [NorthSignal](https://northsignal.studio/contact) does the setup.
+Rather not wire up Shopify and Klaviyo yourself? [Jake at NorthSignal](https://northsignal.studio/lifecycle#setup) sets it up with you, starting with a free call.
 
 ## Help and community
 

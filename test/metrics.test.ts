@@ -120,7 +120,7 @@ describe('source catalog and setup prompts', () => {
 
   it('keeps the quickstart free of dashes and in step with llms.txt', () => {
     expect(DOCS.quickstart).not.toMatch(/[–—]/)
-    expect(DOCS.quickstart).toContain('northsignal.studio/contact')
+    expect(DOCS.quickstart).toContain('northsignal.studio/lifecycle')
     if (existsSync('llms.txt')) expect(readFileSync('llms.txt', 'utf8')).toBe(DOCS.quickstart)
   })
 })

@@ -24,7 +24,7 @@ Graphed's CLI (0.0.24, checked 2026-11-07) runs your marketing on their cloud. C
 | llms.txt | [llms.txt](../llms.txt) | Generated from `docs quickstart`. CI fails if they differ. |
 | `feedback` | `feedback` | A prefilled GitHub issue with versions only. |
 | Update notices | `status` | Checks GitHub at most once a day. Turn off with `config set update.check false`. |
-| Forward-deployed engineers | [NorthSignal setup](https://northsignal.studio/lifecycle) | A person sets it up for you. |
+| Forward-deployed engineers | [Setup with Jake at NorthSignal](https://northsignal.studio/lifecycle) | A person sets it up for you. |
 
 ## Not built, on purpose
 
