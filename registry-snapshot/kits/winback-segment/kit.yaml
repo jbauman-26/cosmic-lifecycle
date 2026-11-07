@@ -1,0 +1,20 @@
+name: winback-segment
+version: 1.0.0
+title: Win-back segment
+summary: Proposes a win-back segment from the brand's own repeat timing, and creates it only after review.
+keywords: [klaviyo, shopify, winback, segment, lapsed, retention]
+needs: [klaviyo, shopify]
+requires_cli: 0.1.1
+writes: one Klaviyo segment, after a reviewed plan and --confirm. Never sends.
+secrets:
+  - name: KLAVIYO_READ_KEY
+    description: Klaviyo private API key with read-only scopes, for sync.
+    required: true
+  - name: SHOPIFY_SECRET
+    description: Client secret of the Shopify custom app with read_orders.
+    required: true
+  - name: KLAVIYO_SEGMENTS_KEY
+    description: A separate Klaviyo private key with Segments write access. Used only by segments apply.
+    required: true
+files:
+  - files/plan.example.json

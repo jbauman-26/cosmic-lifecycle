@@ -1,0 +1,14 @@
+name: flow-audit
+version: 1.0.0
+title: Flow audit
+summary: Finds missing, silent and declining Klaviyo flows, with evidence for each finding.
+keywords: [klaviyo, flows, audit, email, retention]
+needs: [klaviyo]
+requires_cli: 0.1.1
+writes: nothing
+secrets:
+  - name: KLAVIYO_READ_KEY
+    description: Klaviyo private API key with read-only scopes. Connect it with lifecycle connect klaviyo --key-env KLAVIYO_READ_KEY.
+    required: true
+files:
+  - files/findings-summary.md

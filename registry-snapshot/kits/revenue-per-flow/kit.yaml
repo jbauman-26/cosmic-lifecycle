@@ -1,0 +1,17 @@
+name: revenue-per-flow
+version: 1.0.0
+title: Revenue per flow
+summary: Ranks flows by attributed revenue per recipient and shows the share of Shopify revenue.
+keywords: [klaviyo, shopify, flows, revenue, report]
+needs: [klaviyo, shopify]
+requires_cli: 0.1.1
+writes: nothing
+secrets:
+  - name: KLAVIYO_READ_KEY
+    description: Klaviyo private API key with read-only scopes.
+    required: true
+  - name: SHOPIFY_SECRET
+    description: Client secret of the Shopify custom app with read_orders. See lifecycle docs setup.
+    required: true
+files:
+  - files/ranking-summary.md

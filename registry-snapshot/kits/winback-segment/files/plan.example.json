@@ -1,0 +1,8 @@
+{
+  "kind": "klaviyo-segment",
+  "name": "Win-back: no order in 210 days",
+  "reason": "75% of 77 repeat orders happen within 6 months of the first order.",
+  "lapsedAfterDays": 210,
+  "metricId": "EXAMPLE",
+  "checksum": "written by lifecycle segments propose, do not edit"
+}

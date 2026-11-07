@@ -17,7 +17,9 @@ import { runQuery } from './query.js';
 import { PUBLIC_TABLES } from './schema.js';
 import { VERSION } from './version.js';
 import { DOCS } from './docs.js';
-import { addKit, listKits } from './kits.js';
+import { addKit, ensureRegistry, listKits, searchKits, showKit, validateRegistry } from './registry.js';
+import { skillsStatus, syncSkills, uninstallSkills } from './skills.js';
+import { feedbackUrl, openUrl } from './feedback.js';
 import { startMcp } from './mcp.js';
 import { runDemo } from './demo.js';
 import { deploy, deployPlan } from './deploy.js';
@@ -187,14 +189,74 @@ segments.command('apply').argument('<plan>').option('--confirm', 'create the seg
     const r = await applyPlan(plan, key ?? '', opts);
     emit(format(), r, () => `Created segment ${r.name} (${r.segmentId}). Nothing was sent.`);
 }));
-const kits = program.command('kits').description('Runbooks your agent can follow');
-kits.command('list').action(run(async () => {
-    const k = listKits();
-    emit(format(), k, () => k.map((x) => `${x.name}: ${x.summary}`).join('\n'));
+// Registry warnings go to stderr so JSON on stdout stays clean for agents.
+const registry = (opts) => {
+    const reg = ensureRegistry({ uri: opts.registry, refresh: opts.refresh });
+    if (reg.warning)
+        console.error(`Warning: ${reg.warning}`);
+    return reg;
+};
+const withRegistry = (c) => c.option('--registry <path-or-url>', 'kit registry: a local folder or a git URL').option('--refresh', 'fetch the latest kits now');
+const kits = program.command('kits').description('Runbooks your agent can follow, from the kit registry');
+withRegistry(kits.command('list').description('List kits in the registry')).action(run(async (opts) => {
+    const reg = registry(opts);
+    const k = listKits(reg);
+    emit(format(), { source: reg.source, kits: k }, () => k.map((x) => `${x.name} ${x.version}: ${x.summary}`).join('\n'));
 }));
-kits.command('add').argument('<name>').option('--into <dir>', 'folder to copy into', 'lifecycle-kits').action(run(async (name, opts) => {
-    const r = addKit(name, opts.into);
-    emit(format(), r, () => `Added ${r.kit} to ${r.path}. Ask your agent to follow ${r.runbook}`);
+withRegistry(kits.command('search').argument('<query>').description('Find kits by name, keyword or summary')).action(run(async (query, opts) => {
+    const k = searchKits(registry(opts), query);
+    emit(format(), k, () => (k.length ? k.map((x) => `${x.name} ${x.version}: ${x.summary}`).join('\n') : `No kits match "${query}". Try lifecycle kits list`));
+}));
+withRegistry(kits.command('show').argument('<name>').description("Show a kit's README, needs and secrets before adding it")).action(run(async (name, opts) => {
+    const r = showKit(registry(opts), name);
+    const m = r.manifest;
+    emit(format(), r, () => [r.readme.trim(), '', `Version: ${m.version}`, `Needs: ${m.needs.join(', ')}`, `Writes: ${m.writes}`, `Secrets: ${m.secrets.map((s) => `${s.name}${s.required ? '' : ' (optional)'}`).join(', ') || 'none'}`, '', `Add it: lifecycle kits add ${m.name}`].join('\n'));
+}));
+withRegistry(kits.command('add').argument('<name>').description('Stage a kit for your agent to follow'))
+    .option('--into <dir>', 'folder to copy into', 'lifecycle-kits')
+    .option('--force', 'stage it even if it needs a newer lifecycle')
+    .action(run(async (name, opts) => {
+    const r = addKit(registry(opts), name, { into: opts.into, force: opts.force });
+    emit(format(), r, () => [`Added ${r.kit} ${r.version} to ${r.path}.`, `Needs: ${r.needs.join(', ')}. Secrets: ${r.secrets.join(', ') || 'none'}.`, `Writes: ${r.writes}`, `Next: ask your agent to follow ${r.runbook}`].join('\n'));
+}));
+kits.command('validate').argument('[dir]', 'registry folder', '.').description('Check a registry folder: index, manifests, runbooks and file references')
+    .option('--write-index', 'rebuild index.json and the README catalog from the kit folders')
+    .action(run(async (dir, opts) => {
+    const r = validateRegistry(dir, { writeIndex: opts.writeIndex });
+    emit(format(), r, () => (r.ok ? `OK: ${r.kits.length} kits${opts.writeIndex ? ', index.json written' : ''}.` : r.problems.map((p) => `${p.kit ? `${p.kit}: ` : ''}${p.problem}`).join('\n')));
+    if (!r.ok)
+        process.exitCode = 1;
+}));
+const targets = (t) => {
+    if (t === undefined)
+        return undefined;
+    if (t === 'all')
+        return ['claude', 'cursor'];
+    if (t === 'claude' || t === 'cursor')
+        return [t];
+    throw new CliError(`Unknown target ${t}.`, 'Use --target claude, cursor or all');
+};
+const skills = program.command('skills').description('Install kit skills into Claude Code and Cursor');
+withRegistry(skills.command('sync').description('Install or update /lifecycle and one /lifecycle:kits:<kit> skill per kit'))
+    .option('--target <target>', 'claude, cursor or all. Default: claude, plus cursor when it is installed')
+    .option('--dry-run', 'show what would change')
+    .option('--force', 'overwrite files you edited')
+    .action(run(async (opts) => {
+    const r = syncSkills(registry(opts), { targets: targets(opts.target), dryRun: opts.dryRun, force: opts.force });
+    emit(format(), r, () => r.map((t) => [`${t.target}: ${t.dir}`, `  ${opts.dryRun ? 'would write' : 'wrote'} ${t.written.length}, unchanged ${t.unchanged.length}, removed ${t.removed.length}`, ...t.kept.map((k) => `  kept your edit: ${k}`)].join('\n')).join('\n') + (opts.dryRun ? '\nNothing was written.' : '\nRestart Claude Code to load new skills.'));
+}));
+withRegistry(skills.command('status').description('Show installed skills and kits not installed yet')).action(run(async (opts) => {
+    const r = skillsStatus(registry(opts));
+    emit(format(), r, () => r.map((t) => `${t.target}: ${t.installed ? `installed (${t.installedVersion}), kits: ${t.kits.join(', ') || 'none'}` : 'not installed'}${t.installed && t.newKits.length ? `\n  new: ${t.newKits.join(', ')}. Run lifecycle skills sync` : ''}`).join('\n'));
+}));
+skills.command('uninstall').description('Remove the skills this CLI installed. Files you edited are kept').option('--target <target>', 'claude, cursor or all', 'all').action(run(async (opts) => {
+    const r = uninstallSkills(targets(opts.target));
+    emit(format(), r, () => r.map((t) => `${t.target}: removed ${t.removed.length}${t.kept.length ? `, kept your edits: ${t.kept.join(', ')}` : ''}`).join('\n'));
+}));
+program.command('feedback').argument('<message...>').description('Report a bug or a missing feature as a GitHub issue').option('--open', 'open the issue page in your browser').action(run(async (words, opts) => {
+    const url = feedbackUrl(words.join(' '));
+    const opened = opts.open ? openUrl(url) : false;
+    emit(format(), { url, opened }, () => `${opened ? 'Opened' : 'Open this to send it'}: ${url}\nIt includes your lifecycle, Node and OS versions. Nothing else.`);
 }));
 program.command('mcp').description('Start the read-only MCP server').action(run(startMcp));
 program.command('deploy').description('Run the daily sync from your own GitHub account').requiredOption('--repo <owner/name>').option('--yes', 'create it. Without this, only prints the plan').action(run(async (opts) => {
@@ -240,7 +302,7 @@ program.command('doctor').description('Check keys, connections and sync age').ac
     if (!r.healthy)
         process.exitCode = 1;
 }));
-program.command('docs').argument('[topic]', 'agents, commands or troubleshooting', 'agents').description('Read the built-in docs').action(run(async (topic) => {
+program.command('docs').argument('[topic]', `one of: ${Object.keys(DOCS).join(', ')}`, 'agents').description('Read the built-in docs').action(run(async (topic) => {
     const doc = DOCS[topic];
     if (!doc)
         throw new CliError(`No doc named ${topic}.`, 'lifecycle docs commands');

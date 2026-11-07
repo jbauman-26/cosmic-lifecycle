@@ -11,7 +11,7 @@ It is for the person running lifecycle at a Shopify brand who already works in C
 No keys and no accounts. This runs on invented sample data.
 
 ```sh
-npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/download/v0.1.1/cosmic-lifecycle-0.1.1.tgz
+npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
 lifecycle demo
 ```
 
@@ -76,13 +76,26 @@ Add the read-only MCP server:
 claude mcp add lifecycle -- lifecycle mcp
 ```
 
-Or give your agent a runbook:
+Install the skills once, then ask for a job by name:
 
 ```sh
-lifecycle kits add flow-audit
+lifecycle skills sync
 ```
 
-Kits: `flow-audit`, `revenue-per-flow`, `winback-segment`. Any kit that writes copy includes an editing standard and a required review step.
+That adds `/lifecycle` and one skill per kit, such as `/lifecycle:kits:flow-audit`. It never overwrites a skill file you edited, and `lifecycle skills uninstall` removes what it added.
+
+## Kits
+
+A kit is a runbook your agent follows, with a Verify checklist at the end. Kits live in their own repo, [cosmic-registry](https://github.com/jbauman-26/cosmic-registry), so a kit fix reaches you without a new CLI release. The CLI downloads it on first use, refreshes it every 10 minutes, and keeps working offline from the last copy.
+
+```sh
+lifecycle kits list
+lifecycle kits search "win back"
+lifecycle kits show winback-segment
+lifecycle kits add winback-segment
+```
+
+Kits today: `flow-audit`, `revenue-per-flow`, `winback-segment`. Any kit that writes copy includes an editing standard and a required review step. To use a fork or a local folder, pass `--registry`, or see `lifecycle docs kits`.
 
 ## Run it every day
 
@@ -111,7 +124,7 @@ This is an early release. Here is what has and has not been tested.
 - GA4 with live data.
 - `deploy` running for days on end.
 
-If something breaks, `lifecycle doctor` says what is wrong and what to run next.
+If something breaks, `lifecycle doctor` says what is wrong and what to run next. To report a bug, run `lifecycle feedback "what happened" --open`.
 
 ## Requirements
 

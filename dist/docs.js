@@ -38,11 +38,51 @@ Read this before working with Lifecycle.
 3. Query with \`lifecycle query "SELECT ..." --format json\`. Queries are read-only and capped at 1,000 rows.
 4. Run \`lifecycle reconcile\` before quoting any number. If a check failed, say so first.
 5. Report the sync warnings. Do not hide them from the user.
+6. For a named job, such as a flow audit, use a kit: \`lifecycle kits search "flow audit"\`, then \`lifecycle kits add NAME\`, then follow its AGENT.md through the Verify checklist.
 
 Rules:
 - The database holds totals only. It has no customer names, emails, phones or addresses.
 - Revenue in fact_flow_daily is Klaviyo attributed revenue. Say so, and never present it as proof of causation.
 - Nothing in this tool sends a message.
+`,
+    kits: `# Kits
+
+A kit is a runbook your agent follows, not a package. Each one is a folder:
+
+kit.yaml    what it needs, what it writes, which secrets, which CLI version
+AGENT.md    the steps, ending in a Verify checklist
+README.md   the human overview
+files/      reference files the runbook points at
+
+The CLI stages kits. Your agent follows them. You check the Verify list.
+
+Where kits come from:
+  Kits live in their own repo, https://github.com/jbauman-26/cosmic-registry,
+  so a kit fix ships without a new CLI. The CLI clones it into ~/.lifecycle/registry
+  on first use and refreshes it at most every 10 minutes. If a refresh fails, it
+  keeps working from the last copy and prints a warning. A machine that has never
+  been online uses the copy that shipped with the CLI.
+
+Use another registry, such as a fork or a local folder:
+  --registry PATH_OR_URL, then LIFECYCLE_REGISTRY, then "registry": {"uri": ...}
+  in ~/.lifecycle/config.json, then the public registry.
+
+Flow:
+  lifecycle kits list
+  lifecycle kits search "win back"
+  lifecycle kits show winback-segment
+  lifecycle kits add winback-segment
+  Then: "Follow lifecycle-kits/winback-segment/AGENT.md"
+
+Skills for Claude Code and Cursor:
+  lifecycle skills sync installs /lifecycle and one /lifecycle:kits:NAME skill
+  per kit. It never overwrites a file you edited. lifecycle skills uninstall
+  removes what it installed.
+
+Writing a kit:
+  Copy a kit folder in the registry, edit it, then run
+  lifecycle kits validate . --write-index
+  The same check runs in the registry's CI.
 `,
     commands: `lifecycle demo
 lifecycle init [--database-url-env NAME]
@@ -57,11 +97,14 @@ lifecycle report revenue-per-flow [--html FILE]
 lifecycle audit flows [--html FILE]
 lifecycle segments propose winback
 lifecycle segments apply PLAN_FILE --confirm
-lifecycle kits list|add NAME
+lifecycle kits list|search QUERY|show NAME|add NAME [--into DIR]
+lifecycle kits validate [DIR] [--write-index]
+lifecycle skills sync|status|uninstall [--target claude|cursor|all]
+lifecycle feedback MESSAGE [--open]
 lifecycle deploy --repo OWNER/NAME [--yes]
 lifecycle mcp
 lifecycle doctor
-lifecycle docs setup|agents|commands|troubleshooting
+lifecycle docs setup|agents|kits|commands|troubleshooting
 
 Add --format json to any command.`,
     troubleshooting: `Shopify says the app is not approved to access orders:

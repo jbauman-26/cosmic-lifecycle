@@ -1,5 +1,0 @@
-name: flow-audit
-title: Flow audit
-summary: Finds missing, silent and declining Klaviyo flows, with evidence for each finding.
-needs: [klaviyo]
-writes: nothing

@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "kits": [
+    {
+      "name": "flow-audit",
+      "version": "1.0.0",
+      "path": "kits/flow-audit",
+      "title": "Flow audit",
+      "summary": "Finds missing, silent and declining Klaviyo flows, with evidence for each finding.",
+      "keywords": [
+        "klaviyo",
+        "flows",
+        "audit",
+        "email",
+        "retention"
+      ],
+      "needs": [
+        "klaviyo"
+      ],
+      "writes": "nothing"
+    },
+    {
+      "name": "revenue-per-flow",
+      "version": "1.0.0",
+      "path": "kits/revenue-per-flow",
+      "title": "Revenue per flow",
+      "summary": "Ranks flows by attributed revenue per recipient and shows the share of Shopify revenue.",
+      "keywords": [
+        "klaviyo",
+        "shopify",
+        "flows",
+        "revenue",
+        "report"
+      ],
+      "needs": [
+        "klaviyo",
+        "shopify"
+      ],
+      "writes": "nothing"
+    },
+    {
+      "name": "winback-segment",
+      "version": "1.0.0",
+      "path": "kits/winback-segment",
+      "title": "Win-back segment",
+      "summary": "Proposes a win-back segment from the brand's own repeat timing, and creates it only after review.",
+      "keywords": [
+        "klaviyo",
+        "shopify",
+        "winback",
+        "segment",
+        "lapsed",
+        "retention"
+      ],
+      "needs": [
+        "klaviyo",
+        "shopify"
+      ],
+      "writes": "one Klaviyo segment, after a reviewed plan and --confirm. Never sends."
+    }
+  ]
+}

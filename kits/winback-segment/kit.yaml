@@ -1,5 +1,0 @@
-name: winback-segment
-title: Win-back segment
-summary: Proposes a win-back segment from the brand's own repeat timing, and creates it only after review.
-needs: [klaviyo, shopify]
-writes: one Klaviyo segment, after a reviewed plan and --confirm. Never sends.
