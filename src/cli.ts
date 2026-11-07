@@ -83,10 +83,13 @@ program.command('sync').description('Pull fresh totals from connected sources').
       results.push(await syncGa4(db, async () => fetchGa4Daily(property, await ga4AccessToken(clientId, ga4Secret, ga4Refresh), start, end)))
     }
     if (!results.length) throw new CliError('No sources connected.', 'lifecycle connect klaviyo --key-env NAME')
-    emit(format(), { results }, () => results.map((r) => `${r.source}: ${r.status}, ${r.rows} rows${r.detail ? `. ${r.detail}` : ''}`).join('\n'))
     const check = await reconcile(db)
     const failed = check.checks.filter((c) => c.status === 'fail')
-    emit(format(), { reconcile: check }, () => (failed.length ? `Reconcile: ${failed.length} failed. Run lifecycle reconcile for details.` : 'Reconcile: passed.'))
+    // One JSON document per command, so an agent can parse stdout whole.
+    emit(format(), { results, reconcile: check }, () => [
+      ...results.map((r) => `${r.source}: ${r.status}, ${r.rows} rows${r.detail ? `. ${r.detail}` : ''}`),
+      failed.length ? `Reconcile: ${failed.length} failed. Run lifecycle reconcile for details.` : 'Reconcile: passed.',
+    ].join('\n'))
     if (results.some((r) => r.status === 'failed')) process.exitCode = 1
   } finally {
     await db.close()

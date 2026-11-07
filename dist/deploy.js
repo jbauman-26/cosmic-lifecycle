@@ -3,7 +3,8 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CliError } from './errors.js';
-export const PACKAGE = 'https://github.com/jbauman-26/cosmic-lifecycle/releases/download/v0.1.1/cosmic-lifecycle-0.1.1.tgz';
+import { VERSION } from './version.js';
+export const PACKAGE = `https://github.com/jbauman-26/cosmic-lifecycle/releases/download/v${VERSION}/cosmic-lifecycle-${VERSION}.tgz`;
 export function workflowYaml(hasGa4) {
     const ga4 = hasGa4
         ? `      LIFECYCLE_GA4_CLIENT_SECRET: \${{ secrets.LIFECYCLE_GA4_CLIENT_SECRET }}\n      LIFECYCLE_GA4_REFRESH_TOKEN: \${{ secrets.LIFECYCLE_GA4_REFRESH_TOKEN }}\n`

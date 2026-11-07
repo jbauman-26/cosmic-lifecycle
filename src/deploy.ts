@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CliError } from './errors.js'
 import type { Config } from './config.js'
+import { VERSION } from './version.js'
 
-export const PACKAGE = 'https://github.com/jbauman-26/cosmic-lifecycle/releases/download/v0.1.1/cosmic-lifecycle-0.1.1.tgz'
+export const PACKAGE = `https://github.com/jbauman-26/cosmic-lifecycle/releases/download/v${VERSION}/cosmic-lifecycle-${VERSION}.tgz`
 
 export function workflowYaml(hasGa4: boolean) {
   const ga4 = hasGa4
