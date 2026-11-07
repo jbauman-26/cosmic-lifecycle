@@ -35,7 +35,7 @@ Graphed's CLI (0.0.24, checked 2026-11-07) runs your marketing on Graphed's clou
 
 ## Where the two differ on purpose
 
-- **Hosting.** A hosted Cosmic Cloud is not built. Running it means paying for infrastructure and holding brands' data, so it waits until a brand asks to pay not to run it themselves.
+- **Hosting.** A hosted pilot, Cosmic Cloud, runs the same CLI for brands that want it managed. Each brand gets its own database schema and role, encrypted keys, a daily sync and a dashboard behind sign-in. It is in pilot and onboards brands one at a time under signed terms. Setup starts with a call: https://northsignal.studio/lifecycle
 - **Where things run.** Graphed runs your jobs and services on its servers. Cosmic runs them on your machine and in your GitHub account, so there is no server of ours holding your data.
 - **How tools are paid for.** Graphed charges plan credits per tool call, across 233 tools from 13 providers. Cosmic's tools call Klaviyo and Shopify directly on your own keys, at no cost from us. It covers fewer providers, and only the ones lifecycle work needs.
 - **How sources connect.** Graphed manages 750+ pipelines into its warehouse. Cosmic connects three natively and imports any other tool's daily totals from CSV. It never imports customer records.
