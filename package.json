@@ -1,0 +1,55 @@
+{
+  "name": "cosmic-lifecycle",
+  "version": "0.1.0",
+  "description": "Lifecycle marketing data your agent can trust. Syncs Shopify and Klaviyo into your own database, proves the numbers agree, and finds what to fix.",
+  "type": "module",
+  "bin": {
+    "lifecycle": "dist/cli.js",
+    "cosmic-lifecycle": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "prepare": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.15",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "commander": "^15.0.0",
+    "pg": "^8.23.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  },
+  "files": [
+    "dist",
+    "kits",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jbauman-26/cosmic-lifecycle"
+  },
+  "keywords": [
+    "klaviyo",
+    "shopify",
+    "lifecycle",
+    "marketing",
+    "mcp",
+    "claude-code",
+    "email-marketing"
+  ],
+  "author": "Cosmic AI"
+}

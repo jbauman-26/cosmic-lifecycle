@@ -1,0 +1,5 @@
+name: revenue-per-flow
+title: Revenue per flow
+summary: Ranks flows by attributed revenue per recipient and shows the share of Shopify revenue.
+needs: [klaviyo, shopify]
+writes: nothing

@@ -1,0 +1,7 @@
+.env
+node_modules
+dist
+spike/out
+.lifecycle-dev
+spike
+*.tgz
