@@ -569,7 +569,7 @@ sources.command('import').argument('<name>').requiredOption('--csv <file>', 'CSV
     try {
         await migrate(db);
         const r = await importCsv(db, name, opts.csv, opts.dateColumn);
-        emit(format(), r, () => `Imported ${r.days} days (${r.from} to ${r.to}) into ${r.table}: ${r.columns.join(', ')}\nQuery it with lifecycle query "SELECT * FROM ${r.table} ORDER BY date DESC"`);
+        emit(format(), r, () => `Imported ${r.days} day${r.days === 1 ? '' : 's'} (${r.from} to ${r.to}) into ${r.table}: ${r.columns.join(', ')}\nQuery it with lifecycle query "SELECT * FROM ${r.table} ORDER BY date DESC"`);
     }
     finally {
         await db.close();
