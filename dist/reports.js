@@ -83,7 +83,7 @@ export async function auditFlows(db) {
         notes: [ATTRIBUTION_NOTE, 'Missing-flow checks match on flow names, so review each one before acting.', ...(reportsVerified ? [] : [UNTESTED_NOTE])],
     };
 }
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export function htmlPage(title, trust, body, notes) {
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
 <style>:root{--ink:#17181a;--muted:#5d6168;--line:#e4e4e0;--bg:#fbfbf9;--bad:#a2281d;--ok:#1f6b45}

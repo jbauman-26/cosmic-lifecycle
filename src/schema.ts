@@ -38,6 +38,9 @@ export const MIGRATIONS = [
     source TEXT NOT NULL, metric TEXT NOT NULL, window_start DATE NOT NULL, window_end DATE NOT NULL, recorded_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (source, metric))`,
   `CREATE TABLE IF NOT EXISTS meta_reconcile_result (
     check_name TEXT PRIMARY KEY, status TEXT NOT NULL, expected NUMERIC, actual NUMERIC, diff_pct NUMERIC, detail TEXT NOT NULL, checked_at TIMESTAMPTZ NOT NULL)`,
+  // Custom SQL that agents ran because no verified metric fit. Repeated ones become new metrics.
+  `CREATE TABLE IF NOT EXISTS meta_custom_query (
+    sql_hash TEXT PRIMARY KEY, sql TEXT NOT NULL, runs BIGINT NOT NULL DEFAULT 1, first_seen TIMESTAMPTZ NOT NULL, last_seen TIMESTAMPTZ NOT NULL)`,
 ]
 
 export const PUBLIC_TABLES = [

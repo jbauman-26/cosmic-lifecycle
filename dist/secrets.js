@@ -25,6 +25,22 @@ export function setSecret(name, value) {
     if (res.status !== 0)
         throw new CliError('Could not save to the macOS keychain.', 'Unlock your keychain and run the command again.');
 }
+export const SECRET_NAMES = Object.keys(ENV);
+export const envName = (name) => ENV[name];
+export function deleteSecret(name) {
+    if (!useKeychain())
+        return { name, removed: false, note: `No keychain here. Unset ${ENV[name]} in your environment.` };
+    const res = spawnSync('security', ['delete-generic-password', '-s', SERVICE, '-a', name], { encoding: 'utf8' });
+    return { name, removed: res.status === 0, note: res.status === 0 ? 'Removed from the keychain.' : 'It was not in the keychain.' };
+}
+// Where each secret comes from. Never returns a value.
+export function secretStatus() {
+    return SECRET_NAMES.map((name) => {
+        const fromEnv = Boolean(process.env[ENV[name]]);
+        const inKeychain = !fromEnv && useKeychain() && spawnSync('security', ['find-generic-password', '-s', SERVICE, '-a', name], { encoding: 'utf8' }).status === 0;
+        return { name, env: ENV[name], source: fromEnv ? 'env' : inKeychain ? 'keychain' : 'missing' };
+    });
+}
 export function getSecret(name) {
     const fromEnv = process.env[ENV[name]];
     if (fromEnv)

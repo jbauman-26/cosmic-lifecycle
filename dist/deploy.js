@@ -43,17 +43,23 @@ export function deployPlan(config, repo) {
     };
 }
 const gh = (args, input, cwd) => spawnSync('gh', args, { encoding: 'utf8', input, cwd });
+// The files that make up a sync project. `deploy --write DIR` writes them without creating anything on GitHub.
+export function writeProject(config, dir) {
+    mkdirSync(join(dir, '.github', 'workflows'), { recursive: true });
+    mkdirSync(join(dir, '.lifecycle'), { recursive: true });
+    writeFileSync(join(dir, '.github', 'workflows', 'sync.yml'), workflowYaml(Boolean(config.ga4)));
+    // The store name and client id are not secret, and the runner needs them.
+    const { registry: _r, deploy: _d, update: _u, ...runner } = config;
+    writeFileSync(join(dir, '.lifecycle', 'config.json'), JSON.stringify({ ...runner, database: { kind: 'postgres' } }, null, 2) + '\n');
+    writeFileSync(join(dir, 'README.md'), '# Lifecycle sync\n\nRuns `lifecycle sync` every day. Keys live in GitHub Actions secrets.\n');
+    return { dir, files: ['.github/workflows/sync.yml', '.lifecycle/config.json', 'README.md'] };
+}
 // Runs only with --yes. Secrets go through stdin, never the command line.
 export function deploy(config, repo, secrets) {
     if (gh(['auth', 'status']).status !== 0)
         throw new CliError('GitHub CLI is not signed in.', 'gh auth login', 'gh_auth');
     const dir = mkdtempSync(join(tmpdir(), 'lifecycle-deploy-'));
-    mkdirSync(join(dir, '.github', 'workflows'), { recursive: true });
-    mkdirSync(join(dir, '.lifecycle'), { recursive: true });
-    writeFileSync(join(dir, '.github', 'workflows', 'sync.yml'), workflowYaml(Boolean(config.ga4)));
-    // The store name and client id are not secret, and the runner needs them.
-    writeFileSync(join(dir, '.lifecycle', 'config.json'), JSON.stringify({ ...config, database: { kind: 'postgres' } }, null, 2) + '\n');
-    writeFileSync(join(dir, 'README.md'), '# Lifecycle sync\n\nRuns `lifecycle sync` every day. Keys live in GitHub Actions secrets.\n');
+    writeProject(config, dir);
     for (const args of [['init', '-q', '-b', 'main'], ['add', '-A'], ['commit', '-q', '-m', 'chore: daily lifecycle sync']]) {
         const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
         if (r.status !== 0)
@@ -67,5 +73,46 @@ export function deploy(config, repo, secrets) {
         if (r.status !== 0)
             throw new CliError(`Could not set ${name}.`, 'lifecycle deploy', 'gh_secret');
     }
-    return { repo, url: `https://github.com/${repo}`, firstRun: `gh workflow run sync.yml --repo ${repo}` };
+    return { repo, url: `https://github.com/${repo}`, firstRun: 'lifecycle deploy run' };
+}
+function requireRepo(repo) {
+    if (!repo)
+        throw new CliError('No sync repo is set.', 'lifecycle deploy --repo OWNER/NAME, or lifecycle config set deploy.repo OWNER/NAME', 'no_repo');
+    if (gh(['auth', 'status']).status !== 0)
+        throw new CliError('GitHub CLI is not signed in.', 'gh auth login', 'gh_auth');
+    return repo;
+}
+export function deployStatus(repo, limit = 7) {
+    const r = gh(['run', 'list', '--repo', requireRepo(repo), '--workflow', 'sync.yml', '--limit', String(limit), '--json', 'databaseId,status,conclusion,event,createdAt,url']);
+    if (r.status !== 0)
+        throw new CliError(`Could not read runs for ${repo}: ${r.stderr.trim().slice(0, 160)}`, 'Check the repo name with lifecycle config get deploy.repo', 'gh_runs');
+    const runs = JSON.parse(r.stdout || '[]').map((x) => ({ id: x.databaseId, status: x.status, conclusion: x.conclusion, event: x.event, createdAt: x.createdAt, url: x.url }));
+    return { repo, runs, successStreak: successStreak(runs) };
+}
+// Successful runs in a row, newest first. Seven in a row is the release test for running with the laptop closed.
+// A run still in progress neither counts nor breaks the streak.
+export function successStreak(runs) {
+    let streak = 0;
+    for (const run of runs) {
+        if (run.conclusion === 'success')
+            streak++;
+        else if (run.status === 'completed')
+            break;
+    }
+    return streak;
+}
+export function deployRun(repo) {
+    const r = gh(['workflow', 'run', 'sync.yml', '--repo', requireRepo(repo)]);
+    if (r.status !== 0)
+        throw new CliError(`Could not start a run: ${r.stderr.trim().slice(0, 160)}`, 'lifecycle deploy status', 'gh_run');
+    return { repo, started: true, next: 'lifecycle deploy status' };
+}
+export function deployLogs(repo, tail = 60) {
+    const { runs } = deployStatus(repo, 1);
+    const last = runs[0];
+    if (!last)
+        throw new CliError('No runs yet.', 'lifecycle deploy run', 'no_runs');
+    const r = gh(['run', 'view', String(last.id), '--repo', repo, '--log']);
+    const lines = (r.stdout || r.stderr).trim().split('\n');
+    return { repo, run: last, log: lines.slice(-tail).join('\n') };
 }

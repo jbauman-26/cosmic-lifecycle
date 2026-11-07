@@ -107,3 +107,9 @@ export function formatValue(unit: Unit, v: number | null) {
   if (unit === 'percent') return `${v.toFixed(2)}%`
   return v.toLocaleString('en-US')
 }
+
+// Custom queries run more than once are candidates for a new verified metric.
+export async function metricCandidates(db: Tx, minRuns = 2, limit = 20) {
+  const rows = await db.query(`SELECT sql_hash, sql, runs, first_seen, last_seen FROM meta_custom_query WHERE runs >= $1 ORDER BY runs DESC, last_seen DESC LIMIT $2`, [minRuns, limit])
+  return rows.map((r) => ({ id: String(r.sql_hash), sql: String(r.sql), runs: Number(r.runs), firstSeen: new Date(String(r.first_seen)).toISOString(), lastSeen: new Date(String(r.last_seen)).toISOString() }))
+}

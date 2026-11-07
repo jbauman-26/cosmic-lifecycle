@@ -81,7 +81,8 @@ customer records, and has no account or server of ours in the path.
 - Agent access in Claude Code: \`claude mcp add lifecycle -- lifecycle mcp\`
 - Slash commands: \`lifecycle skills sync\`
 - Runbooks: \`lifecycle kits list\`, then \`lifecycle kits add NAME\`
-- A daily sync from their own GitHub: \`lifecycle deploy --repo OWNER/NAME\`
+- A daily sync from their own GitHub: \`lifecycle deploy --repo OWNER/NAME\`, then \`lifecycle jobs list\`
+- One local page with every number and check: \`lifecycle dashboard\`
 
 Do not lead with these during first-time setup.
 
@@ -100,7 +101,7 @@ Read this before working with Lifecycle.
 
 If the tool is not set up yet, follow \`lifecycle docs quickstart\` instead.
 
-1. Run \`lifecycle doctor --format json\` first.
+1. Run \`lifecycle status --format json\` first, then \`lifecycle doctor --format json\` if anything looks wrong.
 2. Run \`lifecycle reconcile\` before quoting any number. If a check failed, say so first.
 3. For a standard number, use a verified metric: \`lifecycle metrics list\`, then \`lifecycle metrics run NAME --format json\`. The same metric always runs the same SQL, so answers stay comparable over time. Quote the metric name with the number.
 4. Write your own SQL only when no metric fits. Run \`lifecycle schema --format json\` first and never guess column names. Query with \`lifecycle query "SELECT ..." --format json\`. Queries are read-only and capped at 1,000 rows. Tell the user the number came from custom SQL, and show it.
@@ -159,7 +160,7 @@ lifecycle connect ga4 --property ID --client-id ID --secret-env NAME --refresh-t
 lifecycle sync [--since DATE]
 lifecycle schema [TABLE]
 lifecycle query "SELECT ..."
-lifecycle metrics list|show NAME|run NAME... [--days N]
+lifecycle metrics list|show NAME|run NAME... [--days N]|candidates
 lifecycle sources list|catalog
 lifecycle reconcile
 lifecycle report revenue-per-flow [--html FILE]
@@ -170,7 +171,13 @@ lifecycle kits list|search QUERY|show NAME|prompt NAME|add NAME [--into DIR]
 lifecycle kits validate [DIR] [--write-index]
 lifecycle skills sync|status|uninstall [--target claude|cursor|all]
 lifecycle feedback MESSAGE [--open]
-lifecycle deploy --repo OWNER/NAME [--yes]
+lifecycle deploy [--repo OWNER/NAME] [--yes] [--write DIR]
+lifecycle jobs list|run
+lifecycle logs [--cloud]
+lifecycle dashboard [--html FILE] [--days N]
+lifecycle status
+lifecycle config list|get|set|unset KEY [VALUE]
+lifecycle secrets list|set NAME --from-env VAR|delete NAME
 lifecycle mcp
 lifecycle doctor
 lifecycle docs quickstart|setup|agents|kits|commands|troubleshooting

@@ -24,7 +24,14 @@ import { findMetric, formatValue, listMetrics, runMetric } from './metrics.js';
 import { CATALOG, kitPrompt, sourceStatus } from './sources-catalog.js';
 import { startMcp } from './mcp.js';
 import { runDemo } from './demo.js';
-import { deploy, deployPlan } from './deploy.js';
+import { deploy, deployLogs, deployPlan, deployRun, deployStatus, writeProject } from './deploy.js';
+import { getSetting, listSettings, setSetting, unsetSetting } from './config.js';
+import { deleteSecret, secretStatus, setSecret, SECRET_NAMES } from './secrets.js';
+import { buildDashboard, dashboardHtml } from './dashboard.js';
+import { checkForUpdate, UPDATE_COMMAND } from './update.js';
+import { trustLine } from './reconcile.js';
+import { metricCandidates } from './metrics.js';
+import { recordCustomQuery } from './query.js';
 import { auditFlows, auditHtml, revenueHtml, revenuePerFlow, writeHtml } from './reports.js';
 import { applyPlan, buildPlan, readPlan, suggestLapsedDays, writePlan } from './segments.js';
 const program = new Command('lifecycle')
@@ -131,6 +138,7 @@ program.command('query').argument('<sql>').description('Run one read-only SQL qu
     const db = await openDb();
     try {
         const r = await runQuery(db, sql);
+        await recordCustomQuery(db, sql);
         emit(format(), r, () => `${JSON.stringify(r.rows, null, 2)}\n${r.rowCount} rows${r.truncated ? ' (capped)' : ''}`);
     }
     finally {
@@ -160,6 +168,17 @@ metrics.command('run').argument('<names...>').option('--days <n>', 'window in da
             ...results.map((r) => `${r.title}, last ${r.days} days: ${formatValue(r.unit, r.value)}${r.detail ? `. ${r.detail}` : ''}`),
             ...[...new Set(results.flatMap((r) => r.notes))],
         ].join('\n'));
+    }
+    finally {
+        await db.close();
+    }
+}));
+metrics.command('candidates').description('Custom queries run more than once: candidates for a new verified metric').option('--min-runs <n>', 'only queries run at least this often', '2').action(run(async (opts) => {
+    const db = await openDb();
+    try {
+        await migrate(db);
+        const c = await metricCandidates(db, Number(opts.minRuns));
+        emit(format(), c, () => (c.length ? [...c.map((x) => `${x.runs} runs  ${x.sql}`), '', 'To ask for one as a verified metric: lifecycle feedback "metric request: ..."'].join('\n') : 'No repeated custom queries yet.'));
     }
     finally {
         await db.close();
@@ -319,8 +338,21 @@ program.command('feedback').argument('<message...>').description('Report a bug o
     emit(format(), { url, opened }, () => `${opened ? 'Opened' : 'Open this to send it'}: ${url}\nIt includes your lifecycle, Node and OS versions. Nothing else.`);
 }));
 program.command('mcp').description('Start the read-only MCP server').action(run(startMcp));
-program.command('deploy').description('Run the daily sync from your own GitHub account').requiredOption('--repo <owner/name>').option('--yes', 'create it. Without this, only prints the plan').action(run(async (opts) => {
+program.command('deploy').description('Run the daily sync from your own GitHub account')
+    .option('--repo <owner/name>', 'private repo to create. Defaults to the deploy.repo setting')
+    .option('--yes', 'create it. Without this, only prints the plan')
+    .option('--write <dir>', 'write the project files to a folder instead, and create nothing')
+    .action(run(async (opts) => {
     const config = readConfig();
+    if (opts.write) {
+        const w = writeProject(config, opts.write);
+        emit(format(), w, () => `Wrote ${w.files.join(', ')} to ${w.dir}. Nothing was created on GitHub.`);
+        return;
+    }
+    const repo = opts.repo ?? config.deploy?.repo;
+    if (!repo)
+        throw new CliError('Which repo should run the sync?', 'lifecycle deploy --repo OWNER/NAME', 'no_repo');
+    opts.repo = repo;
     const plan = deployPlan(config, opts.repo);
     if (!opts.yes) {
         emit(format(), plan, () => [`This would create:`, ...plan.creates.map((c) => `  ${c}`), `Secrets to set: ${plan.secrets.join(', ')}`, `Cost: ${plan.expectedCost}`, `Nothing was created. Add --yes to go ahead.`].join('\n'));
@@ -335,7 +367,115 @@ program.command('deploy').description('Run the daily sync from your own GitHub a
         secrets[s] = v;
     }
     const r = deploy(config, opts.repo, secrets);
+    setSetting('deploy.repo', opts.repo);
     emit(format(), r, () => `Deployed to ${r.url}\nRun it once now: ${r.firstRun}`);
+}));
+// The daily sync in GitHub Actions, named the way Graphed names its cloud jobs.
+const jobs = program.command('jobs').description('The daily sync running in your GitHub account');
+jobs.command('list').description('Recent runs of the daily sync, and the current success streak').option('--repo <owner/name>').option('--limit <n>', 'runs to show', '7').action(run(async (opts) => {
+    const r = deployStatus(opts.repo ?? readConfig().deploy?.repo, Number(opts.limit));
+    emit(format(), r, () => [`${r.repo}: ${r.successStreak} successful run${r.successStreak === 1 ? '' : 's'} in a row`, ...r.runs.map((x) => `  ${x.createdAt.slice(0, 16).replace('T', ' ')}  ${x.conclusion ?? x.status}  (${x.event})`)].join('\n'));
+}));
+jobs.command('run').description('Start the daily sync now').option('--repo <owner/name>').action(run(async (opts) => {
+    const r = deployRun(opts.repo ?? readConfig().deploy?.repo);
+    emit(format(), r, () => `Started a sync in ${r.repo}. Check it with lifecycle jobs list`);
+}));
+program.command('logs').description('Recent sync runs on this machine, or with --cloud, the last GitHub Actions log')
+    .option('--cloud', 'show the log of the last daily sync in GitHub Actions')
+    .option('--limit <n>', 'runs to show', '10')
+    .option('--repo <owner/name>')
+    .action(run(async (opts) => {
+    if (opts.cloud) {
+        const r = deployLogs(opts.repo ?? readConfig().deploy?.repo);
+        emit(format(), r, () => `${r.run.url}\n${r.log}`);
+        return;
+    }
+    const db = await openDb();
+    try {
+        const rows = await db.query(`SELECT source, status, rows_written, started_at, finished_at, detail FROM meta_sync_run ORDER BY started_at DESC LIMIT $1`, [Number(opts.limit)]);
+        const runs = rows.map((r) => ({ source: String(r.source), status: String(r.status), rows: Number(r.rows_written), startedAt: new Date(String(r.started_at)).toISOString(), detail: r.detail ? String(r.detail) : null }));
+        emit(format(), runs, () => (runs.length ? runs.map((r) => `${r.startedAt.slice(0, 16).replace('T', ' ')}  ${r.source.padEnd(8)} ${r.status.padEnd(8)} ${r.rows} rows${r.detail ? `  ${r.detail}` : ''}`).join('\n') : 'Nothing synced yet. Run lifecycle sync'));
+    }
+    finally {
+        await db.close();
+    }
+}));
+const configCmd = program.command('config').description('Settings: registry.uri, deploy.repo, update.check');
+configCmd.command('list').action(run(async () => {
+    const s = listSettings();
+    emit(format(), s, () => s.map((x) => `${x.key} = ${x.value ?? '(not set)'}    ${x.description}`).join('\n'));
+}));
+configCmd.command('get').argument('<key>').action(run(async (key) => {
+    const value = getSetting(key) ?? null;
+    emit(format(), { key, value }, () => String(value ?? '(not set)'));
+}));
+configCmd.command('set').argument('<key>').argument('<value>').action(run(async (key, value) => {
+    const v = setSetting(key, value);
+    emit(format(), { key, value: v }, () => `${key} = ${v}`);
+}));
+configCmd.command('unset').argument('<key>').action(run(async (key) => {
+    unsetSetting(key);
+    emit(format(), { key, value: null }, () => `${key} removed`);
+}));
+const secretsCmd = program.command('secrets').description('Where each key comes from. Values are never shown');
+secretsCmd.command('list').action(run(async () => {
+    const s = secretStatus();
+    emit(format(), s, () => s.map((x) => `${x.source.padEnd(8)} ${x.name}  (env: ${x.env})`).join('\n'));
+}));
+secretsCmd.command('set').argument('<name>').requiredOption('--from-env <var>', 'environment variable that holds the value').description('Save a key to the keychain from an environment variable').action(run(async (name, opts) => {
+    if (!SECRET_NAMES.includes(name))
+        throw new CliError(`Unknown secret ${name}.`, `Secrets: ${SECRET_NAMES.join(', ')}`, 'unknown_secret');
+    const value = process.env[opts.fromEnv];
+    if (!value)
+        throw new CliError(`${opts.fromEnv} is empty.`, `export ${opts.fromEnv}=...`, 'missing_secret');
+    setSecret(name, value);
+    emit(format(), { name, saved: true }, () => `Saved ${name} to the keychain.`);
+}));
+secretsCmd.command('delete').argument('<name>').action(run(async (name) => {
+    if (!SECRET_NAMES.includes(name))
+        throw new CliError(`Unknown secret ${name}.`, `Secrets: ${SECRET_NAMES.join(', ')}`, 'unknown_secret');
+    const r = deleteSecret(name);
+    emit(format(), r, () => r.note);
+}));
+program.command('dashboard').description('Write one local HTML page: trust line, checks, metrics, flows, fixes and syncs')
+    .option('--html <file>', 'where to write it', 'lifecycle-dashboard.html')
+    .option('--days <n>', 'window in days', '90')
+    .action(run(async (opts) => {
+    const db = await openDb();
+    try {
+        const d = await buildDashboard(db, Number(opts.days));
+        writeHtml(opts.html, dashboardHtml(d));
+        emit(format(), { ...d, file: opts.html }, () => `${d.trust.line}\nWrote ${opts.html}. It stays on this machine.`);
+    }
+    finally {
+        await db.close();
+    }
+}));
+program.command('status').description('One-screen summary: setup, sources, trust, the daily sync and updates').action(run(async () => {
+    let config = null;
+    try {
+        config = readConfig();
+    }
+    catch {
+        config = null;
+    }
+    const db = config ? await openDb().catch(() => null) : null;
+    try {
+        const sources = await sourceStatus(config, (slug) => Boolean(getSecret(SECRET_FOR[slug])), db);
+        const trust = db ? await trustLine(db).catch(() => null) : null;
+        const update = await checkForUpdate();
+        const out = { version: VERSION, setUp: Boolean(config), database: config?.database.kind ?? null, sources, trust, deployRepo: config?.deploy?.repo ?? null, update };
+        emit(format(), out, () => [
+            `lifecycle ${VERSION}${update.newer ? `  (update available: ${update.latest}. Run: ${UPDATE_COMMAND})` : ''}`,
+            config ? `Database: ${config.database.kind}` : 'Not set up. Run lifecycle init, or follow lifecycle docs quickstart',
+            ...sources.map((s) => `${s.connected ? 'connected    ' : 'not connected'} ${s.name}${s.lastSync ? `, last sync ${s.lastSync.slice(0, 16).replace('T', ' ')}` : ''}`),
+            trust ? `Trust: ${trust.line}` : '',
+            `Daily sync: ${config?.deploy?.repo ?? 'not deployed. lifecycle deploy --repo OWNER/NAME'}`,
+        ].filter(Boolean).join('\n'));
+    }
+    finally {
+        await db?.close();
+    }
 }));
 program.command('demo').description('See it work on invented sample data. No keys needed').option('--html <file>', 'also write the sample report').action(run(async (opts) => {
     const d = await runDemo({ html: opts.html, write: writeHtml });
