@@ -1,0 +1,98 @@
+{
+  "slug": "gorgias",
+  "name": "Gorgias",
+  "docs": "https://developers.gorgias.com/reference/introduction",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "REST API key (password)",
+      "help": "Gorgias helpdesk, Settings, You, REST API. Under API Access & Credentials click Create API Key (or copy the existing Password (API Key)). Gorgias keys have no scopes: the key acts with the permissions of the user who owns it, so create it from a user with the lowest role that can see all tickets. This connector only sends GET requests."
+    }
+  ],
+  "params": [
+    {
+      "name": "subdomain",
+      "label": "Gorgias subdomain (the part before .gorgias.com)",
+      "example": "acme-store"
+    },
+    {
+      "name": "username",
+      "label": "Gorgias account email (REST API Username)",
+      "example": "ops@acme-store.com"
+    }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://{param:subdomain}.gorgias.com/api/",
+      "auth": {
+        "type": "http_basic",
+        "username": "{param:username}",
+        "password": "{secret:api_key}"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "tickets",
+        "endpoint": {
+          "path": "tickets",
+          "params": {
+            "limit": 100,
+            "order_by": "updated_datetime:desc"
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "meta.next_cursor",
+            "cursor_param": "cursor"
+          }
+        }
+      },
+      {
+        "name": "customers",
+        "endpoint": {
+          "path": "customers",
+          "params": {
+            "limit": 100,
+            "order_by": "updated_datetime:desc"
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "meta.next_cursor",
+            "cursor_param": "cursor"
+          }
+        }
+      },
+      {
+        "name": "satisfaction_surveys",
+        "endpoint": {
+          "path": "satisfaction-surveys",
+          "params": {
+            "limit": 100,
+            "order_by": "created_datetime:desc"
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "meta.next_cursor",
+            "cursor_param": "cursor"
+          }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developers.gorgias.com/reference/pagination",
+    "https://developers.gorgias.com/reference/list-tickets",
+    "https://developers.gorgias.com/reference/list-customers",
+    "https://developers.gorgias.com/reference/list-satisfaction-surveys",
+    "https://developers.gorgias.com/reference/authentication",
+    "https://docs.gorgias.com/en-US/rest-api-208286",
+    "https://developers.gorgias.com/reference/limitations"
+  ],
+  "notes": "All lists use cursor pagination: response data plus meta.next_cursor, passed back as cursor. limit max 100 on each endpoint. No updated_datetime or created_datetime filter is documented on these list endpoints (only order_by), so every resource is a full refresh merged on id. List tickets defaults trashed=true, so trashed tickets are included; filter on trashed_datetime downstream if needed. Messages (GET /api/messages) were left out because without a date filter a full refresh would re-read every message each run; tickets already carry message counts and first/last message timestamps. Rate limit for API key integrations is 40 requests per 20 seconds (developers.gorgias.com/reference/limitations), so a large initial ticket load is slow; dlt retries 429s."
+}

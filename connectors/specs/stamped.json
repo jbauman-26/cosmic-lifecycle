@@ -1,0 +1,45 @@
+{
+  "slug": "stamped",
+  "name": "Stamped (Loyalty 2.0 and merchant records)",
+  "docs": "https://developers.stamped.io/docs/getting-started",
+  "credentials": [
+    { "name": "api_key", "label": "Private API key", "help": "Stamped dashboard, Settings, Loyalty Integrations (or Review Integrations), API Keys: click + Add API Key and copy it. Only the account owner can generate keys. Stamped keys have no read-only scope; the key can also adjust points, so store it as a secret and use it only for this connector. The API requires a Professional or Enterprise plan." }
+  ],
+  "params": [
+    { "name": "shop_id", "label": "Shop ID (Store Hash), shown in the same API Keys screen", "example": "123456" }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://stamped.io/api/v3/",
+      "auth": { "type": "api_key", "name": "stamped-api-key", "api_key": "{secret:api_key}", "location": "header" },
+      "paginator": { "type": "page_number", "base_page": 0, "page_param": "page", "total_path": null, "has_more_path": "morePages" }
+    },
+    "resource_defaults": { "write_disposition": "merge" },
+    "resources": [
+      {
+        "name": "loyalty_activities",
+        "primary_key": "activityId",
+        "endpoint": { "path": "loyalty/shops/{param:shop_id}/activities", "data_selector": "activities", "params": { "limit": 25 } }
+      },
+      {
+        "name": "loyalty_rewards",
+        "primary_key": "rewardId",
+        "endpoint": { "path": "loyalty/shops/{param:shop_id}/rewards", "data_selector": "rewards", "params": { "limit": 25 } }
+      },
+      {
+        "name": "customers",
+        "primary_key": "customerId",
+        "endpoint": { "path": "merchant/shops/{param:shop_id}/customers", "data_selector": "customers", "params": { "limit": 25 } }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developers.stamped.io/docs/getting-started",
+    "https://developers.stamped.io/reference/loyalty-reports-activities",
+    "https://developers.stamped.io/reference/loyalty-reports-rewards",
+    "https://developers.stamped.io/reference/filtercustomers",
+    "https://developers.stamped.io/docs/reviews-apis",
+    "https://developers.stamped.io/v2.0/reference/getreviews-1"
+  ],
+  "notes": "REVIEWS ARE NOT INCLUDED. Stamped's only review list endpoint is the legacy V2 GET /api/v2/{storeHash}/dashboard/reviews (basic auth, public key / private key). Its official reference documents no pagination parameters and no response shape (it even marks an email query param as required), and the V3 Reviews API is announced as coming soon. I would have had to guess page/limit names and the results path, so I left reviews out rather than fake them. This spec covers the V3 API, which per Stamped only works for merchants on the Loyalty 2.0 dashboard (Loyalty 1.0 shops must use V2 and will get errors here). Auth is the stamped-api-key header. Pagination: page (default 0, so base_page 0) and limit (default 25); responses carry page, limit, morePages and the record array; the paginator stops when morePages is false. The documented max limit is not stated, so limit stays at the documented default 25 (safe but slow; raise it after testing). The customers endpoint lists page/limit/morePages in its response schema but not in its query parameters, so paging it by page/limit is an inference from the shared Paginated* shape. No updated-since filter is documented for activities or rewards (only customers has datePlatformCreated ranges, which track creation, not updates), so all three resources are full refresh with merge on their ids. Customer records are mostly personal fields and get stripped."
+}

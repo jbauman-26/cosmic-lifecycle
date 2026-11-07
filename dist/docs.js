@@ -195,9 +195,64 @@ lifecycle config list|get|set|unset KEY [VALUE]
 lifecycle secrets list|set NAME --from-env VAR|delete NAME
 lifecycle mcp
 lifecycle doctor
-lifecycle docs quickstart|setup|agents|kits|commands|troubleshooting
+lifecycle warehouse show|connect|sync|schema|query|list|disconnect|add-api
+lifecycle docs quickstart|setup|agents|kits|commands|warehouse|troubleshooting
 
 Add --format json to any command.`,
+    warehouse: `# The warehouse
+
+Raw tables from the tools a store runs on, one schema per source
+(src_gorgias, src_recharge, ...), in your own database. Loaded by dlt
+(Apache 2.0), run through uv. Needs uv: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+Where it lands:
+  Postgres (lifecycle init --database-url-env, or provision neon): schemas in that database.
+  Local setup: ~/.lifecycle/warehouse.duckdb.
+
+Find and connect a source:
+  lifecycle sources catalog [--query reviews] [--category helpdesk] [--readiness built]
+  lifecycle warehouse show gorgias
+  export GORGIAS_KEY=...        # never paste keys into a chat
+  lifecycle warehouse connect gorgias --secret api_key=GORGIAS_KEY --set subdomain=yourstore --set email=you@store.com
+  lifecycle warehouse sync [gorgias]
+  lifecycle warehouse schema [gorgias]
+  lifecycle warehouse query "select status, count(*) from src_gorgias.tickets group by 1"
+  lifecycle warehouse list | disconnect SLUG
+
+Readiness, said plainly:
+  native   built in, with reconcile checks (Shopify, Klaviyo, GA4, Stripe)
+  tested   a warehouse connector that has synced a real account
+  built    written from the vendor's API docs, not yet run on a real account.
+           Expect the first sync to need a fix. Report it: lifecycle feedback
+  planned  no connector yet. Use lifecycle sources import NAME --csv FILE
+
+Personal data:
+  Removed before anything is written: any field named for an email, phone,
+  address, birthday, IP, or a person's name (customer_name, first_name ...),
+  and email addresses inside text. A plain "name" field is kept, because it
+  is usually a product or campaign. To keep everything:
+  lifecycle warehouse connect SLUG ... --keep-personal-data
+
+Any other tool with a REST API:
+  Write a spec, then lifecycle warehouse add-api my-tool --spec spec.json
+  {
+    "name": "My Tool",
+    "category": "ops",
+    "docs": "https://example.com/api",
+    "credentials": [{ "name": "api_key", "label": "API key", "help": "Settings, API" }],
+    "params": [],
+    "config": {
+      "client": { "base_url": "https://api.example.com/v1/",
+                  "auth": { "type": "bearer", "token": "{secret:api_key}" } },
+      "resource_defaults": { "primary_key": "id", "write_disposition": "merge" },
+      "resources": [ { "name": "orders", "endpoint": { "path": "orders", "data_selector": "data" } } ]
+    }
+  }
+  "config" is a dlt rest_api config: https://dlthub.com/docs/dlt-ecosystem/verified-sources/rest_api/basic
+  {secret:NAME} and {param:NAME} are filled in at run time.
+
+Daily sync: lifecycle deploy adds warehouse sources and their keys to the
+GitHub Actions job automatically.`,
     troubleshooting: `Shopify says the app is not approved to access orders:
   In the Partner Dashboard open your app, then API access requests, then
   Protected customer data access, and select Analytics. Leave name, email,

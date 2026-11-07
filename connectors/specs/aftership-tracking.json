@@ -1,0 +1,49 @@
+{
+  "slug": "aftership-tracking",
+  "name": "AfterShip Tracking",
+  "docs": "https://www.aftership.com/docs/tracking/quickstart/api-quick-start",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "AfterShip API key",
+      "help": "Sign in to AfterShip and open the organization API keys page (organization.automizely.com/api-keys), click Create an API key, pick the plain API key authentication type (not AES or RSA signature), name it Cosmic Lifecycle and copy the key. AfterShip does not document a read-only permission level for Tracking keys; this connector only sends GET requests."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://api.aftership.com/tracking/2026-07/",
+      "auth": { "type": "api_key", "name": "as-api-key", "api_key": "{secret:api_key}", "location": "header" }
+    },
+    "resource_defaults": { "primary_key": "id", "write_disposition": "merge" },
+    "resources": [
+      {
+        "name": "trackings",
+        "endpoint": {
+          "path": "trackings",
+          "params": { "limit": 200 },
+          "data_selector": "data.trackings",
+          "paginator": { "type": "cursor", "cursor_path": "data.pagination.next_cursor", "cursor_param": "cursor" },
+          "incremental": { "start_param": "updated_at_min", "cursor_path": "updated_at", "initial_value": "2020-01-01T00:00:00+00:00" }
+        }
+      },
+      {
+        "name": "couriers",
+        "primary_key": "slug",
+        "write_disposition": "replace",
+        "endpoint": {
+          "path": "couriers",
+          "data_selector": "data.couriers",
+          "paginator": { "type": "single_page" }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://www.aftership.com/docs/tracking/quickstart/api-quick-start",
+    "https://www.aftership.com/docs/tracking/quickstart/authentication",
+    "https://www.aftership.com/docs/tracking/jh865r66gc6hi-get-trackings",
+    "https://www.aftership.com/docs/tracking/ukw8ouy82dp1k-get-couriers"
+  ],
+  "notes": "API version pinned to 2026-07 (current at time of writing). trackings: cursor pagination via data.pagination.next_cursor (data.pagination.has_next_page also present), limit max 200 (default 100). Incremental on updated_at via updated_at_min. created_at_min defaults to 120 days ago and AfterShip only stores 120 days of tracking data, so the first sync returns at most the last 120 days and trackings older than that age out of the API; the warehouse keeps what it already loaded. Checkpoints (carrier scan events) come nested in each tracking and dlt unpacks them into a child table trackings__checkpoints, so no separate checkpoint call is needed. couriers lists the account's activated couriers, single page, replaced each run. GET rate limit 5 requests per second. Customer names, emails and phone numbers inside customers and subscribed_* fields are stripped by the runner's personal-data filter."
+}

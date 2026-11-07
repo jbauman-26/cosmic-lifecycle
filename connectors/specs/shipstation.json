@@ -1,0 +1,56 @@
+{
+  "slug": "shipstation",
+  "name": "ShipStation",
+  "docs": "https://docs.shipstation.com/getting-started",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "ShipStation V2 API key",
+      "help": "In ShipStation go to Settings > Account > API Settings (ship.shipstation.com/#/settings/api); the page also shows whether your plan includes API access. Choose the V2 API key (not the legacy V1 key and secret) and click Generate API Key, then copy it; it is shown only once and only one V2 key can be active, so generating a new one replaces any existing V2 key. ShipStation keys have no scopes or read-only mode; this connector only sends GET requests."
+    }
+  ],
+  "params": [
+    { "name": "start_date", "label": "Sync history from (ISO date, UTC)", "example": "2026-01-01T00:00:00Z" }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://api.shipstation.com/v2/",
+      "auth": { "type": "api_key", "name": "API-Key", "api_key": "{secret:api_key}", "location": "header" }
+    },
+    "resource_defaults": { "write_disposition": "merge" },
+    "resources": [
+      {
+        "name": "shipments",
+        "primary_key": "shipment_id",
+        "endpoint": {
+          "path": "shipments",
+          "params": { "page_size": 500, "sort_by": "modified_at", "sort_dir": "asc" },
+          "data_selector": "shipments",
+          "paginator": { "type": "page_number", "page_param": "page", "base_page": 1, "total_path": "pages" },
+          "incremental": { "start_param": "modified_at_start", "cursor_path": "modified_at", "initial_value": "{param:start_date}" }
+        }
+      },
+      {
+        "name": "labels",
+        "primary_key": "label_id",
+        "endpoint": {
+          "path": "labels",
+          "params": { "page_size": 500, "sort_by": "created_at", "sort_dir": "asc" },
+          "data_selector": "labels",
+          "paginator": { "type": "page_number", "page_param": "page", "base_page": 1, "total_path": "pages" },
+          "incremental": { "start_param": "created_at_start", "cursor_path": "created_at", "initial_value": "{param:start_date}" }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://docs.shipstation.com/authentication",
+    "https://docs.shipstation.com/getting-started",
+    "https://docs.shipstation.com/apis/shipstation-v1/docs/start-here/requirements",
+    "https://docs.shipstation.com/apis/shipengine/docs/reference/pagination",
+    "https://docs.shipstation.com/list-shipments",
+    "https://docs.shipstation.com/list-labels",
+    "https://docs.shipstation.com/orders/legacy-migration"
+  ],
+  "notes": "Uses ShipStation API V2 (api.shipstation.com/v2, API-Key header). The V1 API (ssapi.shipstation.com, Basic auth with key plus secret) is marked deprecated and slated for removal, so it is not used; V1 orders map to V2 shipments (orderId N becomes shipment_id se-N, and awaiting_payment, awaiting_shipment and on_hold all collapse to pending). V2 is still labelled early release by ShipStation. API access depends on plan. Pagination: page/page_size with a pages total in the response; page_size max 500 is documented for labels and shown as a valid example for shipments. Hard limit: list shipments rejects any offset past 10,000 rows (page x page_size) with a 400, so the first sync must start from a start_date recent enough to hold fewer than 10,000 shipments; after that the modified_at_start incremental (sorted ascending) keeps each run small. If a brand ships more than 10,000 orders between syncs, the run fails and needs a later start_date. labels only filter on created_at, so incremental is by creation; a label voided after it was synced is not re-fetched (voided_at stays stale). No sandbox for ShipStation platform keys: every call hits production, but GET calls do not cost money. Addresses and names are stripped by the runner's personal-data filter."
+}

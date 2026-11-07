@@ -1,0 +1,93 @@
+{
+  "slug": "mailchimp",
+  "name": "Mailchimp",
+  "docs": "https://mailchimp.com/developer/marketing/api/",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "API key",
+      "help": "Sign in to Mailchimp and open the API Keys section of your account (https://us1.admin.mailchimp.com/account/api/, it redirects to your own data center), then click Create A Key. Mailchimp keys cannot be scoped or made read-only: every key has full account access, so create it from a dedicated admin user and delete it when you disconnect. This connector only sends GET requests. The key ends in a data center suffix such as -us21; enter the part after the dash (us21) as the Data center setting."
+    }
+  ],
+  "params": [
+    {
+      "name": "dc",
+      "label": "Data center (the suffix after the dash in your API key, e.g. us21)",
+      "example": "us21"
+    }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://{param:dc}.api.mailchimp.com/3.0/",
+      "auth": {
+        "type": "bearer",
+        "token": "{secret:api_key}"
+      },
+      "paginator": {
+        "type": "offset",
+        "limit": 1000,
+        "offset": 0,
+        "offset_param": "offset",
+        "limit_param": "count",
+        "total_path": "total_items"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "campaigns",
+        "endpoint": {
+          "path": "campaigns",
+          "data_selector": "campaigns"
+        }
+      },
+      {
+        "name": "campaign_reports",
+        "endpoint": {
+          "path": "reports",
+          "data_selector": "reports"
+        }
+      },
+      {
+        "name": "lists",
+        "endpoint": {
+          "path": "lists",
+          "data_selector": "lists"
+        }
+      },
+      {
+        "name": "automations",
+        "endpoint": {
+          "path": "automations",
+          "data_selector": "automations"
+        }
+      },
+      {
+        "name": "ecommerce_orders",
+        "primary_key": [
+          "store_id",
+          "id"
+        ],
+        "endpoint": {
+          "path": "ecommerce/orders",
+          "data_selector": "orders"
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://mailchimp.com/developer/marketing/api-concepts/authentication.md",
+    "https://mailchimp.com/developer/marketing/api-concepts/authentication/api-keys.md",
+    "https://mailchimp.com/developer/marketing/api-concepts/methods-and-parameters.md",
+    "https://mailchimp.com/developer/marketing/api/campaigns/list.md",
+    "https://mailchimp.com/developer/marketing/api/reports/list.md",
+    "https://mailchimp.com/developer/marketing/api/lists/list.md",
+    "https://mailchimp.com/developer/marketing/api/automations/list.md",
+    "https://mailchimp.com/developer/marketing/api/e-commerce/list-orders.md",
+    "https://mailchimp.com/developer/marketing/build/get-started/generate-your-api-key.md"
+  ],
+  "notes": "All GET. Pagination is offset/count with count max 1000 and total_items in the body (methods-and-parameters page). Auth: docs accept the key as a Bearer token or as the HTTP Basic password; bearer is used. Base URL: the current (Fern) docs show the root as https://api.mailchimp.com/3.0/ with no data center; the long-standing data-center host https://<dc>.api.mailchimp.com/3.0/ is used here as requested and has always routed correctly for keys from that dc. If the unprefixed host is confirmed to work for API keys, dc could be dropped. No incremental: the only time filters are send/create time (campaigns, reports, automations) or list creation date, while report stats and order status keep changing after creation, so every resource is a full refresh merged on primary key. ecommerce_orders: order id is only unique within a store, so the key is [store_id, id]; it only returns data if a store (e.g. the Shopify integration) syncs orders to Mailchimp. Mailchimp keys cannot be made read-only; the connector itself only issues GETs. 120 second request timeout applies; count=1000 on reports may be slow on large accounts."
+}

@@ -1,0 +1,48 @@
+{
+  "slug": "judge-me",
+  "name": "Judge.me",
+  "docs": "https://judge.me/api/docs",
+  "credentials": [
+    { "name": "api_token", "label": "Private API token", "help": "Judge.me admin, Settings, Integrations, then the View API tokens button at the top right. Copy the Private API token. Judge.me does not offer read-only scopes: the private token is read/write, so store it as a secret. This connector only sends GET requests." }
+  ],
+  "params": [
+    { "name": "shop_domain", "label": "Shop domain (myshopify.com)", "example": "example-store.myshopify.com" }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://api.judge.me/api/v1/",
+      "auth": { "type": "api_key", "name": "X-Api-Token", "api_key": "{secret:api_token}", "location": "header" }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge",
+      "endpoint": { "params": { "shop_domain": "{param:shop_domain}" } }
+    },
+    "resources": [
+      {
+        "name": "reviews",
+        "endpoint": {
+          "path": "reviews",
+          "params": { "per_page": 100 },
+          "data_selector": "reviews",
+          "paginator": { "type": "page_number", "base_page": 1, "page_param": "page", "total_path": null, "stop_after_empty_page": true }
+        }
+      },
+      {
+        "name": "shop_info",
+        "endpoint": {
+          "path": "shops/info",
+          "data_selector": "shop",
+          "paginator": { "type": "single_page" }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://judge.me/api/docs#tag/Reviews/operation/reviews#index",
+    "https://judge.me/api/docs#tag/Shops/operation/shops#info",
+    "https://judge.me/api/docs#section/Authentication",
+    "https://judge.me/help/en/articles/8409180-using-judge-me-api"
+  ],
+  "notes": "Reviews list returns current_page, per_page and reviews with no total count or next link, so pagination is page_number stopping on the first empty page. per_page maximum 100 per the help article (API reference gives no max). No updated_at or created_at filter is documented, so reviews is a full refresh merged on id; large shops will re-read every review each run. The public API has no list endpoints for products, questions or reviewers (only single lookups), so they are not included. shop_info id is returned as a string. No rate limit is documented."
+}

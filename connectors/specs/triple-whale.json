@@ -1,0 +1,93 @@
+{
+  "slug": "triple-whale",
+  "name": "Triple Whale",
+  "docs": "https://triplewhale.readme.io/reference/introduction-to-the-triple-whale-api",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "API key",
+      "help": "Triple Whale app, Data, APIs (app.triplewhale.com/api-keys), Generate API Key. Name it, set an expiration (90 days default; pick a longer one or rotate on schedule), and select no Write scopes. Summary Page: Read and Pixel Attribution: Read are the read scopes; the docs list no specific scope for the SQL endpoint this connector uses. Leave Customer PII: Read off. Copy the key from the popup; it is shown once. Keys stop working if the creating user loses access."
+    }
+  ],
+  "params": [
+    {
+      "name": "shop_domain",
+      "label": "Shop ID (the shop-id value in your Triple Whale app URL)",
+      "example": "example-store.myshopify.com"
+    }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://api.triplewhale.com/api/v2/",
+      "auth": {
+        "type": "api_key",
+        "name": "x-api-key",
+        "api_key": "{secret:api_key}",
+        "location": "header"
+      }
+    },
+    "resource_defaults": {
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "ads_daily",
+        "primary_key": [
+          "event_date",
+          "channel",
+          "campaign_id"
+        ],
+        "endpoint": {
+          "path": "orcabase/api/sql",
+          "method": "POST",
+          "json": {
+            "shopId": "{param:shop_domain}",
+            "query": "SELECT event_date, channel, campaign_id, any(campaign_name) AS campaign_name, SUM(spend) AS spend, SUM(impressions) AS impressions, SUM(clicks) AS clicks, SUM(conversions) AS conversions, SUM(conversion_value) AS conversion_value FROM ads_table WHERE event_date >= today() - 30 AND event_date <= today() GROUP BY event_date, channel, campaign_id",
+            "period": {
+              "startDate": "2020-01-01",
+              "endDate": "2099-12-31"
+            }
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "single_page"
+          }
+        }
+      },
+      {
+        "name": "pixel_attribution_daily",
+        "primary_key": [
+          "event_date",
+          "channel",
+          "campaign_id"
+        ],
+        "endpoint": {
+          "path": "orcabase/api/sql",
+          "method": "POST",
+          "json": {
+            "shopId": "{param:shop_domain}",
+            "query": "SELECT event_date, channel, campaign_id, any(campaign_name) AS campaign_name, SUM(spend) AS spend, SUM(order_revenue) AS order_revenue, SUM(orders_quantity) AS orders, SUM(new_customer_orders) AS new_customer_orders, SUM(new_customer_order_revenue) AS new_customer_order_revenue FROM pixel_joined_tvf() WHERE event_date >= today() - 30 AND event_date <= today() GROUP BY event_date, channel, campaign_id",
+            "period": {
+              "startDate": "2020-01-01",
+              "endDate": "2099-12-31"
+            }
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "single_page"
+          }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://triplewhale.readme.io/reference/data-out-execute-custom-sql-query",
+    "https://triplewhale.readme.io/reference/creating-and-managing-triple-whale-api-keys",
+    "https://triplewhale.readme.io/docs/ads-table",
+    "https://triplewhale.readme.io/docs/pixel-joined-table",
+    "https://triplewhale.readme.io/docs/sql-example-monthly-pixel-roas-for-selected-channels-bing-facebook-google",
+    "https://triplewhale.readme.io/reference/get-summary-page-data",
+    "https://triplewhale.readme.io/reference/get-customer-journey-attribution-data"
+  ],
+  "notes": "Triple Whale has no GET data endpoints. Every Data-Out endpoint is a read-only POST: Summary Page (POST summary-page/get-data), Attribution (POST attribution/get-orders-with-journeys-v2) and Custom SQL (POST orcabase/api/sql). This spec uses only the Custom SQL endpoint, which returns {success, message, data:[rows]} in one response with no pagination. Both resources are aggregated to one row per day, channel and campaign (ads_table is channel-reported; pixel_joined_tvf is Triple Attribution model, lifetime window by default) and re-pull a rolling 31-day window each run, merged on (event_date, channel, campaign_id), so restated ad and attribution numbers are corrected. The runner has no 'today' placeholder, so the window is computed in ClickHouse with today() and the required period field is sent as a fixed wide range (2020-01-01 to 2099-12-31). Uncertain: the docs say to use @startDate and @endDate in the query; it is not confirmed whether the API rejects a query that does not reference them or a period whose endDate is in the future. If it does, switch the WHERE clause to event_date BETWEEN @startDate AND @endDate and send real dates. For a historical backfill, change today() - 30 once to a larger window. Summary Page was skipped because it returns a single unkeyed metric list per period and needs todayHour; Attribution journeys were skipped because they need a per-run date window and body-based page pagination (pageSize max 100) the runner cannot fill without a date placeholder. Rate limit header example is 100 calls per 60 seconds. Queries are aggregated to keep response size small."
+}

@@ -139,6 +139,9 @@ lifecycle tools catalog                          # read-only Klaviyo and Shopify
 lifecycle tools run shopify.order_count
 lifecycle exec -- node my-report.js              # run a script with your keys in its environment
 lifecycle sources import meta_ads --csv ads.csv  # any other tool's daily totals
+lifecycle sources catalog --category reviews      # 97 Shopify-stack tools, ranked by usage
+lifecycle warehouse connect gorgias --secret api_key=GORGIAS_KEY --set subdomain=you --set username=you@store.com
+lifecycle warehouse sync && lifecycle warehouse query "select status, count(*) from src_gorgias.tickets group by 1"
 lifecycle files ls                               # every saved report, dashboard and plan
 lifecycle files pull                             # the dashboard from the last daily sync
 ```

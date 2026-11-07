@@ -6,7 +6,7 @@ import { connectGa4, connectKlaviyo, connectShopify, connectStripe } from './com
 import { doctor } from './commands/doctor.js';
 import { openDb, migrate } from './db.js';
 import { readConfig } from './config.js';
-import { getSecret } from './secrets.js';
+import { getSecret, getSourceSecret } from './secrets.js';
 import { CliError } from './errors.js';
 import { fetchOrderCount, fetchOrders, shopifyToken } from './sources/shopify.js';
 import { fetchGa4Daily, ga4AccessToken } from './sources/ga4.js';
@@ -25,7 +25,7 @@ import { findMetric, formatValue, listMetrics, runMetric } from './metrics.js';
 import { CATALOG, CUSTOM_SOURCE_NOTE, kitPrompt, sourceStatus } from './sources-catalog.js';
 import { startMcp } from './mcp.js';
 import { runDemo } from './demo.js';
-import { deploy, deployLogs, deployPlan, deployRun, deployStatus, writeProject } from './deploy.js';
+import { deploy, deployLogs, deployPlan, deployRun, deployStatus, warehouseSecrets, writeProject } from './deploy.js';
 import { getSetting, listSettings, setSetting, unsetSetting } from './config.js';
 import { deleteSecret, secretStatus, setSecret, SECRET_NAMES } from './secrets.js';
 import { buildDashboard, dashboardHtml } from './dashboard.js';
@@ -43,6 +43,9 @@ import { neonPlan, provisionNeon } from './provision.js';
 import { envName, SECRET_NAMES as ALL_SECRETS } from './secrets.js';
 import { auditFlows, auditHtml, revenueHtml, revenuePerFlow, writeHtml } from './reports.js';
 import { applyPlan, buildPlan, readPlan, suggestLapsedDays, writePlan } from './segments.js';
+import { addCustomSource, connectSource, connectedSources, datasetFor, disconnectSource, duckQuery, duckSchema, findSource, searchCatalog, syncSources } from './warehouse.js';
+import { READINESS_LEGEND } from './warehouse-catalog.js';
+import { randomUUID } from 'node:crypto';
 const program = new Command('lifecycle')
     .description('A clean view of Shopify and Klaviyo for Claude Code. Read-only. Nothing sends.')
     .version(VERSION)
@@ -205,8 +208,31 @@ metrics.command('candidates').description('Custom queries run more than once: ca
 }));
 const SECRET_FOR = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret', stripe: 'stripe-read-key' };
 const sources = program.command('sources').description('What can be connected, and what is connected');
-sources.command('catalog').description('Sources this CLI supports, with how to connect each one').action(run(async () => {
-    emit(format(), CATALOG, () => CATALOG.map((s) => [`${s.name} (${s.slug}), about ${s.setupMinutes} minutes`, `  Syncs: ${s.syncs}`, `  Needs: ${s.credential}`, `  Connect: ${s.connect}`, `  Tested: ${s.tested}`].join('\n')).join('\n\n') + `\n\n${CUSTOM_SOURCE_NOTE}\nFull steps: lifecycle docs setup. Want a native connector? lifecycle feedback "please add ..."`);
+sources
+    .command('catalog')
+    .description('Every source: the built-in four, warehouse connectors, and what is planned')
+    .option('--query <text>', 'search by name, slug or category')
+    .option('--category <name>', 'only one category, such as reviews or helpdesk')
+    .option('--readiness <level>', 'native, tested, built or planned')
+    .action(run(async (opts) => {
+    const warehouse = searchCatalog(opts).filter((s) => s.readiness !== 'native');
+    const native = opts.query || opts.category || (opts.readiness && opts.readiness !== 'native') ? [] : CATALOG;
+    const out = { native, warehouse: warehouse.map(({ config, ...s }) => ({ ...s, hasConnector: Boolean(config) })), legend: READINESS_LEGEND };
+    emit(format(), out, () => {
+        const nativeText = native.map((s) => [`${s.name} (${s.slug}), built in, about ${s.setupMinutes} minutes`, `  Syncs: ${s.syncs}`, `  Connect: ${s.connect}`, `  Tested: ${s.tested}`].join('\n'));
+        const byCategory = new Map();
+        for (const s of warehouse)
+            byCategory.set(s.category, [...(byCategory.get(s.category) ?? []), s]);
+        const whText = [...byCategory.entries()].map(([cat, list]) => `${cat}\n${list.map((s) => `  ${s.readiness.padEnd(7)} ${s.name} (${s.slug})`).join('\n')}`);
+        return [
+            ...(nativeText.length ? ['Built in', ...nativeText, ''] : []),
+            `Warehouse connectors (${warehouse.length})`,
+            ...whText,
+            '',
+            READINESS_LEGEND,
+            `Details for one: lifecycle warehouse show SLUG. ${CUSTOM_SOURCE_NOTE}`,
+        ].join('\n');
+    });
 }));
 sources.command('list').description('Which sources are connected, and when each last synced').action(run(async () => {
     let config = null;
@@ -386,8 +412,10 @@ program.command('deploy').description('Run the daily sync from your own GitHub a
     }
     const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key' };
     const secrets = {};
+    const wh = new Map(warehouseSecrets(config).map((w) => [w.env, w]));
     for (const s of plan.secrets) {
-        const v = getSecret(names[s]);
+        const w = wh.get(s);
+        const v = w ? getSourceSecret(w.slug, w.field) : getSecret(names[s]);
         if (!v)
             throw new CliError(`Missing ${s}.`, s === 'LIFECYCLE_DATABASE_URL' ? 'Create a Postgres database, then lifecycle init --database-url-env NAME' : 'lifecycle doctor', 'missing_secret');
         secrets[s] = v;
@@ -587,6 +615,103 @@ sources.command('import').argument('<name>').requiredOption('--csv <file>', 'CSV
     }
 }));
 // Provision: a managed Postgres in your own Neon account, so the daily sync has somewhere to write.
+// The warehouse: raw tables from many tools, one schema per source, loaded by dlt.
+const warehouse = program.command('warehouse').description('Load raw data from many tools into your database, one schema per source');
+const collect = (v, prev = []) => [...prev, v];
+warehouse.command('show').argument('<slug>').description('What a source needs, what it loads, and how far it is proven').action(run(async (slug) => {
+    const s = findSource(slug);
+    const { config, ...rest } = s;
+    const resources = (config?.resources ?? []).map((r) => r.name);
+    const connectCmd = `lifecycle warehouse connect ${s.slug} ${[...s.credentials.map((c) => `--secret ${c.name}=${c.name.toUpperCase()}_VAR`), ...s.params.map((p) => `--set ${p.name}=${p.example}`)].join(' ')}`.trim();
+    const out = { ...rest, resources, schema: datasetFor(s.slug), connect: config ? connectCmd : null };
+    emit(format(), out, () => [
+        `${s.name} (${s.slug}), ${s.category}, ${s.readiness}`,
+        `Why: ${s.why}`,
+        s.docs ? `API docs: ${s.docs}` : '',
+        resources.length ? `Loads: ${resources.join(', ')} into schema ${datasetFor(s.slug)}` : 'No connector yet. Bring daily totals in with: lifecycle sources import NAME --csv FILE',
+        ...s.credentials.map((c) => `Needs ${c.name}: ${c.label}. ${c.help}`),
+        ...s.params.map((p) => `Needs setting ${p.name}: ${p.label} (for example ${p.example})`),
+        s.tested ? `Tested: ${s.tested}` : '',
+        s.notes ? `Notes: ${s.notes}` : '',
+        config ? `Connect: ${connectCmd}` : '',
+    ].filter(Boolean).join('\n'));
+}));
+warehouse.command('connect').argument('<slug>')
+    .description('Check a key with one page of data, then save it. Keys come from environment variables, never the command line')
+    .option('--secret <field=ENV_VAR>', 'credential field and the variable holding it (repeatable)', collect)
+    .option('--set <name=value>', 'a setting such as your store or subdomain (repeatable)', collect)
+    .option('--keep-personal-data', 'also load emails, names, phones and addresses. Off by default')
+    .option('--skip-check', 'save without calling the API first')
+    .action(run(async (slug, opts) => {
+    const r = await connectSource(slug, opts);
+    emit(format(), r, () => `Connected ${slug}. Check: ${typeof r.check === 'string' ? r.check : `${r.check.rows} rows from ${r.check.resource}`}. Personal data: ${r.personalData}.\nNext: ${r.next}`);
+}));
+warehouse.command('disconnect').argument('<slug>').description('Forget a source and its keys. Loaded data is kept').action(run(async (slug) => {
+    const r = disconnectSource(slug);
+    emit(format(), r, () => `Disconnected ${slug}. ${r.keysRemoved} key(s) removed. ${r.note}`);
+}));
+warehouse.command('list').description('Connected warehouse sources').action(run(async () => {
+    const list = connectedSources(readConfig()).map((c) => ({ ...c, schema: datasetFor(c.slug), name: findSource(c.slug).name }));
+    emit(format(), list, () => list.length ? list.map((c) => `${c.name} (${c.slug}) -> ${c.schema}, personal data ${c.personalData === 'keep' ? 'kept' : 'removed'}, connected ${c.connectedAt.slice(0, 10)}`).join('\n') : 'No warehouse sources connected. See lifecycle sources catalog');
+}));
+warehouse.command('sync').argument('[slugs...]').description('Load fresh data from connected warehouse sources').option('--verbose', 'show the loader log').action(run(async (slugs, opts) => {
+    const config = readConfig();
+    const db = await openDb();
+    try {
+        await migrate(db);
+        const record = async (r, startedAt) => {
+            await db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status, rows_written, detail) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [randomUUID(), r.source, startedAt, new Date().toISOString(), r.status, r.rows, r.detail ?? null]);
+        };
+        const results = await syncSources(slugs, { verbose: opts.verbose, record });
+        const failed = results.filter((r) => r.status === 'failed');
+        if (failed.length)
+            process.exitCode = 1;
+        emit(format(), { database: config.database.kind, results }, () => results.map((r) => r.status === 'ok' ? `ok      ${r.source}: ${r.rows} rows${r.tables ? ` (${Object.entries(r.tables).map(([t, n]) => `${t} ${n}`).join(', ')})` : ''}` : `failed  ${r.source}: ${r.detail}`).join('\n'));
+    }
+    finally {
+        await db.close();
+    }
+}));
+warehouse.command('schema').argument('[slug]').description('Tables and columns the warehouse holds').action(run(async (slug) => {
+    const config = readConfig();
+    let cols;
+    if (config.database.kind === 'local')
+        cols = await duckSchema(slug);
+    else {
+        const db = await openDb();
+        try {
+            const rows = await db.query(`SELECT table_schema, table_name, column_name, data_type FROM information_schema.columns WHERE table_schema LIKE 'src\_%' AND table_schema NOT LIKE '%\_staging' AND column_name NOT LIKE '\_dlt%' AND table_name NOT LIKE '\_dlt%' ${slug ? 'AND table_schema = $1' : ''} ORDER BY 1, 2, ordinal_position`, slug ? [datasetFor(slug)] : []);
+            cols = rows.map((r) => ({ schema: String(r.table_schema), table: String(r.table_name), column: String(r.column_name), type: String(r.data_type) }));
+        }
+        finally {
+            await db.close();
+        }
+    }
+    const grouped = {};
+    for (const c of cols)
+        (grouped[`${c.schema}.${c.table}`] ??= []).push(`${c.column} ${c.type}`);
+    emit(format(), grouped, () => Object.keys(grouped).length ? Object.entries(grouped).map(([t, c]) => `${t}\n  ${c.join('\n  ')}`).join('\n\n') : 'Nothing loaded yet. Run lifecycle warehouse sync');
+}));
+warehouse.command('query').argument('<sql>').description('Run one read-only SQL query across warehouse schemas, such as src_gorgias.tickets').action(run(async (sql) => {
+    const config = readConfig();
+    if (config.database.kind === 'local') {
+        const r = await duckQuery(sql);
+        emit(format(), r, () => `${JSON.stringify(r.rows, null, 2)}\n${r.rows.length} rows`);
+        return;
+    }
+    const db = await openDb();
+    try {
+        const r = await runQuery(db, sql);
+        emit(format(), r, () => `${JSON.stringify(r.rows, null, 2)}\n${r.rowCount} rows${r.truncated ? ' (capped)' : ''}`);
+    }
+    finally {
+        await db.close();
+    }
+}));
+warehouse.command('add-api').argument('<slug>').requiredOption('--spec <file>', 'JSON spec: name, credentials, params and a dlt rest_api config').description('Add any REST API as a source. See lifecycle docs warehouse').action(run(async (slug, opts) => {
+    const r = addCustomSource(slug, opts.spec);
+    emit(format(), r, () => `Added ${slug}.\nNext: ${r.next}`);
+}));
 program.command('provision').description('Create a managed database in your own cloud account').argument('<provider>', 'neon')
     .requiredOption('--key-env <name>', 'environment variable holding your Neon API key')
     .option('--name <name>', 'project name', 'lifecycle')

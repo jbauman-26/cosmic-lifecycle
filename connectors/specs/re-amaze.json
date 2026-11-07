@@ -1,0 +1,57 @@
+{
+  "slug": "re-amaze",
+  "name": "Re:amaze",
+  "docs": "https://www.reamaze.com/api",
+  "credentials": [
+    {
+      "name": "api_token",
+      "label": "API token",
+      "help": "In Re:amaze go to Settings, then under Developer click API Token, then Generate New Token. Tokens are per user and act with that user's permissions; Re:amaze has no read-only token scope, so generate it from a user with the least access that can still see all conversations. This connector only sends GET requests."
+    }
+  ],
+  "params": [
+    { "name": "brand", "label": "Brand subdomain (the part before .reamaze.io, shown on the Brand Settings page)", "example": "acme" },
+    { "name": "login_email", "label": "Login email of the user who generated the token", "example": "support@acme.com" }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://{param:brand}.reamaze.io/api/v1/",
+      "auth": { "type": "http_basic", "username": "{param:login_email}", "password": "{secret:api_token}" },
+      "headers": { "Accept": "application/json" },
+      "paginator": { "type": "page_number", "page_param": "page", "base_page": 1, "total_path": "page_count" }
+    },
+    "resource_defaults": { "write_disposition": "merge" },
+    "resources": [
+      {
+        "name": "conversations",
+        "primary_key": "slug",
+        "endpoint": { "path": "conversations", "params": { "filter": "all" }, "data_selector": "conversations" }
+      },
+      {
+        "name": "messages",
+        "write_disposition": "append",
+        "endpoint": {
+          "path": "messages",
+          "data_selector": "messages",
+          "incremental": { "start_param": "start_date", "cursor_path": "created_at", "initial_value": "2015-01-01T00:00:00Z" }
+        }
+      },
+      {
+        "name": "satisfaction_ratings",
+        "primary_key": "id",
+        "endpoint": {
+          "path": "satisfaction_ratings",
+          "data_selector": "satisfaction_ratings",
+          "incremental": { "start_param": "updated_after", "cursor_path": "updated_at", "initial_value": "2015-01-01T00:00:00Z" }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://www.reamaze.com/api",
+    "https://www.reamaze.com/api/get_conversations",
+    "https://www.reamaze.com/api/get_messages",
+    "https://www.reamaze.com/api/get_satisfaction_ratings"
+  ],
+  "notes": "All GET. Auth is HTTP Basic with the user's login email and API token, plus Accept: application/json (Introduction page). Requests are scoped to one brand by host; a multi-brand account needs one connection per brand. Pagination: page param with page_size, page_count and total_count in the body, so the page_number paginator stops at page_count. No page-size parameter is documented (examples show 30 per page), so none is sent. conversations: keyed on slug (the documented unique id); filter=all so archived ones are included; start_date/end_date filter on the latest customer message, not on last change, so conversations are a full refresh merged on slug. messages: the docs show no id field on a message, so they are loaded append-only and incrementally on created_at via start_date (documented as a creation-date filter); dlt dedupes the boundary rows by content. satisfaction_ratings: incremental via the documented updated_after filter on updated_at, merged on id. Contacts were left out (no documented id field and mostly personal data). Rate limits are per token per minute and not published; 429s are retried by dlt."
+}
