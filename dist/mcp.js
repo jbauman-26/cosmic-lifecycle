@@ -6,6 +6,7 @@ import { runQuery } from './query.js';
 import { reconcile } from './reconcile.js';
 import { auditFlows, revenuePerFlow } from './reports.js';
 import { PUBLIC_TABLES } from './schema.js';
+import { VERSION } from './version.js';
 import { DOCS } from './docs.js';
 const text = (data) => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
 export async function schemaInfo(db) {
@@ -20,7 +21,7 @@ export async function schemaInfo(db) {
 export async function startMcp() {
     const db = await openDb();
     await migrate(db);
-    const server = new McpServer({ name: 'cosmic-lifecycle', version: '0.1.0' }, { instructions: DOCS.agents });
+    const server = new McpServer({ name: 'cosmic-lifecycle', version: VERSION }, { instructions: DOCS.agents });
     const readOnly = { readOnlyHint: true, openWorldHint: false };
     server.registerTool('explore_schema', { description: 'List tables and columns. Call this before writing SQL.', annotations: readOnly }, async () => text(await schemaInfo(db)));
     server.registerTool('query', { description: 'Run one read-only SELECT. Capped at 1,000 rows.', inputSchema: { sql: z.string() }, annotations: readOnly }, async ({ sql }) => text(await runQuery(db, sql)));

@@ -15,6 +15,7 @@ import { Klaviyo } from './sources/klaviyo.js'
 import { syncGa4, syncKlaviyo, syncShopify, type SourceResult } from './sync.js'
 import { runQuery } from './query.js'
 import { PUBLIC_TABLES } from './schema.js'
+import { VERSION } from './version.js'
 import { DOCS } from './docs.js'
 import { addKit, listKits } from './kits.js'
 import { startMcp } from './mcp.js'
@@ -25,7 +26,7 @@ import { applyPlan, buildPlan, readPlan, suggestLapsedDays, writePlan } from './
 
 const program = new Command('lifecycle')
   .description('A clean view of Shopify and Klaviyo for Claude Code. Read-only. Nothing sends.')
-  .version('0.1.0')
+  .version(VERSION)
   .option('--format <format>', 'text or json', 'text')
 
 const format = () => (program.opts().format === 'json' ? 'json' : 'text') as Format
