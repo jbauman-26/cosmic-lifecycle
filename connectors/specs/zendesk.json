@@ -1,0 +1,70 @@
+{
+  "slug": "zendesk",
+  "name": "Zendesk",
+  "docs": "https://developer.zendesk.com/api-reference/",
+  "credentials": [
+    { "name": "api_token", "label": "API token", "help": "Zendesk Admin Center, Apps and integrations, APIs, Zendesk API (Settings tab): turn on Token access, click Add API token, copy it once. Zendesk API tokens are not scopable and act as the admin who owns the email you enter, so use an admin account dedicated to reporting. The incremental ticket export and satisfaction ratings endpoints are Admin only." }
+  ],
+  "params": [
+    { "name": "subdomain", "label": "Zendesk subdomain (the part before .zendesk.com)", "example": "acmecoffee" },
+    { "name": "email", "label": "Email of the admin who owns the API token", "example": "reporting@acmecoffee.com" }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://{param:subdomain}.zendesk.com/api/v2/",
+      "auth": { "type": "http_basic", "username": "{param:email}/token", "password": "{secret:api_token}" }
+    },
+    "resource_defaults": { "primary_key": "id", "write_disposition": "merge" },
+    "resources": [
+      {
+        "name": "tickets",
+        "endpoint": {
+          "path": "incremental/tickets/cursor",
+          "data_selector": "tickets",
+          "params": {
+            "per_page": 1000,
+            "start_time": { "type": "incremental", "cursor_path": "generated_timestamp", "initial_value": 1262304000 }
+          },
+          "paginator": { "type": "cursor", "cursor_path": "after_cursor", "cursor_param": "cursor", "stop_after_empty_page": true }
+        }
+      },
+      {
+        "name": "users",
+        "endpoint": {
+          "path": "incremental/users/cursor",
+          "data_selector": "users",
+          "params": { "per_page": 1000, "start_time": 1262304000 },
+          "paginator": { "type": "cursor", "cursor_path": "after_cursor", "cursor_param": "cursor", "stop_after_empty_page": true }
+        }
+      },
+      {
+        "name": "satisfaction_ratings",
+        "endpoint": {
+          "path": "satisfaction_ratings",
+          "data_selector": "satisfaction_ratings",
+          "params": { "page[size]": 100 },
+          "paginator": { "type": "cursor", "cursor_path": "meta.after_cursor", "cursor_param": "page[after]", "has_more_path": "meta.has_more" }
+        }
+      },
+      {
+        "name": "ticket_metrics",
+        "endpoint": {
+          "path": "ticket_metrics",
+          "data_selector": "ticket_metrics",
+          "params": { "page[size]": 100 },
+          "paginator": { "type": "cursor", "cursor_path": "meta.after_cursor", "cursor_param": "page[after]", "has_more_path": "meta.has_more" }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developer.zendesk.com/api-reference/ticketing/ticket-management/incremental_exports/#incremental-ticket-export-cursor-based",
+    "https://developer.zendesk.com/api-reference/ticketing/ticket-management/incremental_exports/#incremental-user-export-cursor-based",
+    "https://developer.zendesk.com/api-reference/ticketing/ticket-management/incremental_exports/#per_page",
+    "https://developer.zendesk.com/api-reference/ticketing/ticket-management/satisfaction_ratings/",
+    "https://developer.zendesk.com/api-reference/ticketing/tickets/ticket_metrics/",
+    "https://developer.zendesk.com/api-reference/introduction/pagination/",
+    "https://developer.zendesk.com/api-reference/introduction/security-and-auth/"
+  ],
+  "notes": "Tickets and users use the cursor-based incremental exports (per_page max 1000, docs default 1000). The response gives after_cursor and end_of_stream; after_cursor stays non-null at end of stream because Zendesk wants it reused for the next export, so the paginator stops on the first empty page (stop_after_empty_page) rather than on a null cursor. That costs one extra request per sync. dlt's has_more_path cannot invert end_of_stream, which is why it is not used. Tickets incremental maps dlt's last generated_timestamp (unix seconds, present on every exported ticket) onto start_time; dlt resends start_time alongside cursor on later pages, and the docs say start_time is only used on the initial request, so I expect Zendesk to ignore it there, but that is not explicitly documented. Initial value 1262304000 = 2010-01-01; docs say the initial start_time is arbitrary but must be over one minute in the past. Users are a full cursor export each run (no generated_timestamp-based incremental wired, the users export has no such documented field) and most user fields are personal and get stripped. satisfaction_ratings and ticket_metrics use standard Zendesk cursor pagination: page[size] max 100, meta.after_cursor, meta.has_more. Rate limit on incremental exports: 10 requests per minute (users cursor: 20). Skipped: ticket_events and ticket_metric_events, because they are time-based exports whose next_page URL is not documented to become null at the end, so a json_link paginator could loop. Satisfaction ratings require CSAT to be enabled on the account."
+}

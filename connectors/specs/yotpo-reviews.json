@@ -1,0 +1,52 @@
+{
+  "slug": "yotpo-reviews",
+  "name": "Yotpo Reviews",
+  "docs": "https://docs.yotpo.com/docs/authenticate-and-make-your-first-call",
+  "credentials": [
+    {
+      "name": "access_token",
+      "label": "Yotpo access token",
+      "help": "Must be the Yotpo account administrator. In Yotpo Reviews open the account menu (bottom left) > Account Settings > General Settings: copy the Store ID (app key) at the bottom, then click Get secret key, enter the emailed code and copy the API secret. Exchange them once for a token: POST https://api.yotpo.com/oauth/token with JSON {\"client_id\": \"<store id>\", \"client_secret\": \"<api secret>\", \"grant_type\": \"client_credentials\"} and paste the access_token value here. Yotpo has no read-only scope; the token carries full account rights, so keep it server side. If syncs start failing with 401, generate a new token the same way."
+    }
+  ],
+  "params": [
+    { "name": "store_id", "label": "Yotpo Store ID (app key)", "example": "Ab12Cd34Ef56Gh78Ij90Kl12Mn34Op56Qr78St90" }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://api.yotpo.com/",
+      "auth": { "type": "api_key", "name": "X-Yotpo-Token", "api_key": "{secret:access_token}", "location": "header" }
+    },
+    "resource_defaults": { "primary_key": "id", "write_disposition": "merge" },
+    "resources": [
+      {
+        "name": "reviews",
+        "endpoint": {
+          "path": "v1/apps/{param:store_id}/reviews",
+          "params": { "count": 100, "deleted": "true" },
+          "data_selector": "reviews",
+          "paginator": { "type": "page_number", "page_param": "page", "base_page": 1, "total_path": null, "stop_after_empty_page": true },
+          "incremental": { "start_param": "since_updated_at", "cursor_path": "updated_at", "initial_value": "2010-01-01" }
+        }
+      },
+      {
+        "name": "questions",
+        "endpoint": {
+          "path": "apps/{param:store_id}/questions.json",
+          "params": { "count": 100 },
+          "data_selector": "response.questions",
+          "paginator": { "type": "page_number", "page_param": "page", "base_page": 1, "total_path": null, "stop_after_empty_page": true }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://docs.yotpo.com/docs/authenticate-and-make-your-first-call",
+    "https://docs.yotpo.com/reference/yotpo-authentication",
+    "https://support.yotpo.com/docs/finding-your-yotpo-app-key-and-secret-key",
+    "https://docs.yotpo.com/reference/retrieve-all-reviews",
+    "https://docs.yotpo.com/reference/retrieve-all-questions",
+    "https://docs.yotpo.com/docs/guidelines-and-conventions"
+  ],
+  "notes": "Auth is a manual one-time token exchange. Yotpo turns Store ID plus API secret into an access token (POST /oauth/token, client_credentials) that must be sent in the X-Yotpo-Token header. dlt's oauth2_client_credentials auth can fetch that token but always sends it as Authorization: Bearer, which Yotpo documents only for the Insights API, not for Retrieve all reviews or questions, so it is not used here. The token has no documented lifetime; the docs say to regenerate on 401. Best fix later: let the runner exchange a stored api_secret for the token before each sync. reviews: max count is 100 per page (default 10), page/count paging with no total, so the paginator stops on the first empty page. Incremental uses since_updated_at, which the docs type as a date; dlt sends the last seen updated_at datetime string, which Yotpo is expected to accept but this is unverified; if it rejects it, drop the incremental block and run as full refresh with merge. deleted=true is sent so reviews removed in Yotpo come back with deleted=true instead of silently vanishing. Review data lags about 1 hour. questions: the reference lists only status_type as a parameter, but its own example uses count and page; count=100 is assumed (not documented as a max), full refresh with merge on id. Rate limit 5,000 requests per minute per app key on reviews."
+}

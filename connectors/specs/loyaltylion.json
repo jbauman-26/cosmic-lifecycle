@@ -1,0 +1,118 @@
+{
+  "slug": "loyaltylion",
+  "name": "LoyaltyLion",
+  "docs": "https://developers.loyaltylion.com/api-reference/introduction",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "API key",
+      "help": "LoyaltyLion admin, Manage, API keys, Create API key. Tick only the read scopes read_customers (customers, points, tiers, activities, transactions) and read_orders. Copy the token right away; it is shown once."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://api.loyaltylion.com/v2/",
+      "auth": {
+        "type": "bearer",
+        "token": "{secret:api_key}"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "customers",
+        "endpoint": {
+          "path": "customers",
+          "data_selector": "customers",
+          "params": {
+            "limit": 500,
+            "updated_at_min": {
+              "type": "incremental",
+              "cursor_path": "updated_at",
+              "initial_value": "2015-01-01T00:00:00Z"
+            }
+          },
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "cursor.next",
+            "cursor_param": "cursor"
+          }
+        }
+      },
+      {
+        "name": "orders",
+        "endpoint": {
+          "path": "orders",
+          "data_selector": "orders",
+          "params": {
+            "limit": 500,
+            "updated_at_min": {
+              "type": "incremental",
+              "cursor_path": "updated_at",
+              "initial_value": "2015-01-01T00:00:00Z"
+            }
+          },
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "cursor.next",
+            "cursor_param": "cursor"
+          }
+        }
+      },
+      {
+        "name": "activities",
+        "endpoint": {
+          "path": "activities",
+          "data_selector": "activities",
+          "params": {
+            "limit": 500,
+            "created_at_min": {
+              "type": "incremental",
+              "cursor_path": "created_at",
+              "initial_value": "2015-01-01T00:00:00Z"
+            }
+          },
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "cursor.next",
+            "cursor_param": "cursor"
+          }
+        }
+      },
+      {
+        "name": "transactions",
+        "endpoint": {
+          "path": "transactions",
+          "data_selector": "transactions",
+          "params": {
+            "limit": 500,
+            "created_at_min": {
+              "type": "incremental",
+              "cursor_path": "created_at",
+              "initial_value": "2015-01-01T00:00:00Z"
+            }
+          },
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "cursor.next",
+            "cursor_param": "cursor"
+          }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developers.loyaltylion.com/api-reference/authentication/api-keys",
+    "https://developers.loyaltylion.com/api-reference/pagination",
+    "https://developers.loyaltylion.com/api-reference/introduction",
+    "https://developers.loyaltylion.com/api-reference/v2/resources/customers/list-customers",
+    "https://developers.loyaltylion.com/api-reference/v2/resources/orders/list-orders",
+    "https://developers.loyaltylion.com/api-reference/v2/resources/activities/list-activities",
+    "https://developers.loyaltylion.com/api-reference/v2/resources/transactions/list-transactions"
+  ],
+  "notes": "Bearer API key with read_customers and read_orders scopes only (read_orders is separate; customers scope does not include orders). Pagination is LoyaltyLion's documented cursor scheme: response.cursor.next, passed back as the cursor query param, null when done; the cursor carries the original filters and other params are ignored on later pages, so dlt resending limit and the *_min filter is harmless. limit max is 500 (default 100). The since_id style is documented as going away, so it is not used. Incremental: customers and orders filter on updated_at_min (ISO 8601); activities and transactions only document created_at_min, so they increment on created_at. Activities can later change state (Update Activity exists, e.g. pending to approved), which a created_at cursor will not pick up; a periodic full resync of activities (reset its state) is advisable. Results come newest first; dlt takes the max cursor value so ordering does not matter. Rate limit 20 requests per second. transactions also supports type=csv; the default json is used. Not included: customer exports (async create then poll, not expressible) and the deprecated token+secret basic auth."
+}

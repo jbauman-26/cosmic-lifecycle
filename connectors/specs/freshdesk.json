@@ -1,0 +1,88 @@
+{
+  "slug": "freshdesk",
+  "name": "Freshdesk",
+  "docs": "https://developers.freshdesk.com/api/",
+  "credentials": [
+    { "name": "api_key", "label": "API key", "help": "In the Freshdesk support portal, click your profile picture (top right), open Profile settings, and copy the API key shown below the change password section (you may have to click View API key). Freshdesk keys are personal and cannot be scoped, so the key carries that agent's permissions; use an agent with read access to all tickets, ideally a dedicated reporting agent." }
+  ],
+  "params": [
+    { "name": "domain", "label": "Freshdesk subdomain (the part before .freshdesk.com)", "example": "acmecoffee" }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://{param:domain}.freshdesk.com/api/v2/",
+      "auth": { "type": "http_basic", "username": "{secret:api_key}", "password": "X" },
+      "paginator": { "type": "header_link", "links_next_key": "next" }
+    },
+    "resource_defaults": { "primary_key": "id", "write_disposition": "merge" },
+    "resources": [
+      {
+        "name": "tickets",
+        "endpoint": {
+          "path": "tickets",
+          "data_selector": "$",
+          "params": {
+            "per_page": 100,
+            "order_by": "updated_at",
+            "order_type": "asc",
+            "include": "stats",
+            "updated_since": { "type": "incremental", "cursor_path": "updated_at", "initial_value": "2015-01-01T00:00:00Z" }
+          }
+        }
+      },
+      {
+        "name": "contacts",
+        "endpoint": {
+          "path": "contacts",
+          "data_selector": "$",
+          "params": {
+            "per_page": 100,
+            "updated_since": { "type": "incremental", "cursor_path": "updated_at", "initial_value": "2015-01-01T00:00:00Z" }
+          }
+        }
+      },
+      {
+        "name": "satisfaction_ratings",
+        "endpoint": {
+          "path": "surveys/satisfaction_ratings",
+          "data_selector": "$",
+          "params": {
+            "per_page": 100,
+            "created_since": { "type": "incremental", "cursor_path": "created_at", "initial_value": "2015-01-01T00:00:00Z" }
+          },
+          "response_actions": [ { "status_code": 404, "action": "ignore" } ]
+        }
+      },
+      {
+        "name": "csat_surveys",
+        "endpoint": {
+          "path": "customer-satisfaction/surveys",
+          "data_selector": "data",
+          "params": { "per_page": 100 },
+          "paginator": { "type": "json_link", "next_url_path": "paging.next" },
+          "response_actions": [ { "status_code": 404, "action": "ignore" } ]
+        }
+      },
+      {
+        "name": "csat_survey_responses",
+        "endpoint": {
+          "path": "customer-satisfaction/surveys/{resources.csat_surveys.id}/responses",
+          "data_selector": "data",
+          "params": { "per_page": 100 },
+          "paginator": { "type": "json_link", "next_url_path": "paging.next" },
+          "response_actions": [ { "status_code": 404, "action": "ignore" } ]
+        },
+        "include_from_parent": ["id"]
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developers.freshdesk.com/api/#authentication",
+    "https://developers.freshdesk.com/api/#pagination",
+    "https://developers.freshdesk.com/api/#list_all_tickets",
+    "https://developers.freshdesk.com/api/#list_all_contacts",
+    "https://developers.freshdesk.com/api/#view_all_satisfaction_ratings",
+    "https://developers.freshdesk.com/api/#customer-satisfaction_new"
+  ],
+  "notes": "Auth is HTTP basic with the API key as username and any dummy password (docs use X). List endpoints return a bare JSON array; pagination is page/per_page (max 100) with the next page in the Link header (rel=next), which is absent on the last page. Tickets: by default the list only returns tickets created in the past 30 days, so updated_since is always sent (incremental on updated_at, initial 2015-01-01), and the list caps at 300 pages (30,000 tickets) per query; sorting by updated_at ascending means a first sync of a very large account stops at the cap and later runs continue from the last updated_at. include=stats adds closed_at, resolved_at, first_responded_at but costs 3 API credits per call instead of 1; drop it if the plan's rate limit is tight. Ticket conversations (per-ticket child endpoint) were left out to keep API usage sane. CSAT: Freshdesk has two CSAT APIs. Legacy /surveys/satisfaction_ratings applies to accounts created before December 2025 that have not moved to New CSAT (it keeps working for upgraded accounts only until their survey config changes). New CSAT is /customer-satisfaction/surveys plus /surveys/{id}/responses (data + paging.next, max per_page 100). Both are included with a 404 ignore so whichever one the account lacks is skipped; I could not confirm which status code the unsupported variant returns (it may be 400 or 403 instead of 404), so test on a real account. Legacy ratings pagination is assumed to follow the general Link-header scheme; the endpoint section does not restate it. csat_survey_responses ids are strings like _4-62 and the parent survey id is carried as _csat_surveys_id."
+}

@@ -1,0 +1,111 @@
+{
+  "slug": "omnisend",
+  "name": "Omnisend",
+  "docs": "https://api-docs.omnisend.com/reference/getting-started",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "Omnisend API key",
+      "help": "In Omnisend open Store settings > API keys (app.omnisend.com/integrations/api-keys) and click Create API key, named Cosmic Lifecycle. If the form lets you pick permissions, grant only contacts.read, campaigns.read and automations.read and leave every write permission off. Copy the key right away; Omnisend will not show it again."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://api.omnisend.com/api/",
+      "headers": {
+        "Omnisend-Version": "2026-03-15"
+      },
+      "auth": {
+        "type": "api_key",
+        "name": "Authorization",
+        "api_key": "Omnisend-API-Key {secret:api_key}",
+        "location": "header"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "contacts",
+        "endpoint": {
+          "path": "contacts",
+          "params": {
+            "limit": 250,
+            "sort": "updatedAt",
+            "direction": "asc"
+          },
+          "data_selector": "contacts",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "paging.cursors.after",
+            "cursor_param": "after"
+          },
+          "incremental": {
+            "start_param": "updatedAtFrom",
+            "cursor_path": "updatedAt",
+            "initial_value": "2010-01-01T00:00:00Z"
+          }
+        }
+      },
+      {
+        "name": "campaigns",
+        "endpoint": {
+          "path": "campaigns",
+          "params": {
+            "limit": 250,
+            "sort": "updatedAt",
+            "direction": "asc",
+            "view": "summary"
+          },
+          "data_selector": "campaigns",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "paging.cursors.after",
+            "cursor_param": "after"
+          },
+          "incremental": {
+            "start_param": "updatedAtFrom",
+            "cursor_path": "updatedAt",
+            "initial_value": "2010-01-01T00:00:00Z"
+          }
+        }
+      },
+      {
+        "name": "automations",
+        "endpoint": {
+          "path": "automations",
+          "params": {
+            "limit": 250,
+            "sort": "updatedAt",
+            "direction": "asc",
+            "view": "summary"
+          },
+          "data_selector": "automations",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "paging.cursors.after",
+            "cursor_param": "after"
+          },
+          "incremental": {
+            "start_param": "updatedAtFrom",
+            "cursor_path": "updatedAt",
+            "initial_value": "2010-01-01T00:00:00Z"
+          }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://api-docs.omnisend.com/reference/getting-started",
+    "https://api-docs.omnisend.com/reference/authentication",
+    "https://api-docs.omnisend.com/reference/pagination",
+    "https://api-docs.omnisend.com/reference/rate-limit-timeouts-errors",
+    "https://api-docs.omnisend.com/reference/get_contacts",
+    "https://api-docs.omnisend.com/reference/get_campaigns",
+    "https://api-docs.omnisend.com/reference/get_automations"
+  ],
+  "notes": "Targets the dated API version 2026-03-15 (base https://api.omnisend.com/api, Authorization: Omnisend-API-Key <key>, plus the required Omnisend-Version header). The older v3 and v5 APIs are superseded per Omnisend's migration guides. All three lists use cursor pagination: paging.cursors.after sent back as after, limit max 250; Omnisend accepts the original filters alongside the cursor. Incremental on updatedAt via updatedAtFrom, sorted ascending; on contacts updatedAtFrom cannot be combined with status, tag, segmentID, email or phone, so none of those are sent. campaigns and automations use view=summary to skip email content and automation block trees. Campaign and automation performance numbers (sends, opens, clicks, revenue) are not on these objects; they live only in POST /analytics/reports and /analytics/statistics, which are read-only report endpoints but are limited to 10 per minute and 55 per 24 hours per brand and need a request body, so they are left out of this spec. Campaign and Automation schemas are labelled 2026-preview in the reference. Contact emails and phones (inside identifiers) are stripped by the runner's personal-data filter. Rate limit 400 requests per minute per brand, shared with every other integration on the account. The per-endpoint scopes (contacts.read, campaigns.read, automations.read) are documented, but the docs do not show whether the API key form lets a merchant restrict a key to them; unverified."
+}

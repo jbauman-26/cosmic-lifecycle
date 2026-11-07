@@ -1,0 +1,183 @@
+{
+  "slug": "skio",
+  "name": "Skio",
+  "docs": "https://code.skio.com/",
+  "credentials": [
+    {
+      "name": "api_token",
+      "label": "API token",
+      "help": "Skio dashboard, click API in the left navigation, name the token and click Generate, then copy it (Skio shows it only once). Skio tokens have no read-only scope and can also run mutations, so keep it server side and use it only for this connector. A token only sees its own store, so no store ID is needed."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://graphql.skio.com/",
+      "auth": {
+        "type": "api_key",
+        "name": "Authorization",
+        "api_key": "API {secret:api_token}",
+        "location": "header"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "subscriptions",
+        "endpoint": {
+          "path": "v1/graphql",
+          "method": "POST",
+          "data_selector": "data.Subscriptions",
+          "json": {
+            "query": "query Sync($since: timestamptz!, $offset: Int!, $limit: Int!) {{ Subscriptions(where: {{updatedAt: {{_gte: $since}}}}, order_by: [{{updatedAt: asc}}, {{id: asc}}], limit: $limit, offset: $offset) {{ billingPolicyId cancelledAt churnPredictedAt churnRiskReasons churnScore createdAt currencyCode customAttributes cyclesCompleted deliveryPolicyId deliveryPrice deliveryPriceOverride id isPickup lastBillingAttemptAt maxStreakCount metadata nextBillingDate nextRenewalDate originOrderId platformId prepaidDeliveryPolicyId remainingCyclesUntilRenewal siteId status statusContext storefrontUserId streakCount streakExpiresAt updatedAt }} }}",
+            "variables": {
+              "since": "{incremental.start_value}",
+              "offset": 0,
+              "limit": 100
+            }
+          },
+          "incremental": {
+            "cursor_path": "updatedAt",
+            "initial_value": "2015-01-01T00:00:00Z"
+          },
+          "paginator": {
+            "type": "offset",
+            "limit": 100,
+            "offset_body_path": "variables.offset",
+            "limit_body_path": "variables.limit",
+            "total_path": null,
+            "stop_after_empty_page": true
+          }
+        }
+      },
+      {
+        "name": "subscription_lines",
+        "endpoint": {
+          "path": "v1/graphql",
+          "method": "POST",
+          "data_selector": "data.SubscriptionLines",
+          "json": {
+            "query": "query Sync($since: timestamptz!, $offset: Int!, $limit: Int!) {{ SubscriptionLines(where: {{updatedAt: {{_gte: $since}}}}, order_by: [{{updatedAt: asc}}, {{id: asc}}], limit: $limit, offset: $offset) {{ createdAt customAttributes groupId id isPrepaid ordersRemaining platformId prepaidSubscriptionId priceWithoutDiscount productVariantId quantity removedAt sellingPlanId subscriptionId taxable titleOverride updatedAt }} }}",
+            "variables": {
+              "since": "{incremental.start_value}",
+              "offset": 0,
+              "limit": 100
+            }
+          },
+          "incremental": {
+            "cursor_path": "updatedAt",
+            "initial_value": "2015-01-01T00:00:00Z"
+          },
+          "paginator": {
+            "type": "offset",
+            "limit": 100,
+            "offset_body_path": "variables.offset",
+            "limit_body_path": "variables.limit",
+            "total_path": null,
+            "stop_after_empty_page": true
+          }
+        }
+      },
+      {
+        "name": "orders",
+        "endpoint": {
+          "path": "v1/graphql",
+          "method": "POST",
+          "data_selector": "data.Orders",
+          "json": {
+            "query": "query Sync($since: timestamp!, $offset: Int!, $limit: Int!) {{ Orders(where: {{updatedAt: {{_gte: $since}}}}, order_by: [{{updatedAt: asc}}, {{id: asc}}], limit: $limit, offset: $offset) {{ appId cancelledAt createdAt currencyCode deletedAt deliveredAt firstOrderInPrepaidSequence fulfillAt fulfillmentOrderCredit id platformId platformNumber prepaidSubscriptionId processedAt siteId storefrontUserId subscriptionId taxExempt taxesIncluded totalPrice totalPricePresentmentAmount updatedAt }} }}",
+            "variables": {
+              "since": "{incremental.start_value}",
+              "offset": 0,
+              "limit": 100
+            }
+          },
+          "incremental": {
+            "cursor_path": "updatedAt",
+            "initial_value": "2015-01-01T00:00:00Z"
+          },
+          "paginator": {
+            "type": "offset",
+            "limit": 100,
+            "offset_body_path": "variables.offset",
+            "limit_body_path": "variables.limit",
+            "total_path": null,
+            "stop_after_empty_page": true
+          }
+        }
+      },
+      {
+        "name": "order_line_items",
+        "endpoint": {
+          "path": "v1/graphql",
+          "method": "POST",
+          "data_selector": "data.OrderLineItems",
+          "json": {
+            "query": "query Sync($since: timestamptz!, $offset: Int!, $limit: Int!) {{ OrderLineItems(where: {{updatedAt: {{_gte: $since}}}}, order_by: [{{updatedAt: asc}}, {{id: asc}}], limit: $limit, offset: $offset) {{ attributionGroupId createdAt currencyCode customAttributes groupId id orderId platformId pricePresentmentAmount pricePresentmentCurrencyCode priceWithoutDiscount productVariantId quantity subscriptionLineId updatedAt }} }}",
+            "variables": {
+              "since": "{incremental.start_value}",
+              "offset": 0,
+              "limit": 100
+            }
+          },
+          "incremental": {
+            "cursor_path": "updatedAt",
+            "initial_value": "2015-01-01T00:00:00Z"
+          },
+          "paginator": {
+            "type": "offset",
+            "limit": 100,
+            "offset_body_path": "variables.offset",
+            "limit_body_path": "variables.limit",
+            "total_path": null,
+            "stop_after_empty_page": true
+          }
+        }
+      },
+      {
+        "name": "customers",
+        "endpoint": {
+          "path": "v1/graphql",
+          "method": "POST",
+          "data_selector": "data.StorefrontUsers",
+          "json": {
+            "query": "query Sync($since: timestamptz!, $offset: Int!, $limit: Int!) {{ StorefrontUsers(where: {{updatedAt: {{_gte: $since}}}}, order_by: [{{updatedAt: asc}}, {{id: asc}}], limit: $limit, offset: $offset) {{ createdAt id platformId redactedAt removedAt shopifyTags siteId smsTransactionalOptIn updatedAt }} }}",
+            "variables": {
+              "since": "{incremental.start_value}",
+              "offset": 0,
+              "limit": 100
+            }
+          },
+          "incremental": {
+            "cursor_path": "updatedAt",
+            "initial_value": "2015-01-01T00:00:00Z"
+          },
+          "paginator": {
+            "type": "offset",
+            "limit": 100,
+            "offset_body_path": "variables.offset",
+            "limit_body_path": "variables.limit",
+            "total_path": null,
+            "stop_after_empty_page": true
+          }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://code.skio.com/#authentication",
+    "https://code.skio.com/#filtering",
+    "https://code.skio.com/#rate-limits",
+    "https://code.skio.com/#query-Subscriptions",
+    "https://code.skio.com/#query-SubscriptionLines",
+    "https://code.skio.com/#query-Orders",
+    "https://code.skio.com/#query-OrderLineItems",
+    "https://code.skio.com/#query-StorefrontUsers",
+    "https://code.skio.com/#definition-Subscription",
+    "https://code.skio.com/#definition-Order"
+  ],
+  "notes": "Skio is GraphQL only: every call is a POST to https://graphql.skio.com/v1/graphql. All five resources send GraphQL queries only (no mutations), so the POSTs are read-only. dlt rest_api expresses this cleanly: a fixed query in the JSON body, limit/offset written into variables.offset and variables.limit by the offset paginator (offset_body_path / limit_body_path), and the dlt incremental start value written into variables.since. Braces in the query strings are doubled because dlt runs str.format over the JSON body; I confirmed against a local mock server (not Skio) that dlt 1.32.0 sends single braces, pages by offset, and passes the last updatedAt as since on the next run. Pagination follows the docs: limit + offset with a stable order_by (updatedAt asc, id asc), stop when a page is short; dlt stops on the first empty page, so one extra request per resource. Skio documents no max limit; 100 matches its own sync example. Incremental uses the documented updatedAt _gte filter. Order.updatedAt is typed timestamp (no zone) while the others are timestamptz, so the Orders query declares $since as timestamp; the docs do not say which zone a bare timestamp is in. Limits: 30,000 requests per minute per store, 100 fields and depth 4 per query; every query here is flat scalars under 40 fields. Caveat: Skio returns most errors as HTTP 200 with an errors array, which dlt does not treat as a failure, so a bad token or schema change would look like an empty sync rather than an error. Personal fields (email, names, phone) were left out of customers on purpose; nested objects (Address, PaymentMethod, Discounts) were not pulled."
+}

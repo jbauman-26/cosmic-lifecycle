@@ -1,14 +1,34 @@
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CliError } from './errors.js'
 import type { Config } from './config.js'
 import { VERSION } from './version.js'
+import { appHome } from './paths.js'
+import { sourceSecretEnv } from './secrets.js'
+import { WAREHOUSE_CATALOG } from './warehouse-catalog.js'
 
 export const PACKAGE = `https://github.com/jbauman-26/cosmic-lifecycle/releases/download/v${VERSION}/cosmic-lifecycle-${VERSION}.tgz`
 
-export function workflowYaml(hasGa4: boolean, hasStripe = false) {
+// One Actions secret per credential of each connected warehouse source, as {env, slug, field}.
+export function warehouseSecrets(config: Config) {
+  return Object.keys(config.warehouse?.sources ?? {}).flatMap((slug) => {
+    const fields = WAREHOUSE_CATALOG.find((s) => s.slug === slug)?.credentials.map((c) => c.name) ?? customFields(slug)
+    return fields.map((field) => ({ env: sourceSecretEnv(slug, field), slug, field }))
+  })
+}
+
+function customFields(slug: string): string[] {
+  try {
+    const spec = JSON.parse(readFileSync(join(appHome(), 'custom-apis', `${slug}.json`), 'utf8'))
+    return (spec.credentials ?? []).map((c: { name: string }) => c.name)
+  } catch {
+    return []
+  }
+}
+
+export function workflowYaml(hasGa4: boolean, hasStripe = false, warehouseEnvs: string[] = [], hasWarehouse = warehouseEnvs.length > 0) {
   const ga4 = hasGa4
     ? `      LIFECYCLE_GA4_CLIENT_SECRET: \${{ secrets.LIFECYCLE_GA4_CLIENT_SECRET }}\n      LIFECYCLE_GA4_REFRESH_TOKEN: \${{ secrets.LIFECYCLE_GA4_REFRESH_TOKEN }}\n`
     : ''
@@ -28,7 +48,7 @@ jobs:
       LIFECYCLE_DATABASE_URL: \${{ secrets.LIFECYCLE_DATABASE_URL }}
       LIFECYCLE_KLAVIYO_READ_KEY: \${{ secrets.LIFECYCLE_KLAVIYO_READ_KEY }}
       LIFECYCLE_SHOPIFY_CLIENT_SECRET: \${{ secrets.LIFECYCLE_SHOPIFY_CLIENT_SECRET }}
-${ga4}${stripe}      LIFECYCLE_HOME: .lifecycle
+${ga4}${stripe}${warehouseEnvs.map((e) => `      ${e}: \${{ secrets.${e} }}\n`).join('')}      LIFECYCLE_HOME: .lifecycle
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,7 +56,10 @@ ${ga4}${stripe}      LIFECYCLE_HOME: .lifecycle
           node-version: 22
       - run: npm install --no-save ${PACKAGE}
       - run: npx lifecycle sync
-      # A dashboard of totals, kept in this private repo for 30 days. lifecycle files pull downloads it.
+${hasWarehouse ? `      # Warehouse sources load raw tables with dlt, run by uv.
+      - uses: astral-sh/setup-uv@v6
+      - run: npx lifecycle warehouse sync
+` : ''}      # A dashboard of totals, kept in this private repo for 30 days. lifecycle files pull downloads it.
       - run: npx lifecycle dashboard --html lifecycle-dashboard.html
         if: always()
       - uses: actions/upload-artifact@v4
@@ -53,7 +76,7 @@ export function deployPlan(config: Config, repo: string) {
   return {
     repo,
     creates: [`Private GitHub repo ${repo}`, 'A daily sync at 09:17 UTC in GitHub Actions'],
-    secrets: ['LIFECYCLE_DATABASE_URL', 'LIFECYCLE_KLAVIYO_READ_KEY', 'LIFECYCLE_SHOPIFY_CLIENT_SECRET', ...(config.ga4 ? ['LIFECYCLE_GA4_CLIENT_SECRET', 'LIFECYCLE_GA4_REFRESH_TOKEN'] : []), ...(config.stripe ? ['LIFECYCLE_STRIPE_READ_KEY'] : [])],
+    secrets: ['LIFECYCLE_DATABASE_URL', 'LIFECYCLE_KLAVIYO_READ_KEY', 'LIFECYCLE_SHOPIFY_CLIENT_SECRET', ...(config.ga4 ? ['LIFECYCLE_GA4_CLIENT_SECRET', 'LIFECYCLE_GA4_REFRESH_TOKEN'] : []), ...(config.stripe ? ['LIFECYCLE_STRIPE_READ_KEY'] : []), ...warehouseSecrets(config).map((w) => w.env)],
     expectedCost: 'Likely $0 on free plans for a small brand: about 150 of 2,000 Actions minutes a month, and summary tables inside Neon Free. Check both plans for your size.',
   }
 }
@@ -64,7 +87,10 @@ const gh = (args: string[], input?: string, cwd?: string) => spawnSync('gh', arg
 export function writeProject(config: Config, dir: string) {
   mkdirSync(join(dir, '.github', 'workflows'), { recursive: true })
   mkdirSync(join(dir, '.lifecycle'), { recursive: true })
-  writeFileSync(join(dir, '.github', 'workflows', 'sync.yml'), workflowYaml(Boolean(config.ga4), Boolean(config.stripe)))
+  const wh = warehouseSecrets(config)
+  writeFileSync(join(dir, '.github', 'workflows', 'sync.yml'), workflowYaml(Boolean(config.ga4), Boolean(config.stripe), wh.map((w) => w.env), Object.keys(config.warehouse?.sources ?? {}).length > 0))
+  // Custom API specs travel with the project, so the runner can load them.
+  if (existsSync(join(appHome(), 'custom-apis'))) cpSync(join(appHome(), 'custom-apis'), join(dir, '.lifecycle', 'custom-apis'), { recursive: true })
   // The store name and client id are not secret, and the runner needs them.
   const { registry: _r, deploy: _d, update: _u, ...runner } = config
   writeFileSync(join(dir, '.lifecycle', 'config.json'), JSON.stringify({ ...runner, database: { kind: 'postgres' } }, null, 2) + '\n')

@@ -1,0 +1,48 @@
+{
+  "slug": "kustomer",
+  "name": "Kustomer",
+  "docs": "https://developer.kustomer.com/api",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "API key",
+      "help": "As a Kustomer admin go to Settings, Security, API Keys and select Add API Key. Grant only the read roles org.permission.conversation.read, org.permission.message.read and org.permission.customer.read (roles cannot be edited later; create a new key to change them). Set an expiry if your policy requires one."
+    }
+  ],
+  "params": [
+    { "name": "org", "label": "Org name (the subdomain you sign in at, acme for acme.kustomerapp.com)", "example": "acme" }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://{param:org}.api.kustomerapp.com/v1/",
+      "auth": { "type": "bearer", "token": "{secret:api_key}" },
+      "paginator": { "type": "json_link", "next_url_path": "links.next" }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge",
+      "endpoint": { "data_selector": "data", "params": { "pageSize": 100 } }
+    },
+    "resources": [
+      { "name": "conversations", "endpoint": { "path": "conversations" } },
+      { "name": "messages", "endpoint": { "path": "messages" } },
+      {
+        "name": "customers",
+        "endpoint": {
+          "path": "customers",
+          "params": { "sort": "updatedAt" },
+          "incremental": { "start_param": "filter[updatedAt][gte]", "cursor_path": "attributes.updatedAt", "initial_value": "2015-01-01T00:00:00Z" }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developer.kustomer.com/docs/get-started/api-keys-and-roles.md",
+    "https://developer.kustomer.com/docs/get-started/regions-and-base-urls.md",
+    "https://developer.kustomer.com/docs/concepts/pagination.md",
+    "https://developer.kustomer.com/api/core-resources/get-conversations.md",
+    "https://developer.kustomer.com/api/core-resources/get-messages.md",
+    "https://developer.kustomer.com/api/core-resources/get-customers.md"
+  ],
+  "notes": "All GET. Bearer API key against the org host https://<org>.api.kustomerapp.com, which routes to the US, EU or India region automatically. Pagination: follow links.next until null; links.next is a path (/v1/...), which dlt joins onto the host. pageSize 100 is the documented typical maximum for most lists (per-endpoint maxima are not stated on these reference pages). Records are JSON:API style, so fields sit under attributes (attributes.updatedAt, attributes.status, etc.). customers: incremental via the documented filter[updatedAt][gte] with sort=updatedAt (ascending). conversations and messages: GET /v1/conversations and /v1/messages document only page, pageSize and sort (no date filter), so they are full refresh merged on id; on large orgs that is many pages. A cheaper incremental path exists through the read-only search endpoint (POST /v1/customers/search with an updated_at window, needs org.permission.search.create) but it caps at 10,000 matches per query and needs a POST body, so it was not used here. Rate limits are org-wide by plan; dlt retries 429."
+}

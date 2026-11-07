@@ -1,0 +1,47 @@
+{
+  "slug": "loop-returns",
+  "name": "Loop Returns",
+  "docs": "https://docs.loopreturns.com/api-reference/getting-started",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "Loop API key",
+      "help": "Loop Admin (admin.loopreturns.com), Returns Management > Tools & integrations > Developer Tools, Generate API key. Tick only the Returns scope, plus Happy Returns Shipments (Read) if the brand uses Happy Returns drop-off. Do not add Carts, Orders write actions or Destinations (Write). Name it Cosmic Lifecycle and click Generate."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://api.loopreturns.com/api/2026-10/",
+      "auth": { "type": "api_key", "name": "X-Authorization", "api_key": "{secret:api_key}", "location": "header" }
+    },
+    "resource_defaults": { "primary_key": "id", "write_disposition": "merge" },
+    "resources": [
+      {
+        "name": "returns",
+        "endpoint": {
+          "path": "warehouse/return/list",
+          "params": { "paginate": "true", "pageSize": 750, "filter": "updated_at" },
+          "data_selector": "returns",
+          "paginator": { "type": "json_link", "next_url_path": "nextPageUrl" }
+        }
+      },
+      {
+        "name": "happy_returns_shipments",
+        "primary_key": "loop_shipment_id",
+        "endpoint": {
+          "path": "happy-returns/shipments",
+          "data_selector": "data",
+          "paginator": { "type": "json_link", "next_url_path": "next_page_url" }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://docs.loopreturns.com/api-reference/authentication",
+    "https://docs.loopreturns.com/api-reference/pagination",
+    "https://docs.loopreturns.com/api-reference/latest/return-data/detailed-returns-list",
+    "https://docs.loopreturns.com/api-reference/latest/happy-returns-shipment/get-shipments"
+  ],
+  "notes": "Rolling 24 hour window, not a backfill. Both list endpoints return only the last 24 hours when no from/to is sent, the returns list caps from/to at 120 days, and sending from without to returns only the 24 hours after from. A static dlt config cannot compute a moving to-date, so dlt incremental is not used: each run pulls every return updated in the last 24 hours (filter=updated_at, default states open, closed, expired) and merges on id. Run at least daily or rows are missed; cancelled and review-state returns are excluded by the API default. A historical backfill needs a one-off run with explicit from/to params in 120 day windows. returns: pageSize max is 750 per the pagination guide; nextPageUrl carries the cursor and the original filters, dlt follows it as-is. happy_returns_shipments: 200 per page fixed, needs the separate Happy Returns Shipments (Read) scope, so drop that resource if the key lacks it (it will 401). API version pinned to 2026-10 (current stable)."
+}

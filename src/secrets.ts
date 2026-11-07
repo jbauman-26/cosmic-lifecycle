@@ -55,3 +55,35 @@ export function getSecret(name: SecretName): string | undefined {
   const res = spawnSync('security', ['find-generic-password', '-s', SERVICE, '-a', name, '-w'], { encoding: 'utf8' })
   return res.status === 0 ? res.stdout.trim() : undefined
 }
+
+// Warehouse sources keep one keychain entry per credential field, named
+// src:<slug>:<field>. The environment variable LIFECYCLE_SRC_<SLUG>_<FIELD>
+// wins, so CI and other machines work without a keychain.
+export const sourceSecretEnv = (slug: string, field: string) =>
+  `LIFECYCLE_SRC_${slug}_${field}`.toUpperCase().replace(/[^A-Z0-9_]/g, '_')
+
+export function setSourceSecret(slug: string, field: string, value: string) {
+  if (!useKeychain()) {
+    const env = sourceSecretEnv(slug, field)
+    throw new CliError(`No keychain here. Set ${env} in the environment instead.`, `export ${env}=...`, 'no_keychain')
+  }
+  if (/["\\\n]/.test(value)) throw new CliError('That value has characters a key should not contain.', 'Check the value and try again.')
+  const res = spawnSync('security', ['-i'], {
+    input: `add-generic-password -U -s ${SERVICE} -a src:${slug}:${field} -w "${value}"\n`,
+    encoding: 'utf8',
+  })
+  if (res.status !== 0) throw new CliError('Could not save to the macOS keychain.', 'Unlock your keychain and run the command again.')
+}
+
+export function getSourceSecret(slug: string, field: string): string | undefined {
+  const fromEnv = process.env[sourceSecretEnv(slug, field)]
+  if (fromEnv) return fromEnv
+  if (!useKeychain()) return undefined
+  const res = spawnSync('security', ['find-generic-password', '-s', SERVICE, '-a', `src:${slug}:${field}`, '-w'], { encoding: 'utf8' })
+  return res.status === 0 ? res.stdout.trim() : undefined
+}
+
+export function deleteSourceSecret(slug: string, field: string) {
+  if (!useKeychain()) return false
+  return spawnSync('security', ['delete-generic-password', '-s', SERVICE, '-a', `src:${slug}:${field}`], { encoding: 'utf8' }).status === 0
+}

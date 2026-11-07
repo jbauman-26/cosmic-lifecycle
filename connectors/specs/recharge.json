@@ -1,0 +1,124 @@
+{
+  "slug": "recharge",
+  "name": "Recharge",
+  "docs": "https://developer.rechargepayments.com/2021-11/",
+  "credentials": [
+    {
+      "name": "api_token",
+      "label": "Admin API token",
+      "help": "Recharge merchant portal, Tools & apps, API tokens, then Create new in the Admin token section (not the Storefront token). Name it, and under scopes set Read access for Subscriptions, Orders (covers charges and orders) and Customers; leave every other scope at No access. Copy the token after saving."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://api.rechargeapps.com/",
+      "headers": {
+        "X-Recharge-Version": "2021-11",
+        "Accept": "application/json"
+      },
+      "auth": {
+        "type": "api_key",
+        "name": "X-Recharge-Access-Token",
+        "api_key": "{secret:api_token}",
+        "location": "header"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "subscriptions",
+        "endpoint": {
+          "path": "subscriptions",
+          "params": {
+            "limit": 250,
+            "updated_at_min": "{incremental.start_value}"
+          },
+          "data_selector": "subscriptions",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "next_cursor",
+            "cursor_param": "cursor"
+          },
+          "incremental": {
+            "cursor_path": "updated_at",
+            "initial_value": "2015-01-01T00:00:00"
+          }
+        }
+      },
+      {
+        "name": "charges",
+        "endpoint": {
+          "path": "charges",
+          "params": {
+            "limit": 250,
+            "updated_at_min": "{incremental.start_value}"
+          },
+          "data_selector": "charges",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "next_cursor",
+            "cursor_param": "cursor"
+          },
+          "incremental": {
+            "cursor_path": "updated_at",
+            "initial_value": "2015-01-01T00:00:00"
+          }
+        }
+      },
+      {
+        "name": "orders",
+        "endpoint": {
+          "path": "orders",
+          "params": {
+            "limit": 250,
+            "updated_at_min": "{incremental.start_value}"
+          },
+          "data_selector": "orders",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "next_cursor",
+            "cursor_param": "cursor"
+          },
+          "incremental": {
+            "cursor_path": "updated_at",
+            "initial_value": "2015-01-01T00:00:00"
+          }
+        }
+      },
+      {
+        "name": "customers",
+        "endpoint": {
+          "path": "customers",
+          "params": {
+            "limit": 250,
+            "updated_at_min": "{incremental.start_value}"
+          },
+          "data_selector": "customers",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "next_cursor",
+            "cursor_param": "cursor"
+          },
+          "incremental": {
+            "cursor_path": "updated_at",
+            "initial_value": "2015-01-01T00:00:00"
+          }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developer.rechargepayments.com/2021-11/cursor_pagination",
+    "https://developer.rechargepayments.com/2021-11/subscriptions/subscriptions_list",
+    "https://developer.rechargepayments.com/2021-11/charges/charge_list",
+    "https://developer.rechargepayments.com/2021-11/orders/orders_list",
+    "https://developer.rechargepayments.com/2021-11/customers/customers_list",
+    "https://docs.getrecharge.com/docs/using-cursor-pagination-with-the-recharge-api",
+    "https://docs.getrecharge.com/docs/authentication"
+  ],
+  "notes": "Pinned to API version 2021-11 via the X-Recharge-Version header, where list responses carry next_cursor and previous_cursor in the body (2021-01 puts them in a Link header instead). limit max is 250. Incremental uses the documented updated_at_min filter with cursor_path updated_at. Uncertain: the docs only show cursor examples as ?limit=250&cursor=..., and do not say whether filters like updated_at_min may be resent with the cursor; dlt resends the original params on every page. If page 2 errors or ignores the filter, drop incremental and run full refresh with limit only. An automated read of the charges and orders reference pages reported response keys named next/previous rather than next_cursor; the 2021-11 cursor pagination page states next_cursor is included in all list responses, so next_cursor is used. Verify on first live run. Rate limits were not checked; dlt retries 429 responses."
+}

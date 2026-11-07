@@ -1,0 +1,70 @@
+{
+  "slug": "shipbob",
+  "name": "ShipBob",
+  "docs": "https://developer.shipbob.com/2026-07/",
+  "credentials": [
+    {
+      "name": "pat",
+      "label": "Personal Access Token",
+      "help": "Sign in to the ShipBob dashboard as the account root user, go to Integrations, API Tokens (https://web.shipbob.com/app/merchant/#/Integrations/token-management) and click Generate New Token. A PAT does not expire; revoke it there when you disconnect. ShipBob PATs are not scope-selectable in the UI: the auto-created PAT channel carries read scopes (orders_read, inventory_read, returns_read, billing_read and others) plus write scopes, and this connector only uses GET requests."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://api.shipbob.com/2026-07/",
+      "auth": { "type": "bearer", "token": "{secret:pat}" }
+    },
+    "resource_defaults": { "primary_key": "id", "write_disposition": "merge" },
+    "resources": [
+      {
+        "name": "orders",
+        "endpoint": {
+          "path": "order",
+          "params": { "Limit": 250, "SortOrder": "Oldest" },
+          "data_selector": "$",
+          "paginator": { "type": "page_number", "page_param": "Page", "base_page": 1, "total_path": null }
+        }
+      },
+      {
+        "name": "inventory_levels",
+        "primary_key": "inventory_id",
+        "endpoint": {
+          "path": "inventory-level",
+          "params": { "PageSize": 100 },
+          "data_selector": "items",
+          "paginator": { "type": "json_link", "next_url_path": "next" }
+        }
+      },
+      {
+        "name": "returns",
+        "endpoint": {
+          "path": "return",
+          "params": { "Limit": 100, "SortOrder": "Asc" },
+          "data_selector": "items",
+          "paginator": { "type": "json_link", "next_url_path": "next" }
+        }
+      },
+      {
+        "name": "invoices",
+        "primary_key": "invoice_id",
+        "endpoint": {
+          "path": "invoices",
+          "params": { "PageSize": 100, "FromDate": "2015-01-01T00:00:00Z", "SortOrder": "Ascending" },
+          "data_selector": "items",
+          "paginator": { "type": "cursor", "cursor_path": "next", "cursor_param": "Cursor" }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developer.shipbob.com/2026-07/auth.md",
+    "https://developer.shipbob.com/2026-07/api/orders/get-orders.md",
+    "https://developer.shipbob.com/2026-07/guides/build-orders-integration.md",
+    "https://developer.shipbob.com/2026-07/api/inventory/get-all-inventory-levels.md",
+    "https://developer.shipbob.com/2026-07/api/returns/get-return-orders.md",
+    "https://developer.shipbob.com/2026-07/api/billing/get-invoices.md",
+    "https://developer.shipbob.com/2026-07/guides/billing.md"
+  ],
+  "notes": "API version 2026-07 (current default). All GET. orders: response body is a bare array; pagination is Page/Limit with total-pages and total-count returned only as response headers, so the page_number paginator runs until an empty page (total_path null). Limit 250 comes from the docs' recommended request; no maximum is stated. Orders embed shipments (with tracking and last_update_at), so shipments are not a separate resource. inventory_levels and returns: body has items plus next, documented as a URL to the next page (json_link). Page size maxima are not documented for these; 100 is used as the safe value. invoices: next is a cursor token passed back as Cursor (the example shows a token, not a URL); the reference says PageSize 1 to 1000 but the billing guide says max 100, so 100 is used. FromDate defaults to one month ago, so it is pinned to 2015-01-01 to backfill. No incremental: the orders LastUpdateStartDate filter exists but the order record carries no updated timestamp to use as a cursor, and returns/invoices only filter on created/invoice date, so all resources are full refresh merged on primary key. Orders full refresh can be slow on high-volume accounts. Sandbox host is https://sandbox-api.shipbob.com if needed."
+}

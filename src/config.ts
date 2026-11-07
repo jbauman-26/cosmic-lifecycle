@@ -14,6 +14,19 @@ const Config = z
     registry: z.object({ uri: z.string() }).partial().optional(),
     deploy: z.object({ repo: z.string() }).partial().optional(),
     update: z.object({ check: z.boolean() }).partial().optional(),
+    // Warehouse sources: settings only. Their keys live in the keychain or the environment.
+    warehouse: z
+      .object({
+        sources: z.record(
+          z.string(),
+          z.object({
+            params: z.record(z.string(), z.string()).default({}),
+            personalData: z.enum(['strip', 'keep']).default('strip'),
+            connectedAt: z.string(),
+          }),
+        ),
+      })
+      .optional(),
   })
   // Keep keys this version does not know, so an older CLI never deletes a newer one's settings.
   .passthrough()

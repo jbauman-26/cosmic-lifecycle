@@ -1,0 +1,75 @@
+{
+  "slug": "smile-io",
+  "name": "Smile.io",
+  "docs": "https://dev.smile.io/api/introduction",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "Smile API key",
+      "help": "Needs the Plus or Enterprise plan. Smile Admin > Settings > Developer tools (app.smile.io/settings/developer-tools); add a technical contact at the top if asked. In the Manage API keys card click Generate new API key, name it Cosmic Lifecycle, and select only the read scopes: customer:read, points_transaction:read, reward_fulfillment:read and vip_tier:read. Click Generate and copy the key (starts with api_); it is shown only once."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://api.smile.io/v1/",
+      "auth": { "type": "bearer", "token": "{secret:api_key}" }
+    },
+    "resource_defaults": { "primary_key": "id", "write_disposition": "merge" },
+    "resources": [
+      {
+        "name": "customers",
+        "endpoint": {
+          "path": "customers",
+          "params": { "limit": 250, "include": "vip_status" },
+          "data_selector": "customers",
+          "paginator": { "type": "cursor", "cursor_path": "metadata.next_cursor", "cursor_param": "cursor" },
+          "incremental": { "start_param": "updated_at_min", "cursor_path": "updated_at", "initial_value": "2010-01-01T00:00:00.000Z" }
+        }
+      },
+      {
+        "name": "points_transactions",
+        "endpoint": {
+          "path": "points_transactions",
+          "params": { "limit": 250 },
+          "data_selector": "points_transactions",
+          "paginator": { "type": "cursor", "cursor_path": "metadata.next_cursor", "cursor_param": "cursor" },
+          "incremental": { "start_param": "updated_at_min", "cursor_path": "updated_at", "initial_value": "2010-01-01T00:00:00.000Z" }
+        }
+      },
+      {
+        "name": "reward_fulfillments",
+        "endpoint": {
+          "path": "reward_fulfillments",
+          "params": { "limit": 250 },
+          "data_selector": "reward_fulfillments",
+          "paginator": { "type": "cursor", "cursor_path": "metadata.next_cursor", "cursor_param": "cursor" },
+          "incremental": { "start_param": "updated_at_min", "cursor_path": "updated_at", "initial_value": "2010-01-01T00:00:00.000Z" }
+        }
+      },
+      {
+        "name": "vip_tiers",
+        "write_disposition": "replace",
+        "endpoint": {
+          "path": "vip_tiers",
+          "params": { "include": "perks,entry_rewards" },
+          "data_selector": "vip_tiers",
+          "paginator": { "type": "single_page" }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://dev.smile.io/api/introduction",
+    "https://dev.smile.io/api/authentication",
+    "https://dev.smile.io/api/pagination/cursor-pagination",
+    "https://dev.smile.io/api/rate-limits",
+    "https://dev.smile.io/guides/apps/merchant-credentials",
+    "https://help.smile.io/en/articles/11328240-manage-api-keys",
+    "https://dev.smile.io/api/resources/customers/list-customers",
+    "https://dev.smile.io/api/resources/points-transactions/list-points-transactions",
+    "https://dev.smile.io/api/resources/reward-fulfillments/list-reward-fulfillments",
+    "https://dev.smile.io/api/resources/vip-tiers/list-vip-tiers"
+  ],
+  "notes": "API keys exist only on Plus and Enterprise plans; brands on Free or Starter cannot connect. Smile recommends a merchant API key for single-merchant integrations and an OAuth app for products reused across many merchants; this spec uses the merchant's own key, which matches a per-brand CLI but would need an app listing if Cosmic Lifecycle ever connects Smile on the merchant's behalf at scale. Cursor pagination: metadata.next_cursor passed back as cursor, limit max 250, results newest first by id. Incremental on updated_at via updated_at_min (documented on all three list endpoints; points_transactions says at-or-after, the others say after, so merge on id absorbs any overlap). customers include=vip_status adds the current tier. vip_tiers has no pagination and is replaced each run. Rate limit 10 requests per second per key. Customer names and emails are stripped by the runner's personal-data filter."
+}

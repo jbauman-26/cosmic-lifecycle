@@ -1,0 +1,39 @@
+{
+  "slug": "shippo",
+  "name": "Shippo",
+  "docs": "https://docs.goshippo.com/api-reference/overview",
+  "credentials": [
+    {
+      "name": "api_token",
+      "label": "Live API token",
+      "help": "Log in to the Shippo API portal (https://portal.goshippo.com/api-config/api), open API Configuration, Developer keys, and click Create new live key (it starts with shippo_live_). Shippo keys have no read-only scope option; this connector only sends GET requests. Use a shippo_test_ key only if you want test-mode data, since test and live data are separate."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://api.goshippo.com/",
+      "auth": { "type": "api_key", "name": "Authorization", "api_key": "ShippoToken {secret:api_token}", "location": "header" },
+      "paginator": { "type": "json_link", "next_url_path": "next" }
+    },
+    "resource_defaults": {
+      "primary_key": "object_id",
+      "write_disposition": "merge",
+      "endpoint": { "data_selector": "results", "params": { "results": 100 } }
+    },
+    "resources": [
+      { "name": "transactions", "endpoint": { "path": "transactions" } },
+      { "name": "orders", "endpoint": { "path": "orders" } },
+      { "name": "refunds", "endpoint": { "path": "refunds/" } }
+    ]
+  },
+  "verified_against": [
+    "https://docs.goshippo.com/guides/authentication.md",
+    "https://docs.goshippo.com/api-concepts/filtering.md",
+    "https://docs.goshippo.com/api-reference/transactions/list-all-shipping-labels.md",
+    "https://docs.goshippo.com/api-reference/orders/list-all-orders.md",
+    "https://docs.goshippo.com/api-reference/refunds/list-all-refunds.md",
+    "https://docs.goshippo.com/api-reference/shipments/list-all-shipments.md"
+  ],
+  "notes": "All GET. Auth header is 'Authorization: ShippoToken <token>' (security scheme APIKeyHeader with x-token-prefix ShippoToken), so api_key auth is used with the prefix in the value. Pagination: list responses are {next, previous, results}; next is a full URL (filtering guide example) and is followed with json_link. Page size param is results; the OpenAPI spec says max 100 (default 25), while the older filtering guide says to stay under 200, so 100 is used. transactions are the purchased labels and carry tracking_number, tracking_status and rate; this is the core shipping table. Shipments were left out on purpose: every rate quote creates a shipment, so the table is very large and mostly unpurchased quotes, and its only date filter (object_created_*) is documented as limited to 90-day windows. No incremental: transactions only filter on object_created (tracking_status and refunds change after creation), orders filter on placed_at (start_date) and refunds have no filters, so everything is full refresh merged on object_id. The refunds path is documented with a trailing slash (/refunds/). Orders only hold data if the store is connected to Shippo (e.g. the Shopify app)."
+}
