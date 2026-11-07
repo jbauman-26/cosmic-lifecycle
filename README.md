@@ -11,7 +11,7 @@ It is for the person running lifecycle at a Shopify brand who already works in C
 No keys and no accounts. This runs on invented sample data.
 
 ```sh
-npm install -g github:jbauman-26/cosmic-lifecycle
+npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/download/v0.1.0/cosmic-lifecycle-0.1.0.tgz
 lifecycle demo
 ```
 
