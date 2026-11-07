@@ -18,6 +18,6 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - run: git diff --exit-code dist
+      - run: git diff --exit-code dist llms.txt
       - run: node dist/cli.js demo
       - run: node dist/cli.js kits validate registry-snapshot

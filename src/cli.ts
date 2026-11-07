@@ -20,6 +20,9 @@ import { DOCS } from './docs.js'
 import { addKit, ensureRegistry, listKits, searchKits, showKit, validateRegistry, type Registry } from './registry.js'
 import { skillsStatus, syncSkills, uninstallSkills, type Target } from './skills.js'
 import { feedbackUrl, openUrl } from './feedback.js'
+import { findMetric, formatValue, listMetrics, runMetric } from './metrics.js'
+import { CATALOG, kitPrompt, sourceStatus } from './sources-catalog.js'
+import type { Config } from './config.js'
 import { startMcp } from './mcp.js'
 import { runDemo } from './demo.js'
 import { deploy, deployPlan } from './deploy.js'
@@ -135,6 +138,54 @@ program.command('query').argument('<sql>').description('Run one read-only SQL qu
   }
 }))
 
+// Verified metrics: fixed SQL, so the same question gets the same answer every time.
+const metrics = program.command('metrics').description('Verified metrics: the same SQL every time, with a trust line')
+metrics.command('list').description('List every verified metric').action(run(async () => {
+  const m = listMetrics()
+  emit(format(), m, () => m.map((x) => `${x.name}: ${x.description} (needs ${x.needs.join(', ')})`).join('\n'))
+}))
+metrics.command('show').argument('<name>').description('Show what a metric measures and its exact SQL').action(run(async (name: string) => {
+  const m = findMetric(name)
+  emit(format(), m, () => [`${m.title} (${m.name})`, m.description, `Needs: ${m.needs.join(', ')}. Unit: ${m.unit}.`, ...(m.notes ?? []), '', 'SQL ($1 is the first day of the window):', m.sql].join('\n'))
+}))
+metrics.command('run').argument('<names...>').option('--days <n>', 'window in days', '90').description('Run one or more metrics').action(run(async (names: string[], opts) => {
+  const db = await openDb()
+  try {
+    const days = Number(opts.days)
+    const results: Awaited<ReturnType<typeof runMetric>>[] = []
+    for (const n of names) results.push(await runMetric(db, n, days))
+    const out = names.length === 1 ? results[0]! : { metrics: results, trust: results[0]!.trust }
+    emit(format(), out, () => [
+      results[0]!.trust.line,
+      ...results.map((r) => `${r.title}, last ${r.days} days: ${formatValue(r.unit, r.value)}${r.detail ? `. ${r.detail}` : ''}`),
+      ...[...new Set(results.flatMap((r) => r.notes))],
+    ].join('\n'))
+  } finally {
+    await db.close()
+  }
+}))
+
+const SECRET_FOR: Record<string, Parameters<typeof getSecret>[0]> = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret' }
+const sources = program.command('sources').description('What can be connected, and what is connected')
+sources.command('catalog').description('Sources this CLI supports, with how to connect each one').action(run(async () => {
+  emit(format(), CATALOG, () => CATALOG.map((s) => [`${s.name} (${s.slug}), about ${s.setupMinutes} minutes`, `  Syncs: ${s.syncs}`, `  Needs: ${s.credential}`, `  Connect: ${s.connect}`, `  Tested: ${s.tested}`].join('\n')).join('\n\n') + '\n\nFull steps: lifecycle docs setup. Want another source? lifecycle feedback "please add ..."')
+}))
+sources.command('list').description('Which sources are connected, and when each last synced').action(run(async () => {
+  let config: Config | null = null
+  try {
+    config = readConfig()
+  } catch {
+    config = null
+  }
+  const db = config ? await openDb().catch(() => null) : null
+  try {
+    const r = await sourceStatus(config, (slug) => Boolean(getSecret(SECRET_FOR[slug]!)), db)
+    emit(format(), r, () => r.map((s) => `${s.connected ? 'connected    ' : 'not connected'} ${s.name}${s.lastSync ? `, last sync ${s.lastSync} (${s.lastStatus})` : ''}${s.next ? `\n    Next: ${s.next}` : ''}`).join('\n'))
+  } finally {
+    await db?.close()
+  }
+}))
+
 const report = program.command('report').description('Reports, each with a trust line')
 report.command('revenue-per-flow').option('--days <n>', 'window in days', '90').option('--html <file>', 'also write an HTML report').action(run(async (opts) => {
   const db = await openDb()
@@ -207,7 +258,12 @@ withRegistry(kits.command('search').argument('<query>').description('Find kits b
 withRegistry(kits.command('show').argument('<name>').description("Show a kit's README, needs and secrets before adding it")).action(run(async (name: string, opts) => {
   const r = showKit(registry(opts), name)
   const m = r.manifest
-  emit(format(), r, () => [r.readme.trim(), '', `Version: ${m.version}`, `Needs: ${m.needs.join(', ')}`, `Writes: ${m.writes}`, `Secrets: ${m.secrets.map((s) => `${s.name}${s.required ? '' : ' (optional)'}`).join(', ') || 'none'}`, '', `Add it: lifecycle kits add ${m.name}`].join('\n'))
+  const prompt = kitPrompt(m)
+  emit(format(), { ...r, prompt }, () => [r.readme.trim(), '', `Version: ${m.version}`, `Needs: ${m.needs.join(', ')}`, `Writes: ${m.writes}`, `Secrets: ${m.secrets.map((s) => `${s.name}${s.required ? '' : ' (optional)'}`).join(', ') || 'none'}`, '', `Add it: lifecycle kits add ${m.name}`, '', 'Or paste this into your agent:', prompt].join('\n'))
+}))
+withRegistry(kits.command('prompt').argument('<name>').description('Print a setup prompt to paste into Claude Code, Cursor or ChatGPT')).action(run(async (name: string, opts) => {
+  const prompt = kitPrompt(showKit(registry(opts), name).manifest)
+  emit(format(), { kit: name, prompt }, () => prompt)
 }))
 withRegistry(kits.command('add').argument('<name>').description('Stage a kit for your agent to follow'))
   .option('--into <dir>', 'folder to copy into', 'lifecycle-kits')

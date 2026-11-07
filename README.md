@@ -22,6 +22,16 @@ FAIL Orders pulled against Shopify's own count: 787 against 801, off by 1.75%.
      Do not trust reports built on this until it is fixed.
 ```
 
+## Or let your agent set it up
+
+Paste this into Claude Code, Cursor or ChatGPT:
+
+```
+Set up Cosmic Lifecycle using https://raw.githubusercontent.com/jbauman-26/cosmic-lifecycle/main/llms.txt
+```
+
+[llms.txt](llms.txt) is a setup playbook written for agents. It connects one source, checks the numbers, and gives you one verified figure before it offers anything else.
+
 ## What it does
 
 **Checks the numbers before anyone quotes them.** `lifecycle reconcile` compares each source against the others. Every report opens with the result, so a failed check is the first thing you and your agent see.
@@ -40,6 +50,8 @@ FAIL Orders pulled against Shopify's own count: 787 against 801, off by 1.75%.
 
 **Ranks your flows.** `lifecycle report revenue-per-flow` ranks flows by attributed revenue per recipient, next to your Shopify revenue.
 
+**Answers the same question the same way every time.** `lifecycle metrics run average_order_value` runs fixed, reviewed SQL, so Monday's number matches Friday's. Each result carries its inputs, its exact SQL and the reconcile status. `lifecycle metrics list` shows all twelve. Agents use these before writing their own SQL.
+
 **Builds a win-back segment from your own timing.** `lifecycle segments propose winback` reads how long your customers actually take to reorder, then writes a plan. Nothing happens until you review it and run `apply --confirm`.
 
 ## What it will not do
@@ -51,7 +63,7 @@ FAIL Orders pulled against Shopify's own count: 787 against 801, off by 1.75%.
 
 ## Set it up
 
-Klaviyo takes about 2 minutes. Shopify takes about 15, because Shopify requires steps in two dashboards.
+Klaviyo takes about 2 minutes. Shopify takes about 15, because Shopify requires steps in two dashboards. `lifecycle sources catalog` lists what each source syncs and how to connect it, and `lifecycle sources list` shows what is connected.
 
 ```sh
 lifecycle docs setup
@@ -95,7 +107,7 @@ lifecycle kits show winback-segment
 lifecycle kits add winback-segment
 ```
 
-Kits today: `flow-audit`, `revenue-per-flow`, `winback-segment`. Any kit that writes copy includes an editing standard and a required review step. To use a fork or a local folder, pass `--registry`, or see `lifecycle docs kits`.
+Kits today: `flow-audit`, `revenue-per-flow`, `winback-segment`. `lifecycle kits prompt NAME` prints a setup prompt to paste into your agent. Any kit that writes copy includes an editing standard and a required review step. To use a fork or a local folder, pass `--registry`, or see `lifecycle docs kits`.
 
 ## Run it every day
 
@@ -129,6 +141,10 @@ If something breaks, `lifecycle doctor` says what is wrong and what to run next.
 ## Requirements
 
 Node 20 or newer. macOS keeps keys in the keychain. On other systems, set the `LIFECYCLE_*` environment variables listed in `lifecycle docs troubleshooting`.
+
+## Have it set up for you
+
+Rather not wire up Shopify and Klaviyo yourself? [NorthSignal](https://northsignal.studio/contact) does the setup.
 
 ## Help and community
 

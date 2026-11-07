@@ -1,6 +1,6 @@
 {
   "name": "cosmic-lifecycle",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Lifecycle marketing data your agent can trust. Syncs Shopify and Klaviyo into your own database, proves the numbers agree, and finds what to fix.",
   "type": "module",
   "bin": {
@@ -11,7 +11,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/write-llms.mjs",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -35,6 +35,7 @@
   "files": [
     "dist",
     "registry-snapshot",
+    "llms.txt",
     "README.md",
     "LICENSE"
   ],

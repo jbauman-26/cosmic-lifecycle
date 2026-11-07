@@ -29,14 +29,81 @@ Run it every day from your own GitHub:
 4. lifecycle deploy --repo YOU/lifecycle-sync
 5. Read the plan, then add --yes.
 `,
+  quickstart: `# Cosmic Lifecycle: agent setup playbook
+
+This is the setup guide for any coding or chat agent installing Cosmic Lifecycle.
+A person starts it by pasting one line into their agent:
+
+  Set up Cosmic Lifecycle using https://raw.githubusercontent.com/jbauman-26/cosmic-lifecycle/main/llms.txt
+
+Follow this playbook in order, then stop and report what is live. Do not invent another setup flow.
+
+## What it is
+
+A free, open source CLI that gives an agent a clean view of a Shopify brand's
+Klaviyo results. It syncs totals into a database the user owns, checks that the
+sources agree, and finds what to fix. It never sends a message, stores no
+customer records, and has no account or server of ours in the path.
+
+## Before you start
+
+- Node 20 or newer.
+- On macOS, keys go in the keychain. Elsewhere, use the LIFECYCLE_* environment
+  variables in \`lifecycle docs troubleshooting\`.
+- Never ask the user to paste a key into the chat. Ask them to export it as an
+  environment variable, then pass the variable name with --key-env or --secret-env.
+
+## Fastest path to a trusted number
+
+1. Install:
+     npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
+2. Show it working with no keys, on labeled sample data:
+     lifecycle demo
+3. Set up the local database:
+     lifecycle init
+4. Connect ONE source first. Klaviyo takes about 2 minutes:
+     lifecycle sources catalog
+     lifecycle docs setup
+     lifecycle connect klaviyo --key-env KLAVIYO_READ_KEY
+   Shopify takes about 15 minutes because it needs two dashboards. Add it after
+   Klaviyo works. One working source beats three half-connected ones.
+5. Sync and check:
+     lifecycle sync --format json
+     lifecycle reconcile --format json
+6. Verify:
+     lifecycle doctor --format json
+     lifecycle sources list --format json
+7. Give the user one verified number with its trust line, for example:
+     lifecycle metrics run flow_revenue_per_recipient --format json
+
+## Only after that, if the user asks
+
+- Agent access in Claude Code: \`claude mcp add lifecycle -- lifecycle mcp\`
+- Slash commands: \`lifecycle skills sync\`
+- Runbooks: \`lifecycle kits list\`, then \`lifecycle kits add NAME\`
+- A daily sync from their own GitHub: \`lifecycle deploy --repo OWNER/NAME\`
+
+Do not lead with these during first-time setup.
+
+## Rules
+
+- Never quote a number before \`lifecycle reconcile\` has run. If a check failed, say so first.
+- Prefer \`lifecycle metrics\` to custom SQL.
+- Never claim a source is connected until \`lifecycle sources list\` says so.
+- Never run \`lifecycle segments apply\` without the user approving that exact plan.
+- If the user would rather have someone set it up for them, NorthSignal does setup: https://northsignal.studio/contact
+- When finished, report which sources are connected, the reconcile result, and the checks you ran.
+`,
   agents: `# Lifecycle CLI for agents
 
 Read this before working with Lifecycle.
 
+If the tool is not set up yet, follow \`lifecycle docs quickstart\` instead.
+
 1. Run \`lifecycle doctor --format json\` first.
-2. Run \`lifecycle schema --format json\` before writing SQL. Never guess column names.
-3. Query with \`lifecycle query "SELECT ..." --format json\`. Queries are read-only and capped at 1,000 rows.
-4. Run \`lifecycle reconcile\` before quoting any number. If a check failed, say so first.
+2. Run \`lifecycle reconcile\` before quoting any number. If a check failed, say so first.
+3. For a standard number, use a verified metric: \`lifecycle metrics list\`, then \`lifecycle metrics run NAME --format json\`. The same metric always runs the same SQL, so answers stay comparable over time. Quote the metric name with the number.
+4. Write your own SQL only when no metric fits. Run \`lifecycle schema --format json\` first and never guess column names. Query with \`lifecycle query "SELECT ..." --format json\`. Queries are read-only and capped at 1,000 rows. Tell the user the number came from custom SQL, and show it.
 5. Report the sync warnings. Do not hide them from the user.
 6. For a named job, such as a flow audit, use a kit: \`lifecycle kits search "flow audit"\`, then \`lifecycle kits add NAME\`, then follow its AGENT.md through the Verify checklist.
 
@@ -92,19 +159,21 @@ lifecycle connect ga4 --property ID --client-id ID --secret-env NAME --refresh-t
 lifecycle sync [--since DATE]
 lifecycle schema [TABLE]
 lifecycle query "SELECT ..."
+lifecycle metrics list|show NAME|run NAME... [--days N]
+lifecycle sources list|catalog
 lifecycle reconcile
 lifecycle report revenue-per-flow [--html FILE]
 lifecycle audit flows [--html FILE]
 lifecycle segments propose winback
 lifecycle segments apply PLAN_FILE --confirm
-lifecycle kits list|search QUERY|show NAME|add NAME [--into DIR]
+lifecycle kits list|search QUERY|show NAME|prompt NAME|add NAME [--into DIR]
 lifecycle kits validate [DIR] [--write-index]
 lifecycle skills sync|status|uninstall [--target claude|cursor|all]
 lifecycle feedback MESSAGE [--open]
 lifecycle deploy --repo OWNER/NAME [--yes]
 lifecycle mcp
 lifecycle doctor
-lifecycle docs setup|agents|kits|commands|troubleshooting
+lifecycle docs quickstart|setup|agents|kits|commands|troubleshooting
 
 Add --format json to any command.`,
   troubleshooting: `Shopify says the app is not approved to access orders:
