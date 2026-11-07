@@ -114,7 +114,7 @@ Kits today: `flow-audit`, `revenue-per-flow`, `winback-segment`. `lifecycle kits
 `lifecycle deploy` puts a daily sync in a private repo on your own GitHub account, against your own Postgres. It prints the plan first, and creates nothing without `--yes`.
 
 ```sh
-lifecycle init --database-url-env DATABASE_URL
+lifecycle provision neon --key-env NEON_API_KEY --yes   # a managed Postgres in your own Neon account
 lifecycle deploy --repo YOU/lifecycle-sync
 lifecycle jobs list        # recent runs and the success streak
 lifecycle logs --cloud     # the last run's log

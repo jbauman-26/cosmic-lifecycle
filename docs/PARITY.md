@@ -9,7 +9,7 @@ Graphed's CLI (0.0.24, checked 2026-11-07) runs your marketing on Graphed's clou
 | `init` | `init` | A local database, or your own Postgres with `--database-url-env`. |
 | `clone` | `deploy --write DIR` | Writes the sync project files locally. Clone an existing sync repo with `gh repo clone`. |
 | `deploy` | `deploy` | A private repo on your GitHub with a daily GitHub Actions sync. Prints the plan first; creates nothing without `--yes`. |
-| `projects list/create/delete` | `config get deploy.repo`, `deploy` | One sync repo per store. Deleting it stays your call on GitHub. |
+| `projects list/create/delete` | `provision neon`, `deploy`, `config get deploy.repo` | `provision neon` creates the managed Postgres in your own Neon account; `deploy` creates the sync repo. Deleting either stays your call. |
 | `jobs list/run` | `jobs list/run` | Runs of the daily sync, with the success streak toward the 7-day release test. |
 | `logs` | `logs`, `logs --cloud` | Local sync history, or the log of the last GitHub Actions run. |
 | `services list` | `serve` | The dashboard and a read-only JSON API (`/api/metrics/:name`, `/api/reconcile`, `/api/flows`, `/api/audit`) on 127.0.0.1. |
@@ -35,6 +35,7 @@ Graphed's CLI (0.0.24, checked 2026-11-07) runs your marketing on Graphed's clou
 
 ## Where the two differ on purpose
 
+- **Hosting.** A hosted Cosmic Cloud is not built. Running it means paying for infrastructure and holding brands' data, so it waits until a brand asks to pay not to run it themselves.
 - **Where things run.** Graphed runs your jobs and services on its servers. Cosmic runs them on your machine and in your GitHub account, so there is no server of ours holding your data.
 - **How tools are paid for.** Graphed charges plan credits per tool call, across 233 tools from 13 providers. Cosmic's tools call Klaviyo and Shopify directly on your own keys, at no cost from us. It covers fewer providers, and only the ones lifecycle work needs.
 - **How sources connect.** Graphed manages 750+ pipelines into its warehouse. Cosmic connects three natively and imports any other tool's daily totals from CSV. It never imports customer records.

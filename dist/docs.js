@@ -23,9 +23,10 @@ Then:
   lifecycle audit flows --html audit.html
 
 Run it every day from your own GitHub:
-1. Create a free Postgres database, for example on Neon.
-2. export DATABASE_URL=your_url
-3. lifecycle init --database-url-env DATABASE_URL
+1. Create a free Postgres database in your own Neon account:
+     lifecycle provision neon --key-env NEON_API_KEY --yes
+   (Or bring any Postgres: export DATABASE_URL=your_url, then
+   lifecycle init --database-url-env DATABASE_URL.)
 4. lifecycle deploy --repo YOU/lifecycle-sync
 5. Read the plan, then add --yes.
 `,
@@ -167,6 +168,7 @@ lifecycle sources list|catalog|import NAME --csv FILE [--date-column NAME]
 lifecycle tools catalog|run TOOL [--input JSON]|get RUN [--out FILE]|runs
 lifecycle exec -- COMMAND [ARGS]
 lifecycle serve [--port N]
+lifecycle provision neon --key-env NEON_API_KEY [--name N] [--region R] [--yes]
 lifecycle files ls [PATH]|cat PATH|get PATH [DIR]|put FILE [NAME]|path|pull
 lifecycle reconcile
 lifecycle report revenue-per-flow [--html FILE]

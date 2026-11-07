@@ -139,3 +139,22 @@ describe('daily sync workflow', () => {
     expect(y).toContain('name: lifecycle-dashboard')
   })
 })
+
+describe('provision', () => {
+  it('creates a Neon project from the user key and returns its connection string', async () => {
+    const { provisionNeon, neonPlan } = await import('../src/provision.js')
+    let sent: { url: string; init: RequestInit } | null = null
+    const fake = (async (url: string, init: RequestInit) => {
+      sent = { url, init }
+      return { project: { id: 'proj-1' }, connection_uris: [{ connection_uri: 'postgres://u:p@h/db' }] }
+    }) as any
+    const r = await provisionNeon('neon_key', 'lifecycle', 'aws-us-east-2', fake)
+    expect(r).toEqual({ projectId: 'proj-1', region: 'aws-us-east-2', uri: 'postgres://u:p@h/db' })
+    expect(sent!.url).toBe('https://console.neon.tech/api/v2/projects')
+    expect((sent!.init.headers as Record<string, string>).Authorization).toBe('Bearer neon_key')
+    expect(JSON.parse(String(sent!.init.body))).toEqual({ project: { name: 'lifecycle', region_id: 'aws-us-east-2' } })
+    expect(neonPlan('lifecycle', 'aws-us-east-2').creates[0]).toMatch(/your own Neon account/)
+    await expect(provisionNeon('k', 'Bad Name', 'r', fake)).rejects.toThrow(/lowercase/)
+    await expect(provisionNeon('k', 'ok', 'r', (async () => ({})) as any)).rejects.toThrow(/no connection string/)
+  })
+})

@@ -39,6 +39,7 @@ import { saveArtifact, filesDir, listFiles, readFile, getFile, putFile, pullClou
 import { customTables, importCsv } from './custom-sources.js'
 import { defaultToolContext, getRun, listRuns, runTool, toolCatalog } from './tools.js'
 import { serve, ROUTES } from './serve.js'
+import { neonPlan, provisionNeon } from './provision.js'
 import { envName, SECRET_NAMES as ALL_SECRETS } from './secrets.js'
 import { auditFlows, auditHtml, revenueHtml, revenuePerFlow, writeHtml } from './reports.js'
 import { applyPlan, buildPlan, readPlan, suggestLapsedDays, writePlan } from './segments.js'
@@ -556,6 +557,35 @@ sources.command('import').argument('<name>').requiredOption('--csv <file>', 'CSV
     await db.close()
   }
 }))
+
+// Provision: a managed Postgres in your own Neon account, so the daily sync has somewhere to write.
+program.command('provision').description('Create a managed database in your own cloud account').argument('<provider>', 'neon')
+  .requiredOption('--key-env <name>', 'environment variable holding your Neon API key')
+  .option('--name <name>', 'project name', 'lifecycle')
+  .option('--region <id>', 'Neon region', 'aws-us-east-2')
+  .option('--yes', 'create it. Without this, only prints the plan')
+  .action(run(async (provider: string, opts) => {
+    if (provider !== 'neon') throw new CliError(`Unsupported provider ${provider}.`, 'lifecycle provision neon --key-env NEON_API_KEY', 'bad_provider')
+    if (!opts.yes) {
+      const plan = neonPlan(opts.name, opts.region)
+      emit(format(), plan, () => ['This would create:', ...plan.creates.map((c) => `  ${c}`), `Cost: ${plan.cost}`, 'Nothing was created. Add --yes to go ahead.'].join('\n'))
+      return
+    }
+    const key = process.env[opts.keyEnv]
+    if (!key) throw new CliError(`${opts.keyEnv} is empty.`, `export ${opts.keyEnv}=your_neon_api_key`, 'missing_secret')
+    const p = await provisionNeon(key, opts.name, opts.region)
+    // The connection string is a secret: it goes to the keychain and is never printed.
+    process.env.LIFECYCLE_PROVISIONED_URL = p.uri
+    try {
+      await init({ databaseUrlEnv: 'LIFECYCLE_PROVISIONED_URL' })
+    } catch (e) {
+      if (e instanceof CliError && e.code === 'no_keychain') throw new CliError('Created the Neon project, but there is no keychain here to store its connection string.', 'Copy the connection string from the Neon console into LIFECYCLE_DATABASE_URL, then lifecycle init --database-url-env LIFECYCLE_DATABASE_URL', 'no_keychain')
+      throw e
+    } finally {
+      delete process.env.LIFECYCLE_PROVISIONED_URL
+    }
+    emit(format(), { provider, projectId: p.projectId, region: p.region, database: 'postgres' }, () => `Created Neon project ${p.projectId} in ${p.region} and set it as this CLI's database.\nNext: lifecycle sync, then lifecycle deploy --repo OWNER/NAME`)
+  }))
 
 program.command('status').description('One-screen summary: setup, sources, trust, the daily sync and updates').action(run(async () => {
   let config: Config | null = null
