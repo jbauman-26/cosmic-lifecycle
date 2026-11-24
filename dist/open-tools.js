@@ -9,6 +9,8 @@ export const OPEN_PROVIDERS = {
     apify: { name: 'Apify', secret: 'apify-token', ref: 'apify:<owner~actor>', example: 'apify:apimaestro~linkedin-profile-posts', catalog: 'https://apify.com/store', billing: 'Billed by Apify to your Apify account. A finished run reports its cost in US dollars.' },
     scrapecreators: { name: 'ScrapeCreators', secret: 'scrapecreators-key', ref: 'scrapecreators:<path>', example: 'scrapecreators:v1/reddit/search', catalog: 'https://docs.scrapecreators.com', billing: 'ScrapeCreators credits on your account. Each call reports the credits it charged.' },
 };
+// A rate limit or a server error says nothing about the job. It is still there to ask about later.
+const transient = (e) => !(e instanceof CliError) || (e instanceof HttpError && (e.status === 408 || e.status === 429 || e.status >= 500));
 export function parseRef(ref) {
     const at = ref.indexOf(':');
     const provider = at > 0 ? ref.slice(0, at) : '';
@@ -112,7 +114,9 @@ async function poll(provider, remote, ctx) {
             return { status: 'succeeded', output: await ctx.http(remote.responseUrl, { headers }, 'fal result') };
         }
         catch (e) {
-            if (e instanceof HttpError && e.status < 500)
+            // Only an answer that says the request itself was bad ends the run. A rate limit, a server error or a
+            // rejected key leaves it running, so the result that was already paid for can still be fetched later.
+            if (e instanceof HttpError && (e.status === 400 || e.status === 422))
                 return { status: 'failed', error: `fal returned ${e.status}: ${e.body}` };
             throw e;
         }
@@ -158,10 +162,13 @@ export async function startOpenTool(ref, body, ctx, opts = {}) {
         started = await start(parsed.provider, parsed.id, body, ctx, (opts.method ?? 'GET').toUpperCase());
     }
     catch (e) {
-        if (e instanceof CliError)
-            throw e;
-        // The request left this machine and no answer came back, so the job may exist.
-        throw new CliError(`No answer from ${p.name}: ${e instanceof Error ? e.message : String(e)}`, `Look in your ${p.name} dashboard before running this again. The job may have started.`, 'provider_unreachable');
+        // No answer, or a server or gateway error: the request left this machine and nothing says the job was turned down.
+        if (transient(e) && !(e instanceof HttpError && e.status === 429))
+            throw new CliError(e instanceof HttpError ? `${p.name} answered with status ${e.status}, which does not say whether the job started.` : `No answer from ${p.name}: ${e instanceof Error ? e.message : String(e)}`, `Look in your ${p.name} dashboard before running this again. The job may have started.`, 'provider_unreachable');
+        // A 4xx is a clear no. Nothing started and nothing was billed.
+        if (e instanceof HttpError)
+            throw new CliError(`${p.name} turned the request down with status ${e.status}: ${e.body}`, e.status === 401 || e.status === 403 ? `Check the key: lifecycle secrets set ${p.secret} --from-env YOUR_VAR` : e.status === 429 ? `${p.name} is rate limiting this key. Nothing started. Wait a minute, then run it again.` : `Nothing started. Check the id and input against ${p.catalog}`, 'provider_refused');
+        throw e;
     }
     const run = { id: randomUUID().slice(0, 8), tool: `${parsed.provider}:${parsed.id}`, input: body, status: 'running', startedAt: now().toISOString(), finishedAt: '', provider: parsed.provider, remote: started.remote };
     if (started.done)
@@ -175,12 +182,22 @@ export async function refreshRun(run, ctx, now = () => new Date()) {
     return saveRun(apply(run, await poll(run.provider, run.remote, ctx), now));
 }
 // Polls until the run ends or the time is up. On a timeout the run comes back still running: it was not stopped.
+// Each status request is cut off at the deadline and is not retried inside the HTTP helper, so a slow or
+// rate-limited provider cannot hold the command past --timeout. This loop is the retry.
 export async function waitForRun(run, ctx, opts = {}) {
     const now = opts.now ?? (() => new Date());
     const sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     const deadline = now().getTime() + (opts.timeoutMs ?? 300_000);
     for (let delay = 2000; run.status === 'running'; delay = Math.min(delay + 1000, 10_000)) {
-        run = await refreshRun(run, ctx, now);
+        const signal = AbortSignal.timeout(Math.max(1, deadline - now().getTime()));
+        const bounded = { key: ctx.key, http: (url, init, label) => ctx.http(url, { ...init, signal }, label, { retries: 0 }) };
+        try {
+            run = await refreshRun(run, bounded, now);
+        }
+        catch (e) {
+            if (!transient(e))
+                throw e;
+        }
         if (run.status !== 'running' || now().getTime() + delay > deadline)
             break;
         await sleep(delay);

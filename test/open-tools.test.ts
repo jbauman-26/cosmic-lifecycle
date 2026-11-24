@@ -105,6 +105,47 @@ describe('never pay twice', () => {
     expect(calls.filter((c) => c.method === 'POST')).toHaveLength(1)
   })
 
+  it('warns against running again when the start request gets a server error', async () => {
+    for (const status of [500, 502, 504]) {
+      const { ctx } = fake([['/runs', new HttpError('Apify run actor', status, 'Bad Gateway')]])
+      await expect(startOpenTool('apify:a~b', {}, ctx)).rejects.toMatchObject({ code: 'provider_unreachable', next: expect.stringMatching(/dashboard before running this again/) })
+    }
+    expect(listRuns()).toEqual([])
+  })
+
+  it('says nothing started when the provider turns the request down', async () => {
+    const { ctx } = fake([['/runs', new HttpError('Apify run actor', 400, '{"error":"bad input"}')]])
+    await expect(startOpenTool('apify:a~b', {}, ctx)).rejects.toMatchObject({ code: 'provider_refused', message: expect.stringMatching(/400.*bad input/), next: expect.stringMatching(/^Nothing started/) })
+    const limited = fake([['/runs', new HttpError('Apify run actor', 429, '')]])
+    await expect(startOpenTool('apify:a~b', {}, limited.ctx)).rejects.toMatchObject({ code: 'provider_refused', next: expect.stringMatching(/Nothing started/) })
+    const badKey = fake([['createTask', new HttpError('Kie create task', 401, '')]])
+    await expect(startOpenTool('kie:nano-banana-2', {}, badKey.ctx)).rejects.toMatchObject({ next: expect.stringMatching(/secrets set kie-api-key/) })
+  })
+
+  it('returns at the deadline when a status request hangs', async () => {
+    const calls: string[] = []
+    const ctx: OpenContext = {
+      key: () => 'k',
+      http: (url, init, _l, opts) => {
+        calls.push(`${init.method ?? 'GET'} retries=${opts?.retries}`)
+        if (url.includes('createTask')) return Promise.resolve({ code: 200, data: { taskId: 't9' } })
+        return new Promise((_resolve, reject) => init.signal!.addEventListener('abort', () => reject(init.signal!.reason)))
+      },
+    }
+    const started = Date.now()
+    const run = await waitForRun(await startOpenTool('kie:nano-banana-2', { prompt: 'x' }, ctx), ctx, { timeoutMs: 60 })
+    expect(Date.now() - started).toBeLessThan(1500)
+    expect(run.status).toBe('running')
+    expect(getRun(run.id).status).toBe('running')
+    expect(calls).toEqual(['POST retries=0', 'GET retries=0'])
+  })
+
+  it('keeps waiting through a rate limit on a status request', async () => {
+    const { ctx } = fake([['createTask', { code: 200, data: { taskId: 't8' } }], ['recordInfo', new HttpError('Kie task status', 429, '')], ['recordInfo', { code: 200, data: { state: 'success', resultJson: '{"resultUrls":[]}' } }]])
+    const run = await waitForRun(await startOpenTool('kie:nano-banana-2', { prompt: 'x' }, ctx), ctx, { sleep: async () => {} })
+    expect(run.status).toBe('succeeded')
+  })
+
   it('says the job may have started when the start request gets no answer', async () => {
     const { ctx } = fake([['createTask', new Error('socket hang up')]])
     await expect(startOpenTool('kie:nano-banana-2', { prompt: 'x' }, ctx)).rejects.toMatchObject({ code: 'provider_unreachable', next: expect.stringMatching(/dashboard before running this again/) })
@@ -140,6 +181,17 @@ describe('fal', () => {
     const { ctx, calls } = fake([['queue.fal.run', { request_id: 'r2', status_url: 'https://evil.example/status', response_url: 'https://queue.fal.run/x' }]])
     await expect(startOpenTool('fal:fal-ai/flux/schnell', { prompt: 'x' }, ctx)).rejects.toThrow(/outside queue.fal.run/)
     expect(calls).toHaveLength(1)
+  })
+
+  it('keeps a finished fal run recoverable when fetching the result is rate limited or the key is rejected', async () => {
+    const base = 'https://queue.fal.run/fal-ai/flux/requests/r4'
+    for (const status of [429, 401, 503]) {
+      const { ctx } = fake([['fal-ai/flux/schnell', { request_id: 'r4', status_url: `${base}/status`, response_url: base }], ['/status', { status: 'COMPLETED' }], [base, new HttpError('fal result', status, '')], ['/status', { status: 'COMPLETED' }], [base, { images: [] }]])
+      const run = await startOpenTool('fal:fal-ai/flux/schnell', { prompt: 'x' }, ctx)
+      await expect(refreshRun(run, ctx)).rejects.toMatchObject({ status })
+      expect(getRun(run.id).status).toBe('running')
+      expect(await refreshRun(getRun(run.id), ctx)).toMatchObject({ status: 'succeeded', output: { images: [] } })
+    }
   })
 
   it('marks the run failed when fal rejects the result', async () => {
