@@ -138,6 +138,8 @@ lifecycle config list  # registry.uri, deploy.repo, update.check
 lifecycle serve                                  # dashboard and a read-only JSON API on 127.0.0.1
 lifecycle tools catalog                          # read-only Klaviyo and Shopify API tools, on your own keys
 lifecycle tools run shopify.order_count
+lifecycle tools providers                        # Kie, fal, Apify and ScrapeCreators: any id runs, on your own account
+lifecycle tools run kie:gpt-image-2-text-to-image --input '{"prompt":"A red running shoe"}' --wait
 lifecycle exec -- node my-report.js              # run a script with your keys in its environment
 lifecycle sources import meta_ads --csv ads.csv  # any other tool's daily totals
 lifecycle sources catalog --category reviews      # 97 Shopify-stack tools, ranked by usage

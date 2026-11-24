@@ -51,6 +51,11 @@ export function toolCatalog() {
     return TOOLS.map((t) => ({ id: t.id, provider: t.provider, description: t.description, input: Object.keys(t.input.shape ?? {}) }));
 }
 const runsDir = () => join(appHome(), 'runs');
+export function saveRun(run) {
+    mkdirSync(runsDir(), { recursive: true });
+    writeFileSync(join(runsDir(), `${run.id}.json`), JSON.stringify(run, null, 2));
+    return run;
+}
 export async function runTool(id, rawInput, ctx, now = () => new Date()) {
     const tool = TOOLS.find((t) => t.id === id);
     if (!tool)
@@ -67,9 +72,7 @@ export async function runTool(id, rawInput, ctx, now = () => new Date()) {
         run.error = e instanceof Error ? e.message : String(e);
     }
     run.finishedAt = now().toISOString();
-    mkdirSync(runsDir(), { recursive: true });
-    writeFileSync(join(runsDir(), `${run.id}.json`), JSON.stringify(run, null, 2));
-    return run;
+    return saveRun(run);
 }
 export function getRun(id) {
     const p = join(runsDir(), `${id.replace(/[^\w-]/g, '')}.json`);

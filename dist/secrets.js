@@ -9,6 +9,10 @@ const ENV = {
     'ga4-client-secret': 'LIFECYCLE_GA4_CLIENT_SECRET',
     'ga4-refresh-token': 'LIFECYCLE_GA4_REFRESH_TOKEN',
     'stripe-read-key': 'LIFECYCLE_STRIPE_READ_KEY',
+    'kie-api-key': 'LIFECYCLE_KIE_API_KEY',
+    'fal-key': 'LIFECYCLE_FAL_KEY',
+    'apify-token': 'LIFECYCLE_APIFY_TOKEN',
+    'scrapecreators-key': 'LIFECYCLE_SCRAPECREATORS_KEY',
 };
 const useKeychain = () => process.platform === 'darwin' && !process.env.LIFECYCLE_NO_KEYCHAIN;
 // `security -i` reads the command from stdin, so the secret never appears in

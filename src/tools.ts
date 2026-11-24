@@ -13,7 +13,8 @@ import { readConfig } from './config.js'
 // Tools: named, read-only API calls an agent can run with the user's own keys.
 // Graphed resells provider calls for credits. Here every call goes straight from your
 // machine to Klaviyo or Shopify on your key, so there is no markup and no middleman.
-// No tool reads profiles or customers, so no output can contain personal data.
+// No built-in tool reads profiles or customers, so their output cannot contain personal data.
+// Open provider refs (kie:, fal:, apify:, scrapecreators:) live in open-tools.ts and make no such promise.
 
 export type ToolContext = {
   klaviyo: () => Klaviyo
@@ -75,7 +76,14 @@ export function toolCatalog() {
 
 const runsDir = () => join(appHome(), 'runs')
 
-export type ToolRun = { id: string; tool: string; input: unknown; status: 'succeeded' | 'failed'; startedAt: string; finishedAt: string; output?: unknown; error?: string }
+// `running`, `provider`, `remote` and `cost` are only set for open provider refs, which finish later and bill your own account.
+export type ToolRun = { id: string; tool: string; input: unknown; status: 'running' | 'succeeded' | 'failed'; startedAt: string; finishedAt: string; output?: unknown; error?: string; provider?: string; remote?: Record<string, string>; cost?: { amount: number; unit: string } }
+
+export function saveRun(run: ToolRun) {
+  mkdirSync(runsDir(), { recursive: true })
+  writeFileSync(join(runsDir(), `${run.id}.json`), JSON.stringify(run, null, 2))
+  return run
+}
 
 export async function runTool(id: string, rawInput: unknown, ctx: ToolContext, now = () => new Date()): Promise<ToolRun> {
   const tool = TOOLS.find((t) => t.id === id)
@@ -90,9 +98,7 @@ export async function runTool(id: string, rawInput: unknown, ctx: ToolContext, n
     run.error = e instanceof Error ? e.message : String(e)
   }
   run.finishedAt = now().toISOString()
-  mkdirSync(runsDir(), { recursive: true })
-  writeFileSync(join(runsDir(), `${run.id}.json`), JSON.stringify(run, null, 2))
-  return run
+  return saveRun(run)
 }
 
 export function getRun(id: string): ToolRun {

@@ -39,7 +39,8 @@ import { basename } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { saveArtifact, filesDir, listFiles, readFile, getFile, putFile, pullCloud } from './files.js'
 import { customTables, importCsv } from './custom-sources.js'
-import { defaultToolContext, getRun, listRuns, runTool, toolCatalog } from './tools.js'
+import { defaultToolContext, getRun, listRuns, runTool, toolCatalog, type ToolRun } from './tools.js'
+import { costLine, defaultOpenContext, openProviders, parseRef, refreshRun, startOpenTool, waitForRun } from './open-tools.js'
 import { serve, ROUTES } from './serve.js'
 import { neonPlan, provisionNeon } from './provision.js'
 import { envName, SECRET_NAMES as ALL_SECRETS } from './secrets.js'
@@ -501,26 +502,54 @@ program.command('dashboard').description('Write one local HTML page: trust line,
   }))
 
 // Tools: read-only Klaviyo and Shopify calls on your own keys. No credits, no middleman.
-const tools = program.command('tools').description('Read-only Klaviyo and Shopify API tools, run on your own keys')
-tools.command('catalog').description('List every tool and its inputs').action(run(async () => {
-  const c = toolCatalog()
-  emit(format(), c, () => c.map((t) => `${t.id}${t.input.length ? ` (${t.input.join(', ')})` : ''}\n  ${t.description}`).join('\n'))
+const tools = program.command('tools').description('Read-only Klaviyo and Shopify tools, plus any Kie, fal, Apify or ScrapeCreators ref, all on your own keys')
+tools.command('catalog').option('--query <text>', 'only tools whose id or description contains this').description('List the built-in tools and their inputs').action(run(async (opts) => {
+  const q = String(opts.query ?? '').toLowerCase()
+  const c = toolCatalog().filter((t) => !q || `${t.id} ${t.description}`.toLowerCase().includes(q))
+  const note = 'Not limited to this list: any kie:, fal:, apify: or scrapecreators: ref also runs. See lifecycle tools providers'
+  emit(format(), c, () => [...(c.length ? c.map((t) => `${t.id}${t.input.length ? ` (${t.input.join(', ')})` : ''}\n  ${t.description}`) : [`No built-in tool matches "${opts.query}".`]), note].join('\n'))
 }))
-tools.command('run').argument('<tool>').option('--input <json>', 'tool input as JSON', '{}').description('Run a tool and save the result').action(run(async (id: string, opts) => {
-  let input: unknown
-  try {
-    input = JSON.parse(opts.input)
-  } catch {
-    throw new CliError('--input is not valid JSON.', `lifecycle tools run ${id} --input '{"start":"2026-10-01","end":"2026-10-31"}'`, 'bad_input')
-  }
-  const r = await runTool(id, input, defaultToolContext())
-  emit(format(), r, () => (r.status === 'succeeded' ? `${JSON.stringify(r.output, null, 2)}\nRun ${r.id} saved. lifecycle tools get ${r.id}` : `Run ${r.id} failed: ${r.error}`))
-  if (r.status === 'failed') process.exitCode = 1
+tools.command('providers').description('The four open providers: ref shape, where ids are listed, which key each needs').action(run(async () => {
+  const p = openProviders()
+  emit(format(), p, () => p.map((x) => `${x.ref}  ${x.connected ? 'key set' : `no key. lifecycle secrets set ${x.secret} --from-env YOUR_VAR`}\n  Example: ${x.example}\n  Ids: ${x.catalog}\n  ${x.billing}`).join('\n'))
 }))
-tools.command('get').argument('<run>').option('--out <file>', 'write the output to a file').description('Print a saved run, or write its output to a file').action(run(async (id: string, opts) => {
-  const r = getRun(id)
-  if (opts.out) writeHtml(opts.out, JSON.stringify(r.output ?? null, null, 2))
-  emit(format(), r, () => (opts.out ? `Wrote run ${r.id} output to ${opts.out}` : JSON.stringify(r, null, 2)))
+tools.command('run').argument('<tool>', 'a built-in tool id, or kie:<model>, fal:<endpoint_id>, apify:<owner~actor>, scrapecreators:<path>')
+  .option('--input <json>', 'tool input as JSON', '{}')
+  .option('--body <json>', 'same as --input')
+  .option('--wait', 'for a provider ref, wait until the job finishes')
+  .option('--timeout <seconds>', 'how long --wait waits', '300')
+  .option('--method <method>', 'for scrapecreators: GET or POST', 'GET')
+  .option('--out <file>', 'write the output to a file')
+  .description('Run a tool and save the result').action(run(async (id: string, opts) => {
+    let input: unknown
+    try {
+      input = JSON.parse(opts.body ?? opts.input)
+    } catch {
+      throw new CliError('--input is not valid JSON.', `lifecycle tools run ${id} --input '{"start":"2026-10-01","end":"2026-10-31"}'`, 'bad_input')
+    }
+    let r: ToolRun
+    if (parseRef(id)) {
+      const ctx = defaultOpenContext()
+      r = await startOpenTool(id, input, ctx, { method: opts.method })
+      if (opts.wait) r = await waitForRun(r, ctx, { timeoutMs: Number(opts.timeout) * 1000 })
+    } else {
+      r = await runTool(id, input, defaultToolContext())
+    }
+    if (opts.out && r.status === 'succeeded') writeHtml(opts.out, JSON.stringify(r.output ?? null, null, 2))
+    emit(format(), r, () => {
+      if (r.status === 'failed') return `Run ${r.id} failed: ${r.error}`
+      if (r.status === 'running') return opts.wait
+        ? `Run ${r.id} is still going after ${opts.timeout} seconds. It was not stopped and it is still billing.\nDo not run it again. Check it with: lifecycle tools get ${r.id}`
+        : `Started run ${r.id} on ${r.provider}. Check it with: lifecycle tools get ${r.id}`
+      return [opts.out ? `Wrote the output to ${opts.out}` : JSON.stringify(r.output, null, 2), costLine(r), `Run ${r.id} saved. lifecycle tools get ${r.id}`].filter(Boolean).join('\n')
+    })
+    if (r.status === 'failed') process.exitCode = 1
+  }))
+tools.command('get').argument('<run>').option('--out <file>', 'write the output to a file').description('Print a saved run, or write its output to a file. A run that is still going is checked first').action(run(async (id: string, opts) => {
+  let r = getRun(id)
+  if (r.status === 'running') r = await refreshRun(r, defaultOpenContext())
+  if (opts.out && r.status === 'succeeded') writeHtml(opts.out, JSON.stringify(r.output ?? null, null, 2))
+  emit(format(), r, () => (r.status === 'running' ? `Run ${r.id} is still going on ${r.provider}. Ask again in a moment.` : opts.out && r.status === 'succeeded' ? [`Wrote run ${r.id} output to ${opts.out}`, costLine(r)].filter(Boolean).join('\n') : JSON.stringify(r, null, 2)))
 }))
 tools.command('runs').option('--limit <n>', 'runs to show', '20').description('Recent tool runs').action(run(async (opts) => {
   const r = listRuns(Number(opts.limit))
