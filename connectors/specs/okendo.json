@@ -1,0 +1,79 @@
+{
+  "slug": "okendo",
+  "name": "Okendo",
+  "docs": "https://docs.okendo.io/docs/merchant-rest-api/usage",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "Merchant REST API key",
+      "help": "Okendo's help center says the Merchant REST API key comes with the Growth plan and above. In the Okendo admin open Settings > Integrations, click the edit icon on the Okendo section and open Credentials. Click Generate (or Show if a key already exists) and copy the Merchant REST API Key, a 32-character string. Okendo has no read-only scope: the same key can update and reply to reviews, so store it as a secret. This connector only sends GET requests."
+    }
+  ],
+  "params": [
+    {
+      "name": "user_id",
+      "label": "Okendo User ID (same Credentials panel)",
+      "example": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://api.okendo.io/enterprise/",
+      "headers": {
+        "okendo-api-version": "2025-02-01"
+      },
+      "auth": {
+        "type": "http_basic",
+        "username": "{param:user_id}",
+        "password": "{secret:api_key}"
+      }
+    },
+    "resource_defaults": {
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "reviews",
+        "primary_key": "reviewId",
+        "endpoint": {
+          "path": "reviews",
+          "params": {
+            "limit": 100,
+            "status": "approved",
+            "orderBy": "date asc"
+          },
+          "data_selector": "reviews",
+          "paginator": {
+            "type": "json_link_from_base",
+            "next_url_path": "nextUrl"}
+        }
+      },
+      {
+        "name": "surveys",
+        "primary_key": "surveyId",
+        "endpoint": {
+          "path": "surveys",
+          "params": {
+            "limit": 100,
+            "orderBy": "date asc"
+          },
+          "data_selector": "surveys",
+          "paginator": {
+            "type": "json_link_from_base",
+            "next_url_path": "nextUrl"}
+        }
+      }
+    ]
+  },
+  "strip_fields": ["avatarUrl", "location"],
+  "verified_against": [
+    "https://docs.okendo.io/docs/merchant-rest-api/quick-start",
+    "https://docs.okendo.io/docs/merchant-rest-api/usage",
+    "https://docs.okendo.io/docs/open-api/merchant-rest-api/okendo-enterprise-api",
+    "https://docs.okendo.io/docs/open-api/merchant-rest-api/list-reviews",
+    "https://docs.okendo.io/docs/open-api/merchant-rest-api/list-surveys",
+    "https://docs.okendo.io/docs/open-api/merchant-rest-api/list-tags",
+    "https://support.okendo.io/en/articles/9690320-using-custom-earn-rules"
+  ],
+  "notes": "Merchant API at https://api.okendo.io/enterprise, HTTP Basic auth with the Okendo User ID as username and the Merchant REST API key as password, plus the okendo-api-version header (2025-02-01, the only documented version). Plan: the API reference calls this the API available to enterprise customers, while Okendo's help center says the key is available on the Growth plan and above; which plans can actually generate a key is unverified. Lists return the rows plus nextUrl, a link relative to the base path (for example /reviews?lastEvaluated=...), absent on the last page; limit is 1 to 100. The runner's json_link_from_base paginator joins nextUrl to the base path. That relative-link paging was proven against a local mock in the documented shape only, never against Okendo itself; if Okendo's real nextUrl already includes /enterprise the join would double the prefix. reviews returns approved reviews only: status takes one value per request (approved, pending or rejected), so pending and rejected reviews are left out, and a review that is later rejected stays in the warehouse. No updated or created filter is documented, so both tables are a full refresh merged on reviewId and surveyId. reviewer email, name and displayName are removed by the runner's personal-data filter, and avatarUrl and location are listed in strip_fields; order id and number are kept. Left out: tags (a bare list of strings with no id), survey responses (need a survey id per request), customer profiles and activities (personal data per customer), loyalty, groups, quizzes and webhook subscriptions (endpoint pages not read for this spec). Rate limit is a steady 2 requests per second with a small burst; the runner does not throttle and relies on retrying 429 responses."
+}

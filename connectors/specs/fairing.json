@@ -1,0 +1,76 @@
+{
+  "slug": "fairing",
+  "name": "Fairing",
+  "docs": "https://docs.fairing.co/reference/api",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "Fairing API key",
+      "help": "In the Fairing dashboard (app.fairing.co) open the Settings tab and find the API Keys section. Copy the secret API key for this store. Fairing does not offer read-only keys or scopes on dashboard keys, so store it as a secret. This connector only sends GET requests to /api/responses and /api/questions. The key is tied to one store; a brand with several stores needs one key per store."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://app.fairing.co/api/",
+      "auth": {
+        "type": "api_key",
+        "name": "Authorization",
+        "api_key": "{secret:api_key}",
+        "location": "header"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "responses",
+        "endpoint": {
+          "path": "responses",
+          "params": {
+            "limit": 1000,
+            "sort": "updated_at_asc"
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "data[-1].id",
+            "cursor_param": "starting_after"
+          },
+          "incremental": {
+            "start_param": "updated_at_min",
+            "cursor_path": "updated_at",
+            "initial_value": "2010-01-01T00:00:00Z"
+          }
+        }
+      },
+      {
+        "name": "questions",
+        "endpoint": {
+          "path": "questions",
+          "params": {
+            "include_targeting": "true"
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "single_page"
+          }
+        }
+      }
+    ]
+  },
+  "strip_fields": [],
+  "verified_against": [
+    "https://docs.fairing.co/reference/api",
+    "https://docs.fairing.co/reference/authentication",
+    "https://docs.fairing.co/reference/rate-limits",
+    "https://docs.fairing.co/reference/retrieve-responses",
+    "https://docs.fairing.co/reference/the-response-object",
+    "https://docs.fairing.co/reference/retrieve-questions",
+    "https://docs.fairing.co/reference/question-object",
+    "https://docs.fairing.co/reference/connect-with-oauth"
+  ],
+  "notes": "Base https://app.fairing.co/api, with the raw API key in the Authorization header (no Bearer prefix; Bearer is only for partner OAuth tokens, which need a client_id from Fairing and are not used here). The OAuth page states the responses and questions read endpoints are available on all Fairing plans. GET /responses returns {data, next, prev}; pagination is cursor-based, sending the id of the last row back as starting_after, limit default 100 and maximum 1000. The spec reads the cursor from the last row (data[-1].id) instead of following the next URL, because the docs do not say whether next is null on the last page; this costs one extra empty request per run and always stops. Incremental on updated_at through updated_at_min with sort=updated_at_asc, merged on id, so responses recategorized in the Fairing UI are re-synced. updated_at_min is inclusive, so the last row of the previous run is read again and merged. Unverified: the docs ask for ISO 8601 UTC timestamps, and the stored cursor is sent back in the form the API returns it (for example 2022-02-16T17:54:35+00:00). GET /questions returns the full question list in one response with no pagination; include_targeting=true adds the targeting object. Question response options and clarification questions are nested and land in child tables. The customer email on each response is removed by the runner's personal-data filter; customer_id, order_id and order_number are kept as identifiers. No other key on the documented response or question objects holds a name, phone or address, so strip_fields is empty. Free-text answers (other_response, and response on open_ended questions, plus original_response and referring_question_response) are typed by shoppers and can contain a person's name such as a friend or influencer; they are kept because they are the attribution answer, and only email addresses inside them are masked. landing_page_path and referring_site are kept as documented. POST /sources (create sources, Advanced Attribution plan) changes the account and is left out. Rate limit 100 requests per minute per store, shared across both endpoints, with 429 and Retry-After when exceeded."
+}

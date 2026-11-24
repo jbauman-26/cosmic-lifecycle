@@ -12,7 +12,7 @@ export type Tx = { query(sql: string, params?: unknown[]): Promise<Row[]> }
 
 export interface Db extends Tx {
   transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T>
-  readOnly(sql: string): Promise<Row[]>
+  readOnly(sql: string, params?: unknown[]): Promise<Row[]>
   close(): Promise<void>
 }
 
@@ -23,10 +23,10 @@ export function wrapPglite(client: PGlite): Db {
       const out = await client.transaction((tx) => fn({ query: async (sql, params) => (await tx.query<Row>(sql, params as never[])).rows }))
       return out as Awaited<ReturnType<typeof fn>>
     },
-    readOnly: async (sql) => {
+    readOnly: async (sql, params) => {
       await client.exec('BEGIN READ ONLY')
       try {
-        return (await client.query<Row>(sql)).rows
+        return (await client.query<Row>(sql, params as never[])).rows
       } finally {
         await client.exec('ROLLBACK')
       }
@@ -35,13 +35,49 @@ export function wrapPglite(client: PGlite): Db {
   }
 }
 
-function wrapPg(pool: pg.Pool): Db {
+// LIFECYCLE_DB_SCHEMA names the schema this store lives in, for a database that
+// holds one schema per store. Unset, the connection's own schema is used: whatever
+// its role or URL puts first on the search path, which is `public` on a plain database.
+export function dbSchema(env: NodeJS.ProcessEnv = process.env): string | null {
+  const s = env.LIFECYCLE_DB_SCHEMA?.trim()
+  if (!s) return null
+  if (!/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(s) || /^pg_/i.test(s) || s.toLowerCase() === 'information_schema') {
+    throw new CliError('LIFECYCLE_DB_SCHEMA is not a usable schema name.', 'Use letters, numbers and underscores, such as store_acme.', 'bad_schema')
+  }
+  return s
+}
+
+const quoteIdent = (s: string) => `"${s.replace(/"/g, '""')}"`
+
+// The slice of pg this file uses, so tests can pass a recorder instead of a server.
+type PgClient = { query(sql: string, params?: unknown[]): Promise<{ rows: unknown[] }>; release(): void }
+export type PgPool = { query(sql: string, params?: unknown[]): Promise<{ rows: unknown[] }>; connect(): Promise<PgClient>; end(): Promise<void> }
+
+export function wrapPg(pool: PgPool, schema: string | null = dbSchema()): Db {
   return {
-    query: async (sql, params) => (await pool.query(sql, params as unknown[])).rows as Row[],
+    // With a named schema, every statement runs with that schema set for its own transaction.
+    // SET LOCAL holds on any connection, including one handed out by a transaction pooler.
+    query: async (sql, params) => {
+      if (!schema) return (await pool.query(sql, params as unknown[])).rows as Row[]
+      const c = await pool.connect()
+      try {
+        await c.query('BEGIN')
+        await c.query(`SET LOCAL search_path = ${quoteIdent(schema)}`)
+        const rows = (await c.query(sql, params as unknown[])).rows as Row[]
+        await c.query('COMMIT')
+        return rows
+      } catch (e) {
+        await c.query('ROLLBACK').catch(() => {})
+        throw e
+      } finally {
+        c.release()
+      }
+    },
     transaction: async (fn) => {
       const c = await pool.connect()
       try {
         await c.query('BEGIN')
+        if (schema) await c.query(`SET LOCAL search_path = ${quoteIdent(schema)}`)
         const out = await fn({ query: async (sql, params) => (await c.query(sql, params as unknown[])).rows as Row[] })
         await c.query('COMMIT')
         return out
@@ -52,13 +88,17 @@ function wrapPg(pool: pg.Pool): Db {
         c.release()
       }
     },
-    readOnly: async (sql) => {
+    readOnly: async (sql, params) => {
       const c = await pool.connect()
       try {
         await c.query('BEGIN READ ONLY')
         await c.query(`SET LOCAL statement_timeout = '15s'`)
-        await c.query(`SET LOCAL search_path = public`)
-        return (await c.query(sql)).rows as Row[]
+        // Pin the search path to one schema for the query: the store's own. It used to be
+        // forced to `public`, which hid every table of a store that lives in its own schema.
+        // System schemas are still refused by assertReadOnlySql before the query gets here.
+        const own = schema ?? String(((await c.query('SELECT current_schema() AS s')).rows[0] as { s?: string } | undefined)?.s ?? 'public')
+        await c.query(`SET LOCAL search_path = ${quoteIdent(own)}`)
+        return (await c.query(sql, params?.length ? params : undefined)).rows as Row[]
       } finally {
         await c.query('ROLLBACK').catch(() => {})
         c.release()
@@ -82,5 +122,7 @@ export async function openDb(): Promise<Db> {
   }
   const url = getSecret('database-url')
   if (!url) throw new CliError('No database URL saved.', 'Set LIFECYCLE_DATABASE_URL or run lifecycle init --local.', 'no_database')
-  return wrapPg(new pg.Pool({ connectionString: url, max: 2 }))
+  const schema = dbSchema()
+  // With LIFECYCLE_DB_SCHEMA set, reads and writes both land in that schema.
+  return wrapPg(new pg.Pool({ connectionString: url, max: 2 }) as unknown as PgPool, schema)
 }

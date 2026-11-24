@@ -1,0 +1,86 @@
+{
+  "slug": "loox",
+  "name": "Loox",
+  "docs": "https://developers.loox.app/documentation/",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "Loox API secret key",
+      "help": "Needs the Loox Convert or Unlimited plan. In the Loox admin open Settings > API Keys and click Generate new key, named Cosmic Lifecycle. Copy the key right away; Loox hashes it and will not show it again (up to 5 keys per store; revoke and regenerate if lost). The Loox API is read-only, so the key cannot change reviews, but it does expose reviewer emails, so store it as a secret."
+    }
+  ],
+  "params": [
+    {
+      "name": "public_store_id",
+      "label": "Loox publicStoreId (top of Settings > API Keys)",
+      "example": "4JG3Fn92E.37d12ab29c4d99cee8ec882707d45433beedce77a45704fb2f37051e01eb538c"
+    }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://api.loox.io/api/v1/",
+      "auth": {
+        "type": "api_key",
+        "name": "X-Api-Secret-Key",
+        "api_key": "{secret:api_key}",
+        "location": "header"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "product_reviews",
+        "endpoint": {
+          "path": "store/{param:public_store_id}/product-reviews",
+          "params": {
+            "limit": 250,
+            "status": "all",
+            "sort": "date",
+            "direction": "asc"
+          },
+          "data_selector": "reviews",
+          "paginator": {
+            "type": "page_number",
+            "base_page": 1,
+            "page_param": "page",
+            "total_path": null,
+            "has_more_path": "pagination.hasMore"
+          }
+        }
+      },
+      {
+        "name": "store_reviews",
+        "endpoint": {
+          "path": "store/{param:public_store_id}/store-reviews",
+          "params": {
+            "limit": 250,
+            "status": "all",
+            "sort": "date",
+            "direction": "asc"
+          },
+          "data_selector": "reviews",
+          "paginator": {
+            "type": "page_number",
+            "base_page": 1,
+            "page_param": "page",
+            "total_path": null,
+            "has_more_path": "pagination.hasMore"
+          }
+        }
+      }
+    ]
+  },
+  "strip_fields": [
+    "nickname"
+  ],
+  "verified_against": [
+    "https://developers.loox.app/documentation/#tag/Merchant-Quick-Start/operation/merchant_quickStart",
+    "https://developers.loox.app/documentation/#tag/Merchant-Product-Reviews/operation/merchant_listProductReviews",
+    "https://developers.loox.app/documentation/#tag/Merchant-Store-Reviews/operation/merchant_listStoreReviews",
+    "https://help.loox.io/support/solutions/articles/501000356871-loox-reviews-api-and-webhooks"
+  ],
+  "notes": "Uses the authenticated Merchant API (api.loox.io, X-Api-Secret-Key header), available on the Convert and Unlimited plans per Loox's help article; the keyless Storefront API is not used. Both lists return reviews plus pagination with total, page, limit, hasMore and a relative nextPageUrl. Pagination here is page and limit (max 250) and stops when pagination.hasMore is false; nextPageUrl is not followed because its documented example carries only page, limit and total, so it is unclear whether filters survive. status=all returns published, unpublished and pending reviews (the default is published only); sort=date ascending keeps pages stable while new reviews arrive. No incremental: from_date and to_date only accept YYYY-MM-DD and filter on the review date, not on a last-updated time, so later replies, publishes and edits would be missed; every run is a full refresh merged on id. Deleted reviews are not removed from the warehouse. Reviewer firstName, lastName and email are removed by the runner's personal-data filter. reviewer.nickname is listed in strip_fields. reviewer.name (the full name) is not caught by key name and cannot be listed there, because product.name is the product title in the same response; it needs a path-aware rule. reviewer.customerId, orderId and location (country and countryCode only) are kept. Rate limit 120 requests per minute per API key. The API has no list endpoints beyond product reviews and store reviews. Page-number pagination with hasMore was exercised against a local mock in the documented shape only, never against Loox itself."
+}

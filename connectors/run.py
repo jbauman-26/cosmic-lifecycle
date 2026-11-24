@@ -57,11 +57,32 @@ def is_personal(key: str) -> bool:
     return "name" in ws and any(w in NAME_OWNERS for w in ws)
 
 
-def strip_personal(item: Any) -> Any:
+# Inside an object that belongs to a person (reviewer, customer, author ...), short
+# keys that say nothing on their own are personal too: reviewer.name is a person,
+# product.name is not.
+PERSON_OBJECTS = NAME_OWNERS - {"first", "last", "full", "middle", "display"}
+# City and location stay: they are coarse, and useful for geography. Street lines go.
+BARE_PERSONAL = {"name", "first", "last", "nickname", "username", "handle", "initials", "line1", "line2"}
+
+
+def owns_person(key: str) -> bool:
+    return any(w in PERSON_OBJECTS or (w.endswith("s") and w[:-1] in PERSON_OBJECTS) for w in words(key))
+
+
+def strip_personal(item: Any, extra: frozenset[str] = frozenset(), in_person: bool = False) -> Any:
+    """Remove personal data by key name. `extra` holds exact key names a spec lists under strip_fields."""
     if isinstance(item, dict):
-        return {k: strip_personal(v) for k, v in item.items() if not is_personal(str(k))}
+        out = {}
+        for k, v in item.items():
+            key = str(k)
+            if key in extra or is_personal(key):
+                continue
+            if in_person and ("".join(words(key)) in BARE_PERSONAL or "name" in words(key)):
+                continue
+            out[k] = strip_personal(v, extra, in_person or owns_person(key))
+        return out
     if isinstance(item, list):
-        return [strip_personal(v) for v in item]
+        return [strip_personal(v, extra, in_person) for v in item]
     if isinstance(item, str) and EMAIL_VALUE.search(item):
         return EMAIL_VALUE.sub("[removed]", item)
     return item
@@ -98,14 +119,49 @@ def fill(value: Any, params: dict[str, str]) -> Any:
     return value
 
 
+def from_base_paginator(next_url_path: str, base_url: str):
+    """json_link_from_base: a next link that is relative to the API's base path, not the host root.
+
+    dlt's json_link joins a relative link against the host, which drops a base path
+    such as /enterprise. This one joins it to the client's base_url instead.
+    """
+    from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
+
+    class JSONLinkFromBasePaginator(JSONLinkPaginator):
+        def update_state(self, response: Any, data: Any = None) -> None:
+            super().update_state(response, data)
+            ref = self._next_reference
+            if ref and not str(ref).startswith("http"):
+                self._next_reference = base_url.rstrip("/") + "/" + str(ref).lstrip("/")
+
+    return JSONLinkFromBasePaginator(next_url_path=next_url_path)
+
+
+def custom_paginators(value: Any, base_url: str) -> Any:
+    """Swap {"type": "json_link_from_base", "next_url_path": ...} for a paginator object, anywhere in the config."""
+    if isinstance(value, dict):
+        if value.get("type") == "json_link_from_base":
+            return from_base_paginator(value.get("next_url_path", "next"), base_url)
+        return {k: custom_paginators(v, base_url) for k, v in value.items()}
+    if isinstance(value, list):
+        return [custom_paginators(v, base_url) for v in value]
+    return value
+
+
 def build_source(job: dict[str, Any]):
     from dlt.sources.rest_api import rest_api_source
 
     config = fill(job["source"]["config"], job.get("params", {}))
+    config = custom_paginators(config, str((config.get("client") or {}).get("base_url", "")))
     source = rest_api_source(config, name=job["source"]["slug"].replace("-", "_"))
     if job.get("personal_data", "strip") == "strip":
+        extra = frozenset(job["source"].get("strip_fields") or [])
+
+        def strip(item: Any) -> Any:
+            return strip_personal(item, extra)
+
         for resource in source.resources.values():
-            resource.add_map(strip_personal)
+            resource.add_map(strip)
     return source
 
 

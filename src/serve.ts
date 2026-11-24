@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { Db } from './db.js'
 import { buildDashboard, dashboardHtml } from './dashboard.js'
-import { defaultDays, listMetrics, runMetric } from './metrics.js'
+import { defaultDays, listAllMetrics, runMetric } from './metrics.js'
 import { auditFlows, revenuePerFlow } from './reports.js'
 import { trustLine } from './reconcile.js'
 import { VERSION } from './version.js'
@@ -34,7 +34,7 @@ export function createHandler(db: Db) {
         return res.end(html)
       }
       if (url.pathname === '/api/status') return json(res, 200, { version: VERSION, trust: await trustLine(db), routes: ROUTES })
-      if (url.pathname === '/api/metrics') return json(res, 200, listMetrics())
+      if (url.pathname === '/api/metrics') return json(res, 200, await listAllMetrics(db))
       const m = url.pathname.match(/^\/api\/metrics\/([a-z0-9_]+)$/)
       if (m) return json(res, 200, await runMetric(db, m[1]!, days(url)))
       if (url.pathname === '/api/reconcile') {

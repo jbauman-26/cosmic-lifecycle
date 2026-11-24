@@ -118,7 +118,7 @@ describe('update check', () => {
     expect(a).toMatchObject({ latest: '99.0.0', newer: true })
     const failing = (async () => { throw new Error('offline') }) as unknown as typeof fetch
     expect(await checkForUpdate({ fetcher: failing, now: now + 3600_000 })).toMatchObject({ latest: '99.0.0', newer: true })
-    expect((await checkForUpdate({ fetcher: failing, now: now + 2 * 86400_000 })).skipped).toMatch(/could not be reached/)
+    expect((await checkForUpdate({ fetcher: failing, now: now + 2 * 86400_000 })).skipped).toMatch(/private or offline/)
   })
 
   it('can be turned off', async () => {

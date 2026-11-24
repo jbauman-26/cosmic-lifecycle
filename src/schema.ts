@@ -59,6 +59,9 @@ export const MIGRATIONS = [
   // Custom SQL that agents ran because no verified metric fit. Repeated ones become new metrics.
   `CREATE TABLE IF NOT EXISTS meta_custom_query (
     sql_hash TEXT PRIMARY KEY, sql TEXT NOT NULL, runs BIGINT NOT NULL DEFAULT 1, first_seen TIMESTAMPTZ NOT NULL, last_seen TIMESTAMPTZ NOT NULL)`,
+  // Numbers the owner saved by hand: a metric id, a label and one SELECT. SQL text only, never results.
+  `CREATE TABLE IF NOT EXISTS meta_saved_metric (
+    metric TEXT PRIMARY KEY, title TEXT NOT NULL, unit TEXT NOT NULL, sql TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL)`,
 ]
 
 export const PUBLIC_TABLES = [

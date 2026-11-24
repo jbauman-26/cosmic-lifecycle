@@ -1,0 +1,219 @@
+{
+  "slug": "privy",
+  "name": "Privy",
+  "docs": "https://help.privy.com/docs/api-reference/overview",
+  "credentials": [
+    {
+      "name": "api_token",
+      "label": "Privy API token",
+      "help": "Needs a paid Privy plan; accounts without API access get a 403 api_access_required error. In the Privy dashboard (dashboard.privy.com) open Settings > API Tokens and click Create Token. Name it Cosmic Lifecycle and tick only the read scopes: contacts_read, campaigns_read, flows_read, displays_read, segments_read, coupons_read and reports_read. Leave contacts_write, orders_write and events_write off. Pick an expiration (30 days to 1 year, or none) and copy the token right away; it starts with privy_ and is shown only once. When it expires, renew it on the same page or create a new one."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://api.privy.com/v1/",
+      "auth": {
+        "type": "bearer",
+        "token": "{secret:api_token}"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "contacts",
+        "endpoint": {
+          "path": "contacts",
+          "params": {
+            "per_page": 100
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "page_number",
+            "base_page": 1,
+            "page_param": "page",
+            "total_path": "pagination.total_pages"
+          },
+          "incremental": {
+            "start_param": "updated_after",
+            "cursor_path": "updated_at",
+            "initial_value": "2010-01-01T00:00:00Z"
+          }
+        }
+      },
+      {
+        "name": "campaigns",
+        "endpoint": {
+          "path": "campaigns",
+          "params": {
+            "per_page": 100
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "page_number",
+            "base_page": 1,
+            "page_param": "page",
+            "total_path": "pagination.total_pages"
+          }
+        }
+      },
+      {
+        "name": "flow_campaigns",
+        "endpoint": {
+          "path": "campaigns",
+          "params": {
+            "per_page": 100,
+            "type": "flows"
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "page_number",
+            "base_page": 1,
+            "page_param": "page",
+            "total_path": "pagination.total_pages"
+          }
+        }
+      },
+      {
+        "name": "flows",
+        "endpoint": {
+          "path": "flows",
+          "params": {
+            "per_page": 100
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "page_number",
+            "base_page": 1,
+            "page_param": "page",
+            "total_path": "pagination.total_pages"
+          }
+        }
+      },
+      {
+        "name": "displays",
+        "endpoint": {
+          "path": "displays",
+          "params": {
+            "per_page": 100
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "page_number",
+            "base_page": 1,
+            "page_param": "page",
+            "total_path": "pagination.total_pages"
+          }
+        }
+      },
+      {
+        "name": "segments",
+        "endpoint": {
+          "path": "segments",
+          "params": {
+            "per_page": 100
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "page_number",
+            "base_page": 1,
+            "page_param": "page",
+            "total_path": "pagination.total_pages"
+          }
+        }
+      },
+      {
+        "name": "coupons",
+        "endpoint": {
+          "path": "coupons",
+          "params": {
+            "per_page": 100
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "page_number",
+            "base_page": 1,
+            "page_param": "page",
+            "total_path": "pagination.total_pages"
+          }
+        }
+      },
+      {
+        "name": "campaign_performance_30d",
+        "endpoint": {
+          "path": "reports/campaigns",
+          "params": {
+            "per_page": 50,
+            "period": "last_30_days"
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "page_number",
+            "base_page": 1,
+            "page_param": "page",
+            "total_path": "pagination.total_pages"
+          }
+        },
+        "primary_key": "campaign_id",
+        "write_disposition": "replace"
+      },
+      {
+        "name": "flow_performance_30d",
+        "endpoint": {
+          "path": "reports/flows",
+          "params": {
+            "per_page": 25,
+            "period": "last_30_days"
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "page_number",
+            "base_page": 1,
+            "page_param": "page",
+            "total_path": "pagination.total_pages"
+          }
+        },
+        "primary_key": "flow_id",
+        "write_disposition": "replace"
+      },
+      {
+        "name": "display_performance_30d",
+        "endpoint": {
+          "path": "reports/displays",
+          "params": {
+            "per_page": 100,
+            "period": "last_30_days"
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "page_number",
+            "base_page": 1,
+            "page_param": "page",
+            "total_path": "pagination.total_pages"
+          }
+        },
+        "primary_key": "display_id",
+        "write_disposition": "replace"
+      }
+    ]
+  },
+  "verified_against": [
+    "https://help.privy.com/docs/api-reference/overview",
+    "https://help.privy.com/docs/api-reference/api-tokens",
+    "https://help.privy.com/docs/api-reference/rate-limits",
+    "https://help.privy.com/openapi/privy-api.yaml",
+    "https://help.privy.com/docs/api-reference/list-contacts",
+    "https://help.privy.com/docs/api-reference/list-campaigns",
+    "https://help.privy.com/docs/api-reference/list-flows",
+    "https://help.privy.com/docs/api-reference/list-displays",
+    "https://help.privy.com/docs/api-reference/list-segments",
+    "https://help.privy.com/docs/api-reference/list-coupons",
+    "https://help.privy.com/docs/api-reference/list-campaign-performance",
+    "https://help.privy.com/docs/api-reference/list-flow-performance",
+    "https://help.privy.com/docs/api-reference/list-display-performance"
+  ],
+  "notes": "This is Privy the ecommerce pop-up, email and SMS product (api.privy.com), not the unrelated wallet company at privy.io. API access needs a paid Privy account. Auth is Authorization: Bearer with a dashboard API token (prefix privy_); tokens carry per-resource scopes, so a read-only token is possible, and they expire unless created with no expiration. Every list returns data plus pagination with page, per_page, total_count and total_pages; pages start at 1 and the paginator stops at total_pages. per_page is clamped to 10 to 100 on most lists, 50 on reports/campaigns and 25 on reports/flows. contacts is incremental on updated_at through updated_after (strictly after, ISO 8601); the list is ordered newest created first, so a contact created mid-sync can shift pages, and the merge on id absorbs the repeat. Deleted contacts drop out of the list and are not removed from the warehouse. Contact first_name, last_name, email and phone_number are removed by the runner's personal-data filter; custom_fields keys are merchant-defined and are kept unless their key name looks personal. campaigns lists newsletters and flow_campaigns lists the messages flows send (type=flows); both are configuration only and are full refresh merged on id, as are flows, displays, segments and coupons, because none of those lists has an updated filter. displays leaves out archived displays (the API default). The three performance tables are rolling last_30_days snapshots in the account's time zone and are replaced on every run; reports/campaigns ranks at most 100 campaigns sent in the period, reports/displays ranks at most 50 and drops displays with zero signups, reports/flows lists every flow. Left out: orders (they repeat the store platform's orders and include addresses), products and collections (proxied live from the store), tags, imports, per-contact activity, segment members and the single-number reports/summary. Rate limit 60 requests per minute and 10,000 per day per account, shared by all tokens; at 100 contacts per page a first sync of a very large list can hit the daily cap and should be rerun the next day. Pagination and the incremental filter were exercised against a local mock in the documented shape only, never against Privy itself. Parent-account tokens read the parent account; subaccounts need the Privy-Account-Id header, which this spec does not send."
+}
