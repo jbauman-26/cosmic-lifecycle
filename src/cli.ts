@@ -124,7 +124,7 @@ program.command('sync').description('Pull fresh totals from connected sources').
     const metaToken = getSecret('meta-ads-token')
     if (config.meta && metaToken) {
       const meta = new MetaAds(metaToken, config.meta.account)
-      results.push(await syncMeta(db, (since, until) => meta.insights(since, until), { currency: config.meta.currency }))
+      results.push(await syncMeta(db, (since, until) => meta.insights(since, until), { currency: config.meta.currency, account: config.meta.account }))
     }
     if (!results.length) throw new CliError('No sources connected.', 'lifecycle connect klaviyo --key-env NAME')
     const check = await reconcile(db)

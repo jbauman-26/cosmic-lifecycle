@@ -27,6 +27,9 @@ const CCY_NOTE = 'Stripe amounts are in the account\'s main currency for the win
 const META_SPEND = `(SELECT coalesce(sum(spend), 0) FROM fact_meta_ads_daily WHERE date >= $1)`;
 const META_VALUE = `(SELECT coalesce(sum(purchase_value), 0) FROM fact_meta_ads_daily WHERE date >= $1)`;
 const META_PURCHASES = `(SELECT coalesce(sum(purchases), 0) FROM fact_meta_ads_daily WHERE date >= $1)`;
+// Revenue for the efficiency ratio starts on the first day Meta data exists, so a window longer than the
+// synced history never divides months of revenue by weeks of spend.
+const NET_SINCE_META = `(SELECT coalesce(sum(net_revenue), 0) FROM fact_orders_daily WHERE date >= GREATEST($1::date, (SELECT min(date) FROM fact_meta_ads_daily)))`;
 const META_CLAIM_NOTE = 'Purchases and purchase value are what Meta attributes to its own ads, in its own attribution window. They are a claim, not orders. Do not add them to Shopify revenue or to email revenue.';
 const META_CCY_NOTE = 'Spend is in the ad account\'s currency and is not converted. It is shown with a dollar sign either way.';
 const single = (expr) => `SELECT ${expr} AS value, NULL::numeric AS numerator, NULL::numeric AS denominator`;
@@ -51,7 +54,7 @@ export const METRICS = [
     { name: 'meta_ad_spend', title: 'Meta ad spend', description: 'What the Meta ad account spent in the window.', unit: 'usd', needs: ['meta'], sql: single(META_SPEND), notes: [META_CCY_NOTE] },
     { name: 'meta_attributed_purchases', title: 'Meta attributed purchases', description: 'Purchases Meta attributes to its ads in the window.', unit: 'count', needs: ['meta'], sql: single(META_PURCHASES), notes: [META_CLAIM_NOTE] },
     { name: 'meta_reported_roas', title: 'Meta reported ROAS', description: 'Purchase value Meta attributes to its ads, divided by spend. Meta\'s own claim.', unit: 'ratio', needs: ['meta'], sql: ratio(META_VALUE, META_SPEND), notes: [META_CLAIM_NOTE, META_CCY_NOTE] },
-    { name: 'marketing_efficiency_ratio', title: 'Marketing efficiency ratio', description: 'Shopify net revenue divided by Meta ad spend. All store revenue over ad spend, with no attribution at all.', unit: 'ratio', needs: ['shopify', 'meta'], sql: ratio(NET, META_SPEND), notes: ['Only Meta spend is counted. Other paid channels are not in the spend, so the true ratio is lower if you run them.', 'Assumes the store and the ad account use the same currency.', 'Meta days follow the ad account\'s time zone, so a single day can differ slightly from Shopify\'s. Use a window of a week or more.'] },
+    { name: 'marketing_efficiency_ratio', title: 'Marketing efficiency ratio', description: 'Shopify net revenue divided by Meta ad spend. All store revenue over ad spend, with no attribution at all.', unit: 'ratio', needs: ['shopify', 'meta'], sql: ratio(NET_SINCE_META, META_SPEND), notes: ['Revenue is counted from the first day Meta data exists, or the start of the window if that is later. The first sync covers 90 days.', 'Only Meta spend is counted. Other paid channels are not in the spend, so the true ratio is lower if you run them.', 'Assumes the store and the ad account use the same currency.', 'Meta days follow the ad account\'s time zone, so a single day can differ slightly from Shopify\'s. Use a window of a week or more.'] },
     { name: 'ga4_purchase_rate', title: 'GA4 purchase rate', description: 'GA4 purchases divided by GA4 sessions.', unit: 'percent', needs: ['ga4'], sql: ratio(PURCHASES, SESSIONS, 100) },
 ];
 // Which table proves each source has synced at all.

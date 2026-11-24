@@ -176,13 +176,14 @@ export async function syncStripe(db, load) {
 }
 // Meta restates recent days as late conversions come in, so every sync pulls the whole window again and
 // replaces it in one transaction. Days older than the window keep what the last sync that covered them saw.
-export async function writeMeta(db, rows, since, currency) {
+// Rows from any other ad account are removed, so connecting a different account never mixes two accounts' history.
+export async function writeMeta(db, rows, since, currency, account = '') {
     const daily = toDaily(rows);
     const at = now();
     await db.transaction(async (tx) => {
-        await tx.query('DELETE FROM fact_meta_ads_daily WHERE date >= $1', [since]);
+        await tx.query('DELETE FROM fact_meta_ads_daily WHERE date >= $1 OR account_id <> $2', [since, account]);
         for (const d of daily) {
-            await tx.query(`INSERT INTO fact_meta_ads_daily VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (date, campaign_id) DO NOTHING`, [d.date, d.campaignId, d.campaignName, d.spend, d.impressions, d.clicks, d.purchases, d.purchaseValue, currency, at]);
+            await tx.query(`INSERT INTO fact_meta_ads_daily VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (date, campaign_id) DO NOTHING`, [d.date, d.campaignId, d.campaignName, d.spend, d.impressions, d.clicks, d.purchases, d.purchaseValue, currency, account, at]);
         }
     });
     return { rows: daily.length, spend: Math.round(daily.reduce((n, d) => n + d.spend, 0) * 100) / 100 };
@@ -190,9 +191,10 @@ export async function writeMeta(db, rows, since, currency) {
 export async function syncMeta(db, load, opts = {}) {
     return recordRun(db, 'meta', async () => {
         const until = opts.today ?? now().slice(0, 10);
-        const since = new Date(Date.parse(`${until}T00:00:00Z`) - ((opts.days ?? 90) - 1) * 86400000).toISOString().slice(0, 10);
+        // The same first day a 90-day metric uses, so a default window never holds a day of revenue with no spend pulled for it.
+        const since = new Date(Date.parse(`${until}T00:00:00Z`) - (opts.days ?? 90) * 86400000).toISOString().slice(0, 10);
         const raw = await load(since, until);
-        const { rows } = await writeMeta(db, raw, since, opts.currency ?? '');
+        const { rows } = await writeMeta(db, raw, since, opts.currency ?? '', opts.account ?? '');
         await setTotal(db, 'meta', 'rows_pulled', raw.length);
         return rows ? { status: 'ok', rows } : { status: 'warning', rows, detail: `Meta returned no campaign activity from ${since} to ${until}.` };
     });

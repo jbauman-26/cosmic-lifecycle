@@ -81,7 +81,7 @@ describe('verified metrics', () => {
     await db.query(`INSERT INTO fact_stripe_daily VALUES (CURRENT_DATE - 5, 'usd', 10, 500, 50, 450, 2, 4, 6, 0, now())`)
     await db.query(`INSERT INTO fact_stripe_subscriptions_daily VALUES (CURRENT_DATE - 5, 'usd', 3, 1, now())`)
     await db.query(`INSERT INTO fact_stripe_mrr VALUES (CURRENT_DATE, 'usd', 7, 210, 0, now())`)
-    await db.query(`INSERT INTO fact_meta_ads_daily VALUES (CURRENT_DATE - 5, 'c1', 'Prospecting', 250, 10000, 200, 6, 750, 'USD', now())`)
+    await db.query(`INSERT INTO fact_meta_ads_daily VALUES (CURRENT_DATE - 5, 'c1', 'Prospecting', 250, 10000, 200, 6, 750, 'USD', 'act_1', now())`)
     for (const m of METRICS) expect((await runMetric(db, m.name, 90)).status, m.name).toBe('ok')
     expect((await runMetric(db, 'ga4_purchase_rate', 90)).value).toBe(2)
     expect(Number((await runMetric(db, 'meta_reported_roas', 90)).value)).toBe(3)

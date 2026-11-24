@@ -3,7 +3,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { migrate, wrapPglite, type Db } from '../src/db.js'
 import { dateChunks, MetaAds, normalizeAccountId, purchaseStat, toDaily, type RawInsight } from '../src/sources/meta.js'
 import { syncMeta, writeMeta } from '../src/sync.js'
-import { runMetric } from '../src/metrics.js'
+import { runMetric, sinceDate } from '../src/metrics.js'
 import { workflowYaml } from '../src/deploy.js'
 import { HttpError } from '../src/http.js'
 
@@ -133,7 +133,8 @@ describe('sync', () => {
   it('pulls a 90-day window ending today and writes daily campaign rows', async () => {
     const asked: string[] = []
     const r = await syncMeta(db, async (since, until) => { asked.push(`${since}..${until}`); return [row('2026-11-23', 'c1', '50', { actions: [{ action_type: 'omni_purchase', value: '2' }] }), row('2026-11-24', 'c1', '60')] }, { today: '2026-11-24', currency: 'USD' })
-    expect(asked).toEqual(['2026-08-27..2026-11-24'])
+    expect(asked).toEqual(['2026-08-26..2026-11-24'])
+    expect(sinceDate(90, Date.parse('2026-11-24T12:00:00Z'))).toBe('2026-08-26')
     expect(r).toMatchObject({ source: 'meta', status: 'ok', rows: 2 })
     expect(await spend()).toEqual([{ date: '2026-11-23', campaign_id: 'c1', spend: 50, purchases: 2, currency: 'USD' }, { date: '2026-11-24', campaign_id: 'c1', spend: 60, purchases: 0, currency: 'USD' }])
   })
@@ -144,6 +145,27 @@ describe('sync', () => {
     expect((await spend()).map((r) => `${r.date} ${r.campaign_id} ${r.spend}`)).toEqual(['2026-07-01 old 5', '2026-11-23 c1 55'])
   })
 
+  it('drops another ad account\'s history when the account changes', async () => {
+    await writeMeta(db, [row('2026-05-01', 'a-old', '70'), row('2026-11-20', 'a-new', '30')], '2026-05-01', 'EUR', 'act_111')
+    await syncMeta(db, async () => [row('2026-11-23', 'b1', '40')], { today: '2026-11-24', currency: 'USD', account: 'act_222' })
+    expect((await spend()).map((r) => `${r.date} ${r.campaign_id} ${r.currency}`)).toEqual(['2026-11-23 b1 USD'])
+    // The same account keeps its own older days.
+    await writeMeta(db, [row('2026-05-01', 'b-old', '5')], '2026-05-01', 'USD', 'act_222')
+    await syncMeta(db, async () => [row('2026-11-23', 'b1', '41')], { today: '2026-11-24', currency: 'USD', account: 'act_222' })
+    expect((await spend()).map((r) => r.campaign_id)).toEqual(['b-old', 'b1'])
+  })
+
+  it('counts revenue for the efficiency ratio only from the first day Meta data exists', async () => {
+    await db.query(`INSERT INTO fact_meta_ads_daily VALUES (CURRENT_DATE - 10, 'c1', 'Prospecting', 100, 1, 1, 0, 0, 'USD', 'act_1', now())`)
+    const cols = (await db.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'fact_orders_daily' ORDER BY ordinal_position`)).map((c) => String(c.column_name))
+    const insert = (daysAgo: number, net: number) => db.query(`INSERT INTO fact_orders_daily (${cols.join(', ')}) VALUES (${cols.map((c) => (c === 'date' ? `CURRENT_DATE - ${daysAgo}` : c === 'net_revenue' ? String(net) : c === 'source_synced_at' ? 'now()' : '0')).join(', ')})`)
+    await insert(5, 400)
+    await insert(150, 9000)
+    const mer = await runMetric(db, 'marketing_efficiency_ratio', 365)
+    expect(Number(mer.value)).toBe(4)
+    expect(Number(mer.numerator)).toBe(400)
+  })
+
   it('warns when Meta returns nothing, and records a failure with its reason', async () => {
     expect(await syncMeta(db, async () => [], { today: '2026-11-24' })).toMatchObject({ status: 'warning', rows: 0, detail: expect.stringMatching(/no campaign activity/) })
     const failed = await syncMeta(db, async () => { throw new Error('Meta refused the token') }, { today: '2026-11-24' })
@@ -152,7 +174,7 @@ describe('sync', () => {
 
   it('feeds the spend and ratio metrics, and says when Meta is missing', async () => {
     expect(await runMetric(db, 'meta_ad_spend', 30)).toMatchObject({ status: 'no_data', missing: ['meta'] })
-    await db.query(`INSERT INTO fact_meta_ads_daily VALUES (CURRENT_DATE - 2, 'c1', 'Prospecting', 200, 5000, 100, 5, 900, 'USD', now())`)
+    await db.query(`INSERT INTO fact_meta_ads_daily VALUES (CURRENT_DATE - 2, 'c1', 'Prospecting', 200, 5000, 100, 5, 900, 'USD', 'act_1', now())`)
     expect(Number((await runMetric(db, 'meta_ad_spend', 30)).value)).toBe(200)
     expect(Number((await runMetric(db, 'meta_reported_roas', 30)).value)).toBe(4.5)
     const roas = await runMetric(db, 'meta_reported_roas', 30)

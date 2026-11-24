@@ -52,7 +52,7 @@ export const MIGRATIONS = [
     // Meta's own numbers for its own ads. Purchases and their value are what Meta attributes to itself, not orders.
     `CREATE TABLE IF NOT EXISTS fact_meta_ads_daily (
     date DATE NOT NULL, campaign_id TEXT NOT NULL, campaign_name TEXT NOT NULL, spend NUMERIC NOT NULL, impressions BIGINT NOT NULL, clicks BIGINT NOT NULL,
-    purchases NUMERIC NOT NULL, purchase_value NUMERIC NOT NULL, currency TEXT NOT NULL,
+    purchases NUMERIC NOT NULL, purchase_value NUMERIC NOT NULL, currency TEXT NOT NULL, account_id TEXT NOT NULL,
     source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, campaign_id))`,
     // Custom SQL that agents ran because no verified metric fit. Repeated ones become new metrics.
     `CREATE TABLE IF NOT EXISTS meta_custom_query (
