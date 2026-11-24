@@ -22,7 +22,7 @@ import { DOCS } from './docs.js'
 import { addKit, ensureRegistry, listKits, searchKits, showKit, validateRegistry, type Registry } from './registry.js'
 import { skillsStatus, syncSkills, uninstallSkills, type Target } from './skills.js'
 import { feedbackUrl, openUrl } from './feedback.js'
-import { findMetric, formatValue, listMetrics, runMetric } from './metrics.js'
+import { deleteMetric, describeMetric, formatValue, listAllMetrics, runMetric, saveMetric, UNITS } from './metrics.js'
 import { CATALOG, CUSTOM_SOURCE_NOTE, kitPrompt, sourceStatus } from './sources-catalog.js'
 import type { Config } from './config.js'
 import { startMcp } from './mcp.js'
@@ -32,7 +32,8 @@ import { defaultOf, getSetting, listSettings, setSetting, unsetSetting, type Set
 import { deleteSecret, secretStatus, setSecret, SECRET_NAMES, type SecretName } from './secrets.js'
 import { buildDashboard, dashboardHtml } from './dashboard.js'
 import { SECRET_FOR, checklistLines, loadChecklist } from './checklist.js'
-import { checkForUpdate, UPDATE_COMMAND } from './update.js'
+import { checkForUpdate, UPDATE_HINT } from './update.js'
+import { tryWriteLock, withWriteLock } from './lock.js'
 import { trustLine } from './reconcile.js'
 import { defaultDays, metricCandidates } from './metrics.js'
 import { recordCustomQuery } from './query.js'
@@ -65,34 +66,47 @@ const run = (fn: (...a: any[]) => Promise<void>) => async (...a: any[]) => {
     emitError(format(), e)
   }
 }
+// Write commands take the store's lock first, so two of them never write one local database at once.
+// A second one waits a few seconds, then fails with code `busy`.
+const write = (name: string, fn: (...a: any[]) => Promise<void>) => run((...a: any[]) => withWriteLock(name, () => fn(...a)))
+// Open the store for a read when it exists. Listing metrics works before init, with built-ins only.
+const openIfSetUp = async () => {
+  try {
+    readConfig()
+  } catch {
+    return null
+  }
+  return openDb().catch(() => null)
+}
+const keyNote = (r: { keyNote?: string | null }) => (r.keyNote ? `\n${r.keyNote}` : '')
 
-program.command('init').description('Set up the database').option('--database-url-env <name>', 'use your own Postgres instead of the local database').action(run(async (opts) => {
+program.command('init').description('Set up the database').option('--database-url-env <name>', 'use your own Postgres instead of the local database').action(write('init', async (opts) => {
   const r = await init(opts)
   emit(format(), r, () => `Ready. Database: ${r.database}\nNext: lifecycle connect klaviyo --key-env NAME`)
 }))
 
 const connect = program.command('connect').description('Connect a data source')
-connect.command('klaviyo').option('--key-env <name>', 'environment variable holding a read-only private key').action(run(async (opts) => {
+connect.command('klaviyo').option('--key-env <name>', 'environment variable holding a read-only private key').action(write('connect klaviyo', async (opts) => {
   const r = await connectKlaviyo(opts)
-  emit(format(), r, () => `Connected to Klaviyo: ${r.account}`)
+  emit(format(), r, () => `Connected to Klaviyo: ${r.account}${keyNote(r)}`)
 }))
-connect.command('shopify').option('--store <domain>').option('--client-id <id>').option('--secret-env <name>', 'environment variable holding the client secret').action(run(async (opts) => {
+connect.command('shopify').option('--store <domain>').option('--client-id <id>').option('--secret-env <name>', 'environment variable holding the client secret').action(write('connect shopify', async (opts) => {
   const r = await connectShopify(opts)
-  emit(format(), r, () => `Connected to ${r.store}`)
+  emit(format(), r, () => `Connected to ${r.store}${keyNote(r)}`)
 }))
 
-connect.command('ga4').option('--property <id>').option('--client-id <id>').option('--secret-env <name>').option('--refresh-token-env <name>').action(run(async (opts) => {
+connect.command('ga4').option('--property <id>').option('--client-id <id>').option('--secret-env <name>').option('--refresh-token-env <name>').action(write('connect ga4', async (opts) => {
   const r = await connectGa4(opts)
-  emit(format(), r, () => `Connected to GA4 property ${r.property}`)
+  emit(format(), r, () => `Connected to GA4 property ${r.property}${keyNote(r)}`)
 }))
-connect.command('stripe').description('Read-only: charges, refunds, subscriptions. Totals only.').option('--key-env <name>', 'environment variable holding a restricted key').action(run(async (opts) => {
+connect.command('stripe').description('Read-only: charges, refunds, subscriptions. Totals only.').option('--key-env <name>', 'environment variable holding a restricted key').action(write('connect stripe', async (opts) => {
   const r = await connectStripe(opts)
-  emit(format(), r, () => [`Connected to Stripe (${r.mode} mode)${r.subscriptions ? '' : '. This key cannot read subscriptions, so MRR is off.'}`, r.note].filter(Boolean).join('\n'))
+  emit(format(), r, () => [`Connected to Stripe (${r.mode} mode)${r.subscriptions ? '' : '. This key cannot read subscriptions, so MRR is off.'}`, r.note, r.keyNote].filter(Boolean).join('\n'))
 }))
 
-connect.command('meta').description('Read-only: daily spend and results by campaign. No audiences, people or creative.').option('--account <id>', 'ad account id from Ads Manager').option('--token-env <name>', 'environment variable holding a system user token with ads_read').action(run(async (opts) => {
+connect.command('meta').description('Read-only: daily spend and results by campaign. No audiences, people or creative.').option('--account <id>', 'ad account id from Ads Manager').option('--token-env <name>', 'environment variable holding a system user token with ads_read').action(write('connect meta', async (opts) => {
   const r = await connectMeta(opts)
-  emit(format(), r, () => `Connected to Meta ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).\nNext: lifecycle sync`)
+  emit(format(), r, () => `Connected to Meta ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: lifecycle sync`)
 }))
 
 const collectList = (v: string, prev: string[] = []) => [...prev, v]
@@ -100,7 +114,7 @@ const collectList = (v: string, prev: string[] = []) => [...prev, v]
 program.command('sync').description('Pull fresh totals from connected sources, then reconcile')
   .option('--since <date>', 'start of the Klaviyo report window')
   .option('--only <source>', `sync only this built-in source: ${NATIVE.join(', ')} (repeatable, or a comma list)`, collectList)
-  .action(run(async (opts) => {
+  .action(write('sync', async (opts) => {
   const config = readConfig()
   const only = parseOnly(opts.only)
   const shopifySecret = getSecret('shopify-client-secret')
@@ -159,7 +173,7 @@ program.command('sync').description('Pull fresh totals from connected sources, t
 program.command('disconnect').argument('<source>', `${NATIVE.join(', ')}, or a warehouse source`)
   .description('Forget a source: its settings and saved keys. Loaded data is kept unless --delete-data')
   .option('--delete-data', 'also delete the data this source loaded')
-  .action(run(async (source: string, opts) => {
+  .action(write('disconnect', async (source: string, opts) => {
     if (!isNative(source)) {
       if (opts.deleteData) throw new CliError('--delete-data works for built-in sources only.', `lifecycle warehouse disconnect ${source}, then drop its schema yourself`, 'bad_value')
       const r = disconnectSource(source)
@@ -180,7 +194,7 @@ program.command('disconnect').argument('<source>', `${NATIVE.join(', ')}, or a w
     }
   }))
 
-program.command('reconcile').description('Prove the numbers agree across sources').action(run(async () => {
+program.command('reconcile').description('Prove the numbers agree across sources').action(write('reconcile', async () => {
   const db = await openDb()
   try {
     await migrate(db)
@@ -214,7 +228,15 @@ program.command('query').argument('<sql>').description('Run one read-only SQL qu
   const db = await openDb()
   try {
     const r = await runQuery(db, sql)
-    await recordCustomQuery(db, sql)
+    // Logging the query is a write. If a sync holds the store right now, skip the log, never the answer.
+    const lock = tryWriteLock('query log')
+    if (lock) {
+      try {
+        await recordCustomQuery(db, sql)
+      } finally {
+        lock()
+      }
+    }
     emit(format(), r, () => `${JSON.stringify(r.rows, null, 2)}\n${r.rowCount} rows${r.truncated ? ' (capped)' : ''}`)
   } finally {
     await db.close()
@@ -222,14 +244,48 @@ program.command('query').argument('<sql>').description('Run one read-only SQL qu
 }))
 
 // Verified metrics: fixed SQL, so the same question gets the same answer every time.
-const metrics = program.command('metrics').description('Verified metrics: the same SQL every time, with a trust line')
-metrics.command('list').description('List every verified metric').action(run(async () => {
-  const m = listMetrics()
-  emit(format(), m, () => m.map((x) => `${x.name}: ${x.description} (needs ${x.needs.join(', ')})`).join('\n'))
+const metrics = program.command('metrics').description('Verified metrics: the same SQL every time, with a trust line. Plus numbers of your own: metrics save')
+metrics.command('list').description('List every verified metric, then the numbers the owner saved').action(run(async () => {
+  const db = await openIfSetUp()
+  try {
+    const m = await listAllMetrics(db)
+    emit(format(), m, () => m.map((x) => (x.saved ? `${x.name}: ${x.title} (saved by the owner, not reviewed)` : `${x.name}: ${x.description} (needs ${x.needs.join(', ')})`)).join('\n'))
+  } finally {
+    await db?.close()
+  }
 }))
 metrics.command('show').argument('<name>').description('Show what a metric measures and its exact SQL').action(run(async (name: string) => {
-  const m = findMetric(name)
-  emit(format(), m, () => [`${m.title} (${m.name})`, m.description, `Needs: ${m.needs.join(', ')}. Unit: ${m.unit}.`, ...(m.notes ?? []), '', 'SQL ($1 is the first day of the window):', m.sql].join('\n'))
+  const db = await openIfSetUp()
+  try {
+    const m = await describeMetric(db, name)
+    emit(format(), m, () => [`${m.title} (${m.name})${m.saved ? ', saved by the owner' : ''}`, m.description, `${m.needs.length ? `Needs: ${m.needs.join(', ')}. ` : ''}Unit: ${m.unit}.`, ...(m.saved ? [] : (m.notes ?? [])), ...(m.saved ? (m.notes ?? []).slice(1) : []), '', 'SQL ($1 is the first day of the window):', m.sql].join('\n'))
+  } finally {
+    await db?.close()
+  }
+}))
+metrics.command('save').argument('<name>').description('Save a SELECT as a named number of your own. It runs read-only, with the trust line, and cannot take a built-in name')
+  .requiredOption('--sql <select>', 'one SELECT returning one row, in single quotes. $1 is the first day of the window. The number is the column named value, or the first column')
+  .option('--title <text>', 'a label for people')
+  .option('--unit <unit>', UNITS.join(', '), 'count')
+  .action(write('metrics save', async (name: string, opts) => {
+    const db = await openDb()
+    try {
+      await migrate(db)
+      const r = await saveMetric(db, name, opts)
+      emit(format(), r, () => [`${r.replaced ? 'Replaced' : 'Saved'} ${r.name} (${r.unit}). It shows in lifecycle metrics list as saved by the owner.`, ...r.notes.slice(1), `Run it: lifecycle metrics run ${r.name}`].join('\n'))
+    } finally {
+      await db.close()
+    }
+  }))
+metrics.command('delete').argument('<name>').description('Delete a saved number. Built-in metrics cannot be deleted').action(write('metrics delete', async (name: string) => {
+  const db = await openDb()
+  try {
+    await migrate(db)
+    const r = await deleteMetric(db, name)
+    emit(format(), r, () => `Deleted ${r.name}.`)
+  } finally {
+    await db.close()
+  }
 }))
 metrics.command('run').argument('<names...>').option('--days <n>', 'window in days (default: metrics.default_days, 90)').description('Run one or more metrics').action(run(async (names: string[], opts) => {
   const db = await openDb()
@@ -240,7 +296,7 @@ metrics.command('run').argument('<names...>').option('--days <n>', 'window in da
     const out = names.length === 1 ? results[0]! : { metrics: results, trust: results[0]!.trust }
     emit(format(), out, () => [
       results[0]!.trust.line,
-      ...results.map((r) => `${r.title}, last ${r.days} days: ${formatValue(r.unit, r.value)}${r.detail ? `. ${r.detail}` : ''}`),
+      ...results.map((r) => `${r.title}${r.saved ? ' (saved by the owner)' : ''}, last ${r.days} days: ${formatValue(r.unit, r.value)}${r.detail ? `. ${r.detail}` : ''}`),
       ...[...new Set(results.flatMap((r) => r.notes))],
     ].join('\n'))
   } finally {
@@ -675,7 +731,7 @@ files.command('pull').option('--repo <owner/name>').description('Download the da
   emit(format(), r, () => `Pulled run ${r.run} (${r.createdAt}):\n${r.files.map((f) => `  ${f}`).join('\n')}`)
 }))
 
-sources.command('import').argument('<name>').requiredOption('--csv <file>', 'CSV of daily totals').option('--date-column <name>', 'the date column', 'date').description('Import daily totals from any other tool as a custom source').action(run(async (name: string, opts) => {
+sources.command('import').argument('<name>').requiredOption('--csv <file>', 'CSV of daily totals').option('--date-column <name>', 'the date column', 'date').description('Import daily totals from any other tool as a custom source').action(write('sources import', async (name: string, opts) => {
   const db = await openDb()
   try {
     await migrate(db)
@@ -716,12 +772,12 @@ warehouse.command('connect').argument('<slug>')
   .option('--set <name=value>', 'a setting such as your store or subdomain (repeatable)', collect)
   .option('--keep-personal-data', 'also load emails, names, phones and addresses. Off by default')
   .option('--skip-check', 'save without calling the API first')
-  .action(run(async (slug: string, opts) => {
+  .action(write('warehouse connect', async (slug: string, opts) => {
     const r = await connectSource(slug, opts)
     emit(format(), r, () => `Connected ${slug}. Check: ${typeof r.check === 'string' ? r.check : `${r.check.rows} rows from ${r.check.resource}`}. Personal data: ${r.personalData}.\nNext: ${r.next}`)
   }))
 
-warehouse.command('disconnect').argument('<slug>').description('Forget a source and its keys. Loaded data is kept').action(run(async (slug: string) => {
+warehouse.command('disconnect').argument('<slug>').description('Forget a source and its keys. Loaded data is kept').action(write('warehouse disconnect', async (slug: string) => {
   const r = disconnectSource(slug)
   emit(format(), r, () => `Disconnected ${slug}. ${r.keysRemoved} key(s) removed. ${r.note}`)
 }))
@@ -731,7 +787,7 @@ warehouse.command('list').description('Connected warehouse sources').action(run(
   emit(format(), list, () => list.length ? list.map((c) => `${c.name} (${c.slug}) -> ${c.schema}, personal data ${c.personalData === 'keep' ? 'kept' : 'removed'}, connected ${c.connectedAt.slice(0, 10)}`).join('\n') : 'No warehouse sources connected. See lifecycle sources catalog')
 }))
 
-warehouse.command('sync').argument('[slugs...]').description('Load fresh data from connected warehouse sources').option('--verbose', 'show the loader log').action(run(async (slugs: string[], opts) => {
+warehouse.command('sync').argument('[slugs...]').description('Load fresh data from connected warehouse sources').option('--verbose', 'show the loader log').action(write('warehouse sync', async (slugs: string[], opts) => {
   const config = readConfig()
   const db = await openDb()
   try {
@@ -795,7 +851,7 @@ program.command('provision').description('Create a managed database in your own 
   .option('--name <name>', 'project name', 'lifecycle')
   .option('--region <id>', 'Neon region', 'aws-us-east-2')
   .option('--yes', 'create it. Without this, only prints the plan')
-  .action(run(async (provider: string, opts) => {
+  .action(write('provision', async (provider: string, opts) => {
     if (provider !== 'neon') throw new CliError(`Unsupported provider ${provider}.`, 'lifecycle provision neon --key-env NEON_API_KEY', 'bad_provider')
     if (!opts.yes) {
       const plan = neonPlan(opts.name, opts.region)
@@ -833,7 +889,7 @@ program.command('status').description('One-screen summary: setup, sources, trust
     const checklist = await loadChecklist(db, config)
     const out = { version: VERSION, setUp: Boolean(config), database: config?.database.kind ?? null, sources, trust, deployRepo: config?.deploy?.repo ?? null, update, checklist }
     emit(format(), out, () => [
-      `lifecycle ${VERSION}${update.newer ? `  (update available: ${update.latest}. Run: ${UPDATE_COMMAND})` : ''}`,
+      `lifecycle ${VERSION}${update.newer ? `  (update available: ${update.latest}. To get it, ${UPDATE_HINT})` : ''}`,
       config ? `Database: ${config.database.kind}` : 'Not set up. Run lifecycle init, or follow lifecycle docs quickstart',
       ...sources.map((s) => `${s.connected ? 'connected    ' : 'not connected'} ${s.name}${s.lastSync ? `, last sync ${s.lastSync.slice(0, 16).replace('T', ' ')}` : ''}`),
       trust ? `Trust: ${trust.line}` : '',

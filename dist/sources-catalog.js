@@ -79,13 +79,14 @@ export async function sourceStatus(config, hasKey, db) {
 }
 // Any tool not in the catalog can still be brought in as daily totals.
 export const CUSTOM_SOURCE_NOTE = 'Any other source: export daily totals to CSV, then lifecycle sources import NAME --csv FILE. Columns that look like personal data are refused.';
-export const INSTALL_URL = 'https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz';
-export const LLMS_URL = 'https://raw.githubusercontent.com/jbauman-26/cosmic-lifecycle/main/llms.txt';
+// The repo is private, so there is no public install or llms.txt link to hand out.
+// The setup playbook ships inside the CLI.
+export const QUICKSTART_COMMAND = 'lifecycle docs quickstart';
 // The text a person pastes into Claude Code, Cursor or Codex to have their agent run a kit.
 export function kitPrompt(kit) {
     return [
         `Run the Cosmic Lifecycle "${kit.title}" kit for my store.`,
-        `If \`lifecycle\` is not installed, follow ${LLMS_URL} first, connecting ${kit.needs.join(' and ')}.`,
+        `If \`lifecycle\` is not set up yet, follow the output of \`${QUICKSTART_COMMAND}\` first, connecting ${kit.needs.join(' and ')}. The CLI ships inside the Cosmic AI app and Cosmic Cloud.`,
         `Then run \`lifecycle kits add ${kit.name}\` and follow lifecycle-kits/${kit.name}/AGENT.md in order, including the Verify checklist.`,
         'Never ask me to paste a key into this chat. Use environment variables.',
     ].join(' ');

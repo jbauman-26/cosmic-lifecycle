@@ -121,7 +121,7 @@ If the tool is not set up yet, follow \`lifecycle docs quickstart\` instead.
 
 1. Run \`lifecycle status --format json\` first, then \`lifecycle doctor --format json\` if anything looks wrong.
 2. Run \`lifecycle reconcile\` before quoting any number. If a check failed, say so first.
-3. For a standard number, use a verified metric: \`lifecycle metrics list\`, then \`lifecycle metrics run NAME --format json\`. The same metric always runs the same SQL, so answers stay comparable over time. Quote the metric name with the number.
+3. For a standard number, use a verified metric: \`lifecycle metrics list\`, then \`lifecycle metrics run NAME --format json\`. The same metric always runs the same SQL, so answers stay comparable over time. Quote the metric name with the number. The list ends with any numbers the owner saved (\`saved: true\`). Those run the owner's own SQL through the same read-only path and carry the same trust line, but Cosmic has not reviewed them: say "saved by the owner" when you quote one. Save one only when the owner asks: \`lifecycle metrics save NAME --sql 'SELECT ...'\`.
 4. Write your own SQL only when no metric fits. Run \`lifecycle schema --format json\` first and never guess column names. Query with \`lifecycle query "SELECT ..." --format json\`. Queries are read-only and capped at 1,000 rows unless \`query.row_cap\` is set. Tell the user the number came from custom SQL, and show it.
 5. Report the sync warnings. Do not hide them from the user.
 6. For a fact only the live API has, such as the current flow list or Shopify's own order count, use a tool: \`lifecycle tools catalog\`, then \`lifecycle tools run TOOL --format json\`. These built-in tools are read-only and return no personal data. For images, video, voice or scraping, any Kie, fal, Apify or ScrapeCreators id also runs on the user's own account with that provider. Read \`lifecycle docs tools\` first: those jobs cost money and must never be started twice.
@@ -133,6 +133,7 @@ Rules:
 - Revenue in fact_flow_daily is Klaviyo attributed revenue. Say so, and never present it as proof of causation.
 - Purchases and purchase value in fact_meta_ads_daily are what Meta attributes to its own ads. They are a claim, not orders. Never add them to Shopify revenue or to email revenue. For a number with no attribution in it, use the marketing_efficiency_ratio metric.
 - Nothing in this tool sends a message, and nothing changes an ad account. Meta Ads is read only.
+- If a command fails with code \`busy\`, another lifecycle command is writing to the store. Wait and run it again. Do not delete files to get past it.
 `,
   kits: `# Kits
 
@@ -185,6 +186,8 @@ lifecycle disconnect SOURCE [--delete-data]
 lifecycle schema [TABLE]
 lifecycle query "SELECT ..."
 lifecycle metrics list|show NAME|run NAME... [--days N]|candidates
+lifecycle metrics save NAME --sql 'SELECT ...' [--title TEXT] [--unit count|usd|percent|usd_per_recipient|ratio]
+lifecycle metrics delete NAME
 lifecycle sources list|catalog|import NAME --csv FILE [--date-column NAME]
 lifecycle tools catalog [--query TEXT]|providers|run TOOL [--input JSON] [--wait] [--timeout SECONDS] [--out FILE]|get RUN [--out FILE]|runs
 lifecycle exec -- COMMAND [ARGS]
@@ -275,7 +278,16 @@ lifecycle tools run scrapecreators:v1/reddit/search --input '{"query":"welcome e
 
 Raw tables from the tools a store runs on, one schema per source
 (src_gorgias, src_recharge, ...), in your own database. Loaded by dlt
-(Apache 2.0), run through uv. Needs uv: curl -LsSf https://astral.sh/uv/install.sh | sh
+(Apache 2.0), run through uv.
+
+uv, the Python runner:
+  The Cosmic AI app and Cosmic Cloud carry their own uv and point the CLI at it,
+  so an owner installs nothing. uv downloads the Python it needs on first use.
+    LIFECYCLE_UV_PATH        full path to a uv binary to use instead of uv on PATH
+    LIFECYCLE_UV_CACHE_DIR   where uv keeps its downloads (Python and dlt)
+  From a terminal without either: curl -LsSf https://astral.sh/uv/install.sh | sh
+  With no uv at all, warehouse commands fail with code missing_uv. The CLI package
+  does not ship uv itself.
 
 Where it lands:
   Postgres (lifecycle init --database-url-env, or provision neon): schemas in that database.
@@ -297,12 +309,18 @@ Readiness, said plainly:
   built    written from the vendor's API docs, not yet run on a real account.
            Expect the first sync to need a fix. Report it: lifecycle feedback
   planned  no connector yet. Use lifecycle sources import NAME --csv FILE
+           Google Ads and Google Search Console are planned as built-in sources.
+           Both need Google sign-in, which happens in the Cosmic AI app. The CLI
+           has no connector code for either yet.
 
 Personal data:
   Removed before anything is written: any field named for an email, phone,
   address, birthday, IP, or a person's name (customer_name, first_name ...),
   and email addresses inside text. A plain "name" field is kept, because it
-  is usually a product or campaign. To keep everything:
+  is usually a product or campaign, unless it sits inside a person's object
+  (reviewer.name, customer.name, sender.name), where name, nickname, username and
+  street lines are removed too. City is kept. A spec can list more keys under "stripFields".
+  To keep everything:
   lifecycle warehouse connect SLUG ... --keep-personal-data
 
 Any other tool with a REST API:
@@ -330,10 +348,27 @@ GitHub Actions job automatically.`,
   Protected customer data access, and select Analytics. Leave name, email,
   phone and address unselected.
 
-No keychain, such as on Linux:
+No keychain, such as on Linux, in CI, or when an app passes keys per call:
   Set these instead: LIFECYCLE_KLAVIYO_READ_KEY, LIFECYCLE_SHOPIFY_CLIENT_SECRET,
   LIFECYCLE_DATABASE_URL, LIFECYCLE_GA4_CLIENT_SECRET, LIFECYCLE_GA4_REFRESH_TOKEN,
-  LIFECYCLE_STRIPE_READ_KEY.
+  LIFECYCLE_STRIPE_READ_KEY, LIFECYCLE_META_ADS_TOKEN.
+  lifecycle connect SOURCE --key-env NAME still works there: it checks the key,
+  saves the source's settings, and reports keyStorage "environment" with the
+  variable to set at sync time. The key itself is not saved anywhere.
+
+"Another lifecycle command is writing to this store" (code busy):
+  Two commands never write one local database at once. sync, connect, init,
+  reconcile, disconnect, metrics save and the warehouse writes take a lock file,
+  write.lock in the home folder. A second one waits 10 seconds
+  (LIFECYCLE_LOCK_WAIT_MS), then fails with code busy. Reads are not blocked.
+  A lock left by a command that crashed is cleared on the next run. A Postgres
+  store does its own locking and takes no lock file.
+
+Your tables live in their own Postgres schema, not public:
+  lifecycle query and saved metrics use the connection's own schema: whatever
+  its role or URL puts first on the search path. To name it yourself, set
+  LIFECYCLE_DB_SCHEMA=your_schema, and every read and write uses that schema.
+  System tables stay blocked either way.
 
 Your orders live under a custom Klaviyo metric:
   Set LIFECYCLE_KLAVIYO_ORDER_METRIC to that metric's id.
@@ -366,6 +401,25 @@ Error codes (the "code" field with --format json, and in lifecycle logs):
   scope_denied     Shopify refused a field or scope. Add the scope it names to the app, then connect again.
   not_connected    sync --only or disconnect named a source that is not connected.
   unknown_source   Not one of shopify, klaviyo, ga4, stripe, meta.
+  busy             Another lifecycle command is writing to this store. Wait, then run it again.
+  missing_uv       Warehouse sources need uv. Update the app, install uv, or set LIFECYCLE_UV_PATH.
+  reserved_name    metrics save or delete named a built-in metric. Pick another name.
+  bad_metric       A saved metric must be one SELECT that returns one row with one number.
+  bad_schema       LIFECYCLE_DB_SCHEMA is not a plain schema name.
+
+Updates:
+  The repo is private, so there is no public download link. The Cosmic AI app and
+  Cosmic Cloud update the CLI they carry. lifecycle status checks for a newer
+  release at most once a day and says nothing when it cannot see the release list.
+  Turn the check off with lifecycle config set update.check false.
+
+Save a number of your own:
+  lifecycle metrics save repeat_orders --unit count --title "Repeat orders" \\
+    --sql 'SELECT sum(returning_orders) AS value FROM fact_orders_daily WHERE date >= $1'
+  $1 is the first day of the window. Use single quotes, or the shell eats the $1. One SELECT, one row, one number. It then shows
+  in lifecycle metrics list marked as saved by the owner, runs with
+  lifecycle metrics run repeat_orders, and is removed with lifecycle metrics delete.
+  A saved number cannot take the name of a built-in metric.
 
 Sync one source on its own schedule:
   lifecycle sync --only meta

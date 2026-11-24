@@ -13,10 +13,10 @@ export function wrapPglite(client) {
             const out = await client.transaction((tx) => fn({ query: async (sql, params) => (await tx.query(sql, params)).rows }));
             return out;
         },
-        readOnly: async (sql) => {
+        readOnly: async (sql, params) => {
             await client.exec('BEGIN READ ONLY');
             try {
-                return (await client.query(sql)).rows;
+                return (await client.query(sql, params)).rows;
             }
             finally {
                 await client.exec('ROLLBACK');
@@ -25,13 +25,48 @@ export function wrapPglite(client) {
         close: () => client.close(),
     };
 }
-function wrapPg(pool) {
+// LIFECYCLE_DB_SCHEMA names the schema this store lives in, for a database that
+// holds one schema per store. Unset, the connection's own schema is used: whatever
+// its role or URL puts first on the search path, which is `public` on a plain database.
+export function dbSchema(env = process.env) {
+    const s = env.LIFECYCLE_DB_SCHEMA?.trim();
+    if (!s)
+        return null;
+    if (!/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(s) || /^pg_/i.test(s) || s.toLowerCase() === 'information_schema') {
+        throw new CliError('LIFECYCLE_DB_SCHEMA is not a usable schema name.', 'Use letters, numbers and underscores, such as store_acme.', 'bad_schema');
+    }
+    return s;
+}
+const quoteIdent = (s) => `"${s.replace(/"/g, '""')}"`;
+export function wrapPg(pool, schema = dbSchema()) {
     return {
-        query: async (sql, params) => (await pool.query(sql, params)).rows,
+        // With a named schema, every statement runs with that schema set for its own transaction.
+        // SET LOCAL holds on any connection, including one handed out by a transaction pooler.
+        query: async (sql, params) => {
+            if (!schema)
+                return (await pool.query(sql, params)).rows;
+            const c = await pool.connect();
+            try {
+                await c.query('BEGIN');
+                await c.query(`SET LOCAL search_path = ${quoteIdent(schema)}`);
+                const rows = (await c.query(sql, params)).rows;
+                await c.query('COMMIT');
+                return rows;
+            }
+            catch (e) {
+                await c.query('ROLLBACK').catch(() => { });
+                throw e;
+            }
+            finally {
+                c.release();
+            }
+        },
         transaction: async (fn) => {
             const c = await pool.connect();
             try {
                 await c.query('BEGIN');
+                if (schema)
+                    await c.query(`SET LOCAL search_path = ${quoteIdent(schema)}`);
                 const out = await fn({ query: async (sql, params) => (await c.query(sql, params)).rows });
                 await c.query('COMMIT');
                 return out;
@@ -44,13 +79,17 @@ function wrapPg(pool) {
                 c.release();
             }
         },
-        readOnly: async (sql) => {
+        readOnly: async (sql, params) => {
             const c = await pool.connect();
             try {
                 await c.query('BEGIN READ ONLY');
                 await c.query(`SET LOCAL statement_timeout = '15s'`);
-                await c.query(`SET LOCAL search_path = public`);
-                return (await c.query(sql)).rows;
+                // Pin the search path to one schema for the query: the store's own. It used to be
+                // forced to `public`, which hid every table of a store that lives in its own schema.
+                // System schemas are still refused by assertReadOnlySql before the query gets here.
+                const own = schema ?? String((await c.query('SELECT current_schema() AS s')).rows[0]?.s ?? 'public');
+                await c.query(`SET LOCAL search_path = ${quoteIdent(own)}`);
+                return (await c.query(sql, params?.length ? params : undefined)).rows;
             }
             finally {
                 await c.query('ROLLBACK').catch(() => { });
@@ -75,5 +114,7 @@ export async function openDb() {
     const url = getSecret('database-url');
     if (!url)
         throw new CliError('No database URL saved.', 'Set LIFECYCLE_DATABASE_URL or run lifecycle init --local.', 'no_database');
-    return wrapPg(new pg.Pool({ connectionString: url, max: 2 }));
+    const schema = dbSchema();
+    // With LIFECYCLE_DB_SCHEMA set, reads and writes both land in that schema.
+    return wrapPg(new pg.Pool({ connectionString: url, max: 2 }), schema);
 }

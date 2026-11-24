@@ -1,0 +1,213 @@
+{
+  "source": "https://docs.fairing.co/reference/retrieve-responses (responses) and https://docs.fairing.co/reference/retrieve-questions (questions); field list checked against https://docs.fairing.co/reference/the-response-object",
+  "resources": {
+    "responses": {
+      "response": {
+        "data": [
+          {
+            "available_responses": null,
+            "clarification_question": false,
+            "coupon_amount": null,
+            "coupon_code": null,
+            "coupon_type": null,
+            "customer_id": "3445695217710",
+            "customer_order_count": 17,
+            "email": "maya.okafor@example.com",
+            "id": "ENz45Kvbxru0B5X6kDN7Y",
+            "inserted_at": "2022-02-16T17:54:35+00:00",
+            "landing_page_path": null,
+            "order_currency_code": "USD",
+            "order_id": "4104320450606",
+            "order_number": "1301",
+            "order_platform": "shopify",
+            "order_source": "shopify_checkout",
+            "order_total": "57.71",
+            "order_total_usd": "57.71",
+            "other": false,
+            "other_response": null,
+            "question": "Who is your favorite co-founder?",
+            "question_id": 11,
+            "question_type": "single_response",
+            "referring_question": null,
+            "referring_question_id": null,
+            "referring_question_response": null,
+            "referring_question_response_id": null,
+            "referring_site": "null",
+            "response": "Somebody Else",
+            "response_id": 11747,
+            "response_position": 1,
+            "response_provided_at": "2022-02-16T17:54:34Z",
+            "submit_delta": 9428,
+            "updated_at": "2022-02-16T17:54:35+00:00",
+            "utm_campaign": null,
+            "utm_content": null,
+            "utm_medium": null,
+            "utm_source": null,
+            "utm_term": null
+          },
+          {
+            "available_responses": null,
+            "clarification_question": true,
+            "coupon_amount": null,
+            "coupon_code": null,
+            "coupon_type": null,
+            "customer_id": "3446081224750",
+            "customer_order_count": 10,
+            "email": "theo.lindqvist@example.com",
+            "id": "pk9ZDChjMNueWHZqHEF5Z",
+            "inserted_at": "2021-07-09T18:35:57+00:00",
+            "landing_page_path": null,
+            "order_currency_code": null,
+            "order_id": "3821070549038",
+            "order_number": "1260",
+            "order_platform": null,
+            "order_source": null,
+            "order_total": null,
+            "order_total_usd": null,
+            "other": false,
+            "other_response": null,
+            "question": "Which one?",
+            "question_id": 2138,
+            "question_type": "single_response",
+            "referring_question": "How did you hear about us?",
+            "referring_question_id": 9,
+            "referring_question_response": "Online Ad",
+            "referring_question_response_id": 11733,
+            "referring_site": null,
+            "response": "Facebook",
+            "response_id": 11734,
+            "response_position": 1,
+            "response_provided_at": "2021-07-09T18:35:57Z",
+            "submit_delta": 1884,
+            "updated_at": "2021-07-09T18:35:57+00:00",
+            "utm_campaign": null,
+            "utm_content": null,
+            "utm_medium": null,
+            "utm_source": null,
+            "utm_term": null
+          }
+        ],
+        "next": "https://app.fairing.co/api/responses?starting_after=pk9ZDChjMNueWHZqHEF5Z",
+        "prev": "https://app.fairing.co/api/responses?ending_before=ENz45Kvbxru0B5X6kDN7Y"
+      }
+    },
+    "questions": {
+      "response": {
+        "data": [
+          {
+            "allow_other": true,
+            "customer_type": "everyone",
+            "frequency_type": "once",
+            "id": 1818,
+            "inserted_at": "2021-07-06T14:49:37+00:00",
+            "other_placeholder": "Other",
+            "prompt": "One more thing: How did you hear about us?",
+            "published_at": "2021-09-22T18:57:15+00:00",
+            "randomize_responses": false,
+            "responses": [
+              {
+                "clarification_question": {
+                  "allow_other": true,
+                  "id": 1873,
+                  "other_placeholder": "Other",
+                  "prompt": "Who told you?",
+                  "randomize_responses": true,
+                  "responses": [
+                    {
+                      "id": 11834,
+                      "value": "A friend"
+                    },
+                    {
+                      "id": 11835,
+                      "value": "A family member"
+                    }
+                  ],
+                  "type": "single_response"
+                },
+                "id": 11379,
+                "value": "From a friend or family member (has clarification)"
+              },
+              {
+                "clarification_question": null,
+                "id": 11381,
+                "value": "Online Article"
+              },
+              {
+                "clarification_question": {
+                  "allow_other": true,
+                  "id": 2137,
+                  "other_placeholder": null,
+                  "prompt": "Who is the influencer? ",
+                  "randomize_responses": true,
+                  "responses": [],
+                  "type": "open_ended"
+                },
+                "id": 11410,
+                "value": "Was it an influencer? "
+              }
+            ],
+            "submit_text": "Submit",
+            "targeting": {
+              "surfaces": [
+                "post_purchase"
+              ],
+              "geo_targeting": {
+                "option": "include",
+                "targets": {
+                  "US": "all",
+                  "CA": [
+                    "ON",
+                    "QC"
+                  ]
+                }
+              },
+              "product_targeting": null
+            },
+            "type": "single_response",
+            "updated_at": "2022-01-07T14:58:01+00:00"
+          },
+          {
+            "allow_other": true,
+            "customer_type": "everyone",
+            "frequency_type": "always",
+            "id": 12,
+            "inserted_at": "2021-04-20T19:31:04+00:00",
+            "other_placeholder": "Other",
+            "prompt": "Do you own or pay for any of the following?",
+            "published_at": "2022-02-15T15:39:53+00:00",
+            "randomize_responses": true,
+            "responses": [
+              {
+                "clarification_question": null,
+                "id": 11763,
+                "value": "Gym Membership"
+              },
+              {
+                "clarification_question": null,
+                "id": 11784,
+                "value": "Peloton"
+              }
+            ],
+            "submit_text": "Submit",
+            "type": "multi_response",
+            "updated_at": "2022-02-15T15:39:53+00:00"
+          }
+        ]
+      }
+    }
+  },
+  "personal": [
+    "maya.okafor@example.com",
+    "theo.lindqvist@example.com"
+  ],
+  "kept": [
+    "Who is your favorite co-founder?",
+    "Somebody Else",
+    "Online Ad",
+    "shopify_checkout",
+    "ENz45Kvbxru0B5X6kDN7Y",
+    "One more thing: How did you hear about us?",
+    "Gym Membership",
+    "post_purchase"
+  ]
+}

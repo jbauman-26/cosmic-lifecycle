@@ -1,0 +1,162 @@
+{
+  "slug": "brevo",
+  "name": "Brevo",
+  "docs": "https://developers.brevo.com/",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "Brevo API key",
+      "help": "In Brevo open the SMTP & API settings page (https://app.brevo.com/settings/keys/api), go to the API keys tab and click Generate a new API key, named Cosmic Lifecycle. Copy the key right away; Brevo shows it only once. Brevo API keys cannot be scoped or made read-only: every key has full account access, so store it as a secret and delete it when you disconnect. This connector only sends GET requests. If Authorized IPs is switched on for your account (your name at the top right, then Security, then Authorized IPs), requests from an IP that is not on the list are rejected even with a valid key, so add the IP this machine connects from."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://api.brevo.com/v3/",
+      "auth": {
+        "type": "api_key",
+        "name": "api-key",
+        "api_key": "{secret:api_key}",
+        "location": "header"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "email_campaigns",
+        "endpoint": {
+          "path": "emailCampaigns",
+          "params": {
+            "statistics": "globalStats",
+            "excludeHtmlContent": "true",
+            "sort": "asc"
+          },
+          "data_selector": "campaigns",
+          "paginator": {
+            "type": "offset",
+            "limit": 50,
+            "offset": 0,
+            "offset_param": "offset",
+            "limit_param": "limit",
+            "total_path": null,
+            "stop_after_empty_page": true
+          }
+        }
+      },
+      {
+        "name": "sms_campaigns",
+        "endpoint": {
+          "path": "smsCampaigns",
+          "params": {
+            "sort": "asc"
+          },
+          "data_selector": "campaigns",
+          "paginator": {
+            "type": "offset",
+            "limit": 100,
+            "offset": 0,
+            "offset_param": "offset",
+            "limit_param": "limit",
+            "total_path": null,
+            "stop_after_empty_page": true
+          }
+        }
+      },
+      {
+        "name": "lists",
+        "endpoint": {
+          "path": "contacts/lists",
+          "params": {
+            "sort": "asc"
+          },
+          "data_selector": "lists",
+          "paginator": {
+            "type": "offset",
+            "limit": 10,
+            "offset": 0,
+            "offset_param": "offset",
+            "limit_param": "limit",
+            "total_path": null,
+            "stop_after_empty_page": true
+          }
+        }
+      },
+      {
+        "name": "folders",
+        "endpoint": {
+          "path": "contacts/folders",
+          "params": {
+            "sort": "asc"
+          },
+          "data_selector": "folders",
+          "paginator": {
+            "type": "offset",
+            "limit": 10,
+            "offset": 0,
+            "offset_param": "offset",
+            "limit_param": "limit",
+            "total_path": null,
+            "stop_after_empty_page": true
+          }
+        }
+      },
+      {
+        "name": "segments",
+        "endpoint": {
+          "path": "contacts/segments",
+          "params": {
+            "sort": "asc"
+          },
+          "data_selector": "segments",
+          "paginator": {
+            "type": "offset",
+            "limit": 50,
+            "offset": 0,
+            "offset_param": "offset",
+            "limit_param": "limit",
+            "total_path": null,
+            "stop_after_empty_page": true
+          }
+        }
+      },
+      {
+        "name": "transactional_email_daily_stats",
+        "primary_key": "date",
+        "endpoint": {
+          "path": "smtp/statistics/reports",
+          "params": {
+            "days": 30,
+            "sort": "asc"
+          },
+          "data_selector": "reports",
+          "paginator": {
+            "type": "offset",
+            "limit": 10,
+            "offset": 0,
+            "offset_param": "offset",
+            "limit_param": "limit",
+            "total_path": null,
+            "maximum_offset": 30,
+            "stop_after_empty_page": true
+          }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developers.brevo.com/llms.txt",
+    "https://developers.brevo.com/docs/api-key-authentication.md",
+    "https://developers.brevo.com/docs/ip-security.md",
+    "https://developers.brevo.com/docs/api-limits.md",
+    "https://developers.brevo.com/reference/get-email-campaigns.md",
+    "https://developers.brevo.com/reference/get-sms-campaigns.md",
+    "https://developers.brevo.com/reference/get-lists.md",
+    "https://developers.brevo.com/reference/get-folders.md",
+    "https://developers.brevo.com/reference/get-segments.md",
+    "https://developers.brevo.com/reference/get-smtp-report.md"
+  ],
+  "notes": "All GET, base https://api.brevo.com/v3, key sent in the api-key header. Any Brevo account, including Free, can generate a key from its own dashboard; keys are all-access and cannot be made read-only (the docs call the key one all-access secret and point to OAuth machine-to-machine credentials for scoped tokens, which this spec does not use). Every list uses limit and offset. Page sizes are values the reference documents: emailCampaigns default 50, smsCampaigns default 500 and max 1000 (100 used), contacts/lists and contacts/folders default 10 (their maximum is not stated on the reference pages, so the default is used), contacts/segments max 50, smtp/statistics/reports default 10. The count field is described as the number in the account on lists, folders and segments but as the number retrieved on campaigns, so the paginator ignores it and stops on the first empty page instead; that costs one extra request per resource, and how Brevo answers an offset past the end (empty array or missing key) is unverified. No incremental: the only time filter on campaigns is startDate with endDate, both mandatory together, limited to sent campaigns and to a 2 year range, and campaign statistics keep changing after the send, so every resource is a full refresh merged on id. email_campaigns asks for statistics=globalStats (Brevo only fills that for events from the last 6 months; older campaigns need the single-campaign report endpoint, which is left out because it is one request per campaign against a 100 per hour limit) and excludeHtmlContent=true so the email body comes back as an empty string. transactional_email_daily_stats is the per-day aggregate of transactional (SMTP) email for the last 30 days, the maximum range the endpoint allows, merged on date so history builds up run by run; it is empty for stores that do not send transactional email through Brevo. Left out: contacts (GET /contacts exists, but contact attributes are user-defined uppercase keys such as SMS or custom address fields, so a key-name filter cannot be trusted to remove every personal value), contacts in a list, campaign recipient exports and webhook history exports (async export jobs), unaggregated email and SMS event feeds (one row per recipient), WhatsApp campaigns, and the ecommerce attribution endpoints (they need a campaign or workflow id per request). Automation workflows have no list endpoint in the reference. On email campaigns sender.email and the email inside replyTo are removed by the runner; sender.name (the from name) is removed as well, because a brand can send under a person's name. Rate limits on the general tier, which covers Free through Enterprise: 100 requests per hour for emailCampaigns and smsCampaigns (the all other endpoints row), 36,000 per hour and 10 per second under /v3/contacts, 300 per hour under /v3/smtp; a 429 is returned when exceeded. At 50 per page the email campaign list can read about 5,000 campaigns per hour."
+}

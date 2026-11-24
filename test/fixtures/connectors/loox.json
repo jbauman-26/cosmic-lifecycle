@@ -1,0 +1,111 @@
+{
+  "source": "Response samples in https://developers.loox.app/documentation/#tag/Merchant-Product-Reviews/operation/merchant_listProductReviews and https://developers.loox.app/documentation/#tag/Merchant-Store-Reviews/operation/merchant_listStoreReviews. Personal values replaced with invented ones.",
+  "resources": {
+    "product_reviews": {
+      "response": {
+        "reviews": [
+          {
+            "id": "64a1f2b3c4d5e6f7a8b9c0d1",
+            "rating": 5,
+            "body": "Amazing quality, fast shipping!",
+            "date": "2024-01-15T00:00:00.000Z",
+            "createdAt": "2024-01-15T08:30:00.000Z",
+            "verified": true,
+            "status": "published",
+            "reviewer": {
+              "name": "Maya Okafor",
+              "firstName": "Maya",
+              "lastName": "Okafor",
+              "nickname": "MayaInPortland",
+              "email": "maya.okafor@example.com",
+              "customerId": "5234567890123"
+            },
+            "orderId": "4567890123456",
+            "isFeatured": false,
+            "product": {
+              "id": "7891234567890",
+              "name": "Classic White T-Shirt",
+              "url": "https://mystore.myshopify.com/products/classic-white-t-shirt",
+              "imageUrl": "https://cdn.shopify.com/s/files/1/0001/classic-white-t-shirt.jpg"
+            },
+            "media": [
+              {
+                "type": "image",
+                "url": "https://loox.io/assets/reviews/64a1f2b3c4d5e6f7a8b9c0d1/photo.jpg"
+              }
+            ],
+            "reply": {
+              "body": "Thank you for the kind words!",
+              "repliedAt": "2024-01-16T10:00:00.000Z"
+            },
+            "customQuestions": [],
+            "highlights": [
+              "great quality",
+              "fast shipping"
+            ],
+            "originalLanguage": "en",
+            "location": {
+              "country": "United States",
+              "countryCode": "US"
+            }
+          }
+        ],
+        "pagination": {
+          "total": 150,
+          "page": 1,
+          "limit": 10,
+          "hasMore": true,
+          "nextPageUrl": "/api/v1/store/4JG3Fn92E.37d12ab29/product-reviews?page=2&limit=10&total=150"
+        }
+      }
+    },
+    "store_reviews": {
+      "response": {
+        "reviews": [
+          {
+            "id": "64a1f2b3c4d5e6f7a8b9c0d2",
+            "rating": 5,
+            "body": "Fantastic store, will shop again!",
+            "createdAt": "2024-02-10T09:00:00.000Z",
+            "status": "published",
+            "reviewer": {
+              "name": "Tomas Lindqvist",
+              "firstName": "Tomas",
+              "lastName": "Lindqvist",
+              "nickname": null,
+              "email": "tomas.lindqvist@example.com",
+              "customerId": "6345678901234"
+            },
+            "reply": null,
+            "originalLanguage": "en"
+          }
+        ],
+        "pagination": {
+          "total": 42,
+          "page": 1,
+          "limit": 10,
+          "hasMore": true,
+          "nextPageUrl": "/api/v1/store/4JG3Fn92E.37d12ab29/store-reviews?page=2&limit=10&total=42"
+        }
+      }
+    }
+  },
+  "personal": [
+    "Maya Okafor",
+    "Maya",
+    "Okafor",
+    "MayaInPortland",
+    "maya.okafor@example.com",
+    "Tomas Lindqvist",
+    "Tomas",
+    "Lindqvist",
+    "tomas.lindqvist@example.com"
+  ],
+  "kept": [
+    "Classic White T-Shirt",
+    "published",
+    "Amazing quality, fast shipping!",
+    "Fantastic store, will shop again!",
+    "great quality"
+  ]
+}

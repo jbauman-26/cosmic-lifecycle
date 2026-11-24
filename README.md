@@ -58,7 +58,9 @@ Set up Cosmic Lifecycle by following the output of lifecycle docs quickstart
 
 **Ranks your flows.** `lifecycle report revenue-per-flow` ranks flows by attributed revenue per recipient, next to your Shopify revenue.
 
-**Answers the same question the same way every time.** `lifecycle metrics run average_order_value` runs fixed, reviewed SQL, so Monday's number matches Friday's. Each result carries its inputs, its exact SQL and the reconcile status. `lifecycle metrics list` shows all twelve. Agents use these before writing their own SQL.
+**Answers the same question the same way every time.** `lifecycle metrics run average_order_value` runs fixed, reviewed SQL, so Monday's number matches Friday's. Each result carries its inputs, its exact SQL and the reconcile status. `lifecycle metrics list` shows them all. Agents use these before writing their own SQL.
+
+**Keeps the numbers you ask for most.** `lifecycle metrics save repeat_orders --sql 'SELECT ...'` saves one SELECT of your own as a named number. It shows in `metrics list` marked as saved by the owner, runs read-only with the same trust line, and can never take the name of a built-in metric. `lifecycle metrics delete NAME` removes it.
 
 **Builds a win-back segment from your own timing.** `lifecycle segments propose winback` reads how long your customers actually take to reorder, then writes a plan. Nothing happens until you review it and run `apply --confirm`.
 
@@ -164,7 +166,20 @@ lifecycle config set reconcile.tolerance.ga4_purchases 20
 lifecycle config get query.row_cap
 ```
 
-With `--format json`, a failure carries a `code` the app and scripts can act on: `key_rejected` (the source refused the key), `rate_limited` (it asked to slow down), `scope_denied` (Shopify refused a field or scope), `not_connected` and `unknown_source`.
+With `--format json`, a failure carries a `code` the app and scripts can act on: `key_rejected` (the source refused the key), `rate_limited` (it asked to slow down), `scope_denied` (Shopify refused a field or scope), `not_connected`, `unknown_source`, `busy` (another command is writing to this store), `missing_uv` (warehouse sources have no uv to run on) and `reserved_name` (a saved number tried to take a built-in metric's name).
+
+Two commands never write one local database at once. `sync`, `connect`, `init`, `reconcile`, `disconnect` and `metrics save` take a lock file in the home folder. A second one waits 10 seconds, then fails with `busy`. Reads are not blocked, and a lock left by a crashed command is cleared on the next run.
+
+Environment variables for an app or a server that runs the CLI:
+
+| Variable | What it does |
+|---|---|
+| `LIFECYCLE_UV_PATH` | Full path to a uv binary to use for warehouse sources, in place of uv on PATH. uv fetches its own Python. The CLI package does not ship uv. |
+| `LIFECYCLE_UV_CACHE_DIR` | Where that uv keeps its downloads |
+| `LIFECYCLE_DB_SCHEMA` | The Postgres schema this store lives in. Unset, the connection's own schema is used, where `query` used to force `public`. |
+| `LIFECYCLE_LOCK_WAIT_MS` | How long a write command waits for the lock. Default 10000. |
+
+Where there is no keychain, `lifecycle connect SOURCE --key-env NAME` still passes once the key checks out. It saves the source's settings, not the key, and says which `LIFECYCLE_*` variable to set when you sync.
 
 ## More from the command line
 
@@ -176,7 +191,7 @@ lifecycle tools providers                        # Kie, fal, Apify and ScrapeCre
 lifecycle tools run kie:gpt-image-2-text-to-image --input '{"prompt":"A red running shoe"}' --wait
 lifecycle exec -- node my-report.js              # run a script with your keys in its environment
 lifecycle sources import meta_ads --csv ads.csv  # any other tool's daily totals
-lifecycle sources catalog --category reviews      # 96 Shopify-stack tools, ranked by usage
+lifecycle sources catalog --category reviews      # 98 tools Shopify stores use, 25 with connectors
 lifecycle warehouse connect gorgias --secret api_key=GORGIAS_KEY --set subdomain=you --set username=you@store.com
 lifecycle warehouse sync && lifecycle warehouse query "select status, count(*) from src_gorgias.tickets group by 1"
 lifecycle files ls                               # every saved report, dashboard and plan
@@ -196,6 +211,9 @@ This is an early release. Here is what has and has not been tested.
 - Creating a win-back segment in a Klaviyo demo account.
 - Local and Postgres databases, the MCP server, and a clean install.
 - Stripe connect, sync, doctor and metrics on a Stripe test-mode account. Charges, failed payments, MRR and subscription starts all matched the Stripe API.
+- The write lock, with two real CLI processes on one Mac: the second fails with `busy` while a read still answers.
+- Saved numbers on a local database and on a local Postgres 16 server, through the CLI and the MCP `metric` tool.
+- A store in its own Postgres schema, on a local Postgres 16 server: `query` and saved numbers read the store's schema, by the role's search path and by `LIFECYCLE_DB_SCHEMA`.
 
 **Not tested yet**
 - A production Shopify store. A merchant may need a Partner account for one setup step.
@@ -205,6 +223,11 @@ This is an early release. Here is what has and has not been tested.
 - Meta Ads on any real ad account. The connector was written from the Ads Insights API docs and is covered by unit tests against recorded answers only.
 - Stripe on a live account. Refunds, several currencies and tiered prices are covered by unit tests only.
 - `deploy` running for days on end.
+- Any of the 25 warehouse connectors on a real account. All were written from the vendors' API docs. The five added in 0.12.0 (Brevo, Privy, Okendo, Loox, Fairing) load in dlt and strip personal data from recorded responses, and that is all. Okendo's paging was run against a local stand-in, never Okendo.
+- `LIFECYCLE_DB_SCHEMA` on Cosmic Cloud's hosted database, or behind a connection pooler.
+- A bundled uv set with `LIFECYCLE_UV_PATH` inside the packaged Mac app. Here it was run with a stand-in binary and with Homebrew's uv.
+- `connect --key-env` without a keychain against a live account. It was tested against recorded answers.
+- Google Ads and Google Search Console. They are catalog entries only, waiting on Google sign-in. There is no connector code.
 
 If something breaks, `lifecycle doctor` says what is wrong and what to run next. To report a bug, run `lifecycle feedback "what happened" --open`.
 

@@ -9,7 +9,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://developers.google.com/google-ads/api/docs/start",
         "credentials": [],
         "params": [],
-        "notes": "Needs an OAuth sign-in flow, not built yet. CSV import meanwhile."
+        "notes": "Planned as a built-in source, not a warehouse connector. Needs Google sign-in: the owner signs in with Google in the Cosmic AI app and picks an ad account. The CLI has no connector code for it yet, and Google Ads also needs a developer token that Cosmic holds. CSV import meanwhile."
     },
     {
         "slug": "tiktok-ads",
@@ -411,7 +411,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.attentive.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "A merchant can make a custom app key, but the public API has no read endpoints for campaigns, messages, journeys or results; those leave Attentive by SFTP feed and webhook only (https://docs.attentive.com/docs/create-and-manage-custom-apps). CSV import meanwhile."
     },
     {
         "slug": "postscript",
@@ -422,7 +422,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://developers.postscript.io/",
         "credentials": [],
         "params": [],
-        "notes": "Custom API access is enterprise-only, and it lists subscribers only. CSV import meanwhile."
+        "notes": "API keys only work on Postscript's enterprise plan; every other shop needs an integration partner's token, and the one list endpoint is subscribers (https://developers.postscript.io/docs/who-has-access-to-the-partner-api). CSV import meanwhile."
     },
     {
         "slug": "yotpo-reviews",
@@ -508,12 +508,79 @@ export const WAREHOUSE_CATALOG = [
         "slug": "okendo",
         "name": "Okendo",
         "category": "reviews",
-        "readiness": "planned",
+        "readiness": "built",
         "why": "#14 of 100 tools Shopify stores use. StoreLeads: Shopify app installed on 18,979 Shopify stores (Oct 30 2026 snapshot). Alium: Shopify-only; about one in nine Shopify brands interviewed. Source: https://storeleads.app/reports/shopify/app/okendo-reviews",
-        "docs": "https://docs.okendo.io/merchant-rest-api/",
-        "credentials": [],
-        "params": [],
-        "notes": "API is usable, but its relative next-page links need a custom pager in the runner. Planned. CSV import meanwhile."
+        "docs": "https://docs.okendo.io/docs/merchant-rest-api/usage",
+        "credentials": [
+            {
+                "name": "api_key",
+                "label": "Merchant REST API key",
+                "help": "Okendo's help center says the Merchant REST API key comes with the Growth plan and above. In the Okendo admin open Settings > Integrations, click the edit icon on the Okendo section and open Credentials. Click Generate (or Show if a key already exists) and copy the Merchant REST API Key, a 32-character string. Okendo has no read-only scope: the same key can update and reply to reviews, so store it as a secret. This connector only sends GET requests."
+            }
+        ],
+        "params": [
+            {
+                "name": "user_id",
+                "label": "Okendo User ID (same Credentials panel)",
+                "example": "00000000-0000-0000-0000-000000000000"
+            }
+        ],
+        "config": {
+            "client": {
+                "base_url": "https://api.okendo.io/enterprise/",
+                "headers": {
+                    "okendo-api-version": "2025-02-01"
+                },
+                "auth": {
+                    "type": "http_basic",
+                    "username": "{param:user_id}",
+                    "password": "{secret:api_key}"
+                }
+            },
+            "resource_defaults": {
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "reviews",
+                    "primary_key": "reviewId",
+                    "endpoint": {
+                        "path": "reviews",
+                        "params": {
+                            "limit": 100,
+                            "status": "approved",
+                            "orderBy": "date asc"
+                        },
+                        "data_selector": "reviews",
+                        "paginator": {
+                            "type": "json_link_from_base",
+                            "next_url_path": "nextUrl"
+                        }
+                    }
+                },
+                {
+                    "name": "surveys",
+                    "primary_key": "surveyId",
+                    "endpoint": {
+                        "path": "surveys",
+                        "params": {
+                            "limit": 100,
+                            "orderBy": "date asc"
+                        },
+                        "data_selector": "surveys",
+                        "paginator": {
+                            "type": "json_link_from_base",
+                            "next_url_path": "nextUrl"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Merchant API at https://api.okendo.io/enterprise, HTTP Basic auth with the Okendo User ID as username and the Merchant REST API key as password, plus the okendo-api-version header (2025-02-01, the only documented version). Plan: the API reference calls this the API available to enterprise customers, while Okendo's help center says the key is available on the Growth plan and above; which plans can actually generate a key is unverified. Lists return the rows plus nextUrl, a link relative to the base path (for example /reviews?lastEvaluated=...), absent on the last page; limit is 1 to 100. The runner's json_link_from_base paginator joins nextUrl to the base path. That relative-link paging was proven against a local mock in the documented shape only, never against Okendo itself; if Okendo's real nextUrl already includes /enterprise the join would double the prefix. reviews returns approved reviews only: status takes one value per request (approved, pending or rejected), so pending and rejected reviews are left out, and a review that is later rejected stays in the warehouse. No updated or created filter is documented, so both tables are a full refresh merged on reviewId and surveyId. reviewer email, name and displayName are removed by the runner's personal-data filter, and avatarUrl and location are listed in strip_fields; order id and number are kept. Left out: tags (a bare list of strings with no id), survey responses (need a survey id per request), customer profiles and activities (personal data per customer), loyalty, groups, quizzes and webhook subscriptions (endpoint pages not read for this spec). Rate limit is a steady 2 requests per second with a small burst; the runner does not throttle and relies on retrying 429 responses.",
+        "stripFields": [
+            "avatarUrl",
+            "location"
+        ]
     },
     {
         "slug": "loop-returns",
@@ -586,7 +653,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://developers.rebuyengine.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "The public API is storefront only: product recommendations out, analytics events in. Nothing returns a merchant's own results (https://developers.rebuyengine.com/reference/rebuy-analytic-v2-endpoints/). CSV import meanwhile."
     },
     {
         "slug": "quickbooks-online",
@@ -636,12 +703,84 @@ export const WAREHOUSE_CATALOG = [
         "slug": "loox",
         "name": "Loox",
         "category": "reviews",
-        "readiness": "planned",
+        "readiness": "built",
         "why": "#21 of 100 tools Shopify stores use. StoreLeads: Shopify app installed on 128,396 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/shopify/app/loox",
         "docs": "https://developers.loox.app/documentation/",
-        "credentials": [],
-        "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "credentials": [
+            {
+                "name": "api_key",
+                "label": "Loox API secret key",
+                "help": "Needs the Loox Convert or Unlimited plan. In the Loox admin open Settings > API Keys and click Generate new key, named Cosmic Lifecycle. Copy the key right away; Loox hashes it and will not show it again (up to 5 keys per store; revoke and regenerate if lost). The Loox API is read-only, so the key cannot change reviews, but it does expose reviewer emails, so store it as a secret."
+            }
+        ],
+        "params": [
+            {
+                "name": "public_store_id",
+                "label": "Loox publicStoreId (top of Settings > API Keys)",
+                "example": "4JG3Fn92E.37d12ab29c4d99cee8ec882707d45433beedce77a45704fb2f37051e01eb538c"
+            }
+        ],
+        "config": {
+            "client": {
+                "base_url": "https://api.loox.io/api/v1/",
+                "auth": {
+                    "type": "api_key",
+                    "name": "X-Api-Secret-Key",
+                    "api_key": "{secret:api_key}",
+                    "location": "header"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "product_reviews",
+                    "endpoint": {
+                        "path": "store/{param:public_store_id}/product-reviews",
+                        "params": {
+                            "limit": 250,
+                            "status": "all",
+                            "sort": "date",
+                            "direction": "asc"
+                        },
+                        "data_selector": "reviews",
+                        "paginator": {
+                            "type": "page_number",
+                            "base_page": 1,
+                            "page_param": "page",
+                            "total_path": null,
+                            "has_more_path": "pagination.hasMore"
+                        }
+                    }
+                },
+                {
+                    "name": "store_reviews",
+                    "endpoint": {
+                        "path": "store/{param:public_store_id}/store-reviews",
+                        "params": {
+                            "limit": 250,
+                            "status": "all",
+                            "sort": "date",
+                            "direction": "asc"
+                        },
+                        "data_selector": "reviews",
+                        "paginator": {
+                            "type": "page_number",
+                            "base_page": 1,
+                            "page_param": "page",
+                            "total_path": null,
+                            "has_more_path": "pagination.hasMore"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Uses the authenticated Merchant API (api.loox.io, X-Api-Secret-Key header), available on the Convert and Unlimited plans per Loox's help article; the keyless Storefront API is not used. Both lists return reviews plus pagination with total, page, limit, hasMore and a relative nextPageUrl. Pagination here is page and limit (max 250) and stops when pagination.hasMore is false; nextPageUrl is not followed because its documented example carries only page, limit and total, so it is unclear whether filters survive. status=all returns published, unpublished and pending reviews (the default is published only); sort=date ascending keeps pages stable while new reviews arrive. No incremental: from_date and to_date only accept YYYY-MM-DD and filter on the review date, not on a last-updated time, so later replies, publishes and edits would be missed; every run is a full refresh merged on id. Deleted reviews are not removed from the warehouse. Reviewer firstName, lastName and email are removed by the runner's personal-data filter. reviewer.nickname is listed in strip_fields. reviewer.name (the full name) is not caught by key name and cannot be listed there, because product.name is the product title in the same response; it needs a path-aware rule. reviewer.customerId, orderId and location (country and countryCode only) are kept. Rate limit 120 requests per minute per API key. The API has no list endpoints beyond product reviews and store reviews. Page-number pagination with hasMore was exercised against a local mock in the documented shape only, never against Loox itself.",
+        "stripFields": [
+            "nickname"
+        ]
     },
     {
         "slug": "smile-io",
@@ -1278,12 +1417,208 @@ export const WAREHOUSE_CATALOG = [
         "slug": "privy",
         "name": "Privy",
         "category": "email-sms",
-        "readiness": "planned",
+        "readiness": "built",
         "why": "#33 of 100 tools Shopify stores use. StoreLeads: Shopify app installed on 43,495 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/shopify/app/privy",
-        "docs": "",
-        "credentials": [],
+        "docs": "https://help.privy.com/docs/api-reference/overview",
+        "credentials": [
+            {
+                "name": "api_token",
+                "label": "Privy API token",
+                "help": "Needs a paid Privy plan; accounts without API access get a 403 api_access_required error. In the Privy dashboard (dashboard.privy.com) open Settings > API Tokens and click Create Token. Name it Cosmic Lifecycle and tick only the read scopes: contacts_read, campaigns_read, flows_read, displays_read, segments_read, coupons_read and reports_read. Leave contacts_write, orders_write and events_write off. Pick an expiration (30 days to 1 year, or none) and copy the token right away; it starts with privy_ and is shown only once. When it expires, renew it on the same page or create a new one."
+            }
+        ],
         "params": [],
-        "notes": "API is partner-only or needs vendor approval. CSV import meanwhile."
+        "config": {
+            "client": {
+                "base_url": "https://api.privy.com/v1/",
+                "auth": {
+                    "type": "bearer",
+                    "token": "{secret:api_token}"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "contacts",
+                    "endpoint": {
+                        "path": "contacts",
+                        "params": {
+                            "per_page": 100
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "page_number",
+                            "base_page": 1,
+                            "page_param": "page",
+                            "total_path": "pagination.total_pages"
+                        },
+                        "incremental": {
+                            "start_param": "updated_after",
+                            "cursor_path": "updated_at",
+                            "initial_value": "2010-01-01T00:00:00Z"
+                        }
+                    }
+                },
+                {
+                    "name": "campaigns",
+                    "endpoint": {
+                        "path": "campaigns",
+                        "params": {
+                            "per_page": 100
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "page_number",
+                            "base_page": 1,
+                            "page_param": "page",
+                            "total_path": "pagination.total_pages"
+                        }
+                    }
+                },
+                {
+                    "name": "flow_campaigns",
+                    "endpoint": {
+                        "path": "campaigns",
+                        "params": {
+                            "per_page": 100,
+                            "type": "flows"
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "page_number",
+                            "base_page": 1,
+                            "page_param": "page",
+                            "total_path": "pagination.total_pages"
+                        }
+                    }
+                },
+                {
+                    "name": "flows",
+                    "endpoint": {
+                        "path": "flows",
+                        "params": {
+                            "per_page": 100
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "page_number",
+                            "base_page": 1,
+                            "page_param": "page",
+                            "total_path": "pagination.total_pages"
+                        }
+                    }
+                },
+                {
+                    "name": "displays",
+                    "endpoint": {
+                        "path": "displays",
+                        "params": {
+                            "per_page": 100
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "page_number",
+                            "base_page": 1,
+                            "page_param": "page",
+                            "total_path": "pagination.total_pages"
+                        }
+                    }
+                },
+                {
+                    "name": "segments",
+                    "endpoint": {
+                        "path": "segments",
+                        "params": {
+                            "per_page": 100
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "page_number",
+                            "base_page": 1,
+                            "page_param": "page",
+                            "total_path": "pagination.total_pages"
+                        }
+                    }
+                },
+                {
+                    "name": "coupons",
+                    "endpoint": {
+                        "path": "coupons",
+                        "params": {
+                            "per_page": 100
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "page_number",
+                            "base_page": 1,
+                            "page_param": "page",
+                            "total_path": "pagination.total_pages"
+                        }
+                    }
+                },
+                {
+                    "name": "campaign_performance_30d",
+                    "endpoint": {
+                        "path": "reports/campaigns",
+                        "params": {
+                            "per_page": 50,
+                            "period": "last_30_days"
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "page_number",
+                            "base_page": 1,
+                            "page_param": "page",
+                            "total_path": "pagination.total_pages"
+                        }
+                    },
+                    "primary_key": "campaign_id",
+                    "write_disposition": "replace"
+                },
+                {
+                    "name": "flow_performance_30d",
+                    "endpoint": {
+                        "path": "reports/flows",
+                        "params": {
+                            "per_page": 25,
+                            "period": "last_30_days"
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "page_number",
+                            "base_page": 1,
+                            "page_param": "page",
+                            "total_path": "pagination.total_pages"
+                        }
+                    },
+                    "primary_key": "flow_id",
+                    "write_disposition": "replace"
+                },
+                {
+                    "name": "display_performance_30d",
+                    "endpoint": {
+                        "path": "reports/displays",
+                        "params": {
+                            "per_page": 100,
+                            "period": "last_30_days"
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "page_number",
+                            "base_page": 1,
+                            "page_param": "page",
+                            "total_path": "pagination.total_pages"
+                        }
+                    },
+                    "primary_key": "display_id",
+                    "write_disposition": "replace"
+                }
+            ]
+        },
+        "notes": "This is Privy the ecommerce pop-up, email and SMS product (api.privy.com), not the unrelated wallet company at privy.io. API access needs a paid Privy account. Auth is Authorization: Bearer with a dashboard API token (prefix privy_); tokens carry per-resource scopes, so a read-only token is possible, and they expire unless created with no expiration. Every list returns data plus pagination with page, per_page, total_count and total_pages; pages start at 1 and the paginator stops at total_pages. per_page is clamped to 10 to 100 on most lists, 50 on reports/campaigns and 25 on reports/flows. contacts is incremental on updated_at through updated_after (strictly after, ISO 8601); the list is ordered newest created first, so a contact created mid-sync can shift pages, and the merge on id absorbs the repeat. Deleted contacts drop out of the list and are not removed from the warehouse. Contact first_name, last_name, email and phone_number are removed by the runner's personal-data filter; custom_fields keys are merchant-defined and are kept unless their key name looks personal. campaigns lists newsletters and flow_campaigns lists the messages flows send (type=flows); both are configuration only and are full refresh merged on id, as are flows, displays, segments and coupons, because none of those lists has an updated filter. displays leaves out archived displays (the API default). The three performance tables are rolling last_30_days snapshots in the account's time zone and are replaced on every run; reports/campaigns ranks at most 100 campaigns sent in the period, reports/displays ranks at most 50 and drops displays with zero signups, reports/flows lists every flow. Left out: orders (they repeat the store platform's orders and include addresses), products and collections (proxied live from the store), tags, imports, per-contact activity, segment members and the single-number reports/summary. Rate limit 60 requests per minute and 10,000 per day per account, shared by all tokens; at 100 contacts per page a first sync of a very large list can hit the daily cap and should be rerun the next day. Pagination and the incremental filter were exercised against a local mock in the documented shape only, never against Privy itself. Parent-account tokens read the parent account; subaccounts need the Privy-Account-Id header, which this spec does not send."
     },
     {
         "slug": "mailchimp",
@@ -1687,7 +2022,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.northbeam.io/",
         "credentials": [],
         "params": [],
-        "notes": "Attribution data only comes through an export to your own cloud bucket, which needs a custom export job. Planned."
+        "notes": "Attribution data only leaves Northbeam through an export job: create, poll, then download a CSV or read a cloud bucket (https://docs.northbeam.io/docs/northbeam-api-data-exports-overview). That needs an export runner, not a REST spec. Planned."
     },
     {
         "slug": "netsuite",
@@ -1726,12 +2061,69 @@ export const WAREHOUSE_CATALOG = [
         "slug": "fairing",
         "name": "Fairing",
         "category": "surveys",
-        "readiness": "planned",
+        "readiness": "built",
         "why": "#46 of 100 tools Shopify stores use. StoreLeads: Shopify app installed on 3,389 Shopify stores (Oct 30 2026 snapshot). Taylor Sicard lists it for $5M-$20M brands. Source: https://storeleads.app/reports/shopify/app/fairing",
-        "docs": "https://docs.fairing.co/",
-        "credentials": [],
+        "docs": "https://docs.fairing.co/reference/api",
+        "credentials": [
+            {
+                "name": "api_key",
+                "label": "Fairing API key",
+                "help": "In the Fairing dashboard (app.fairing.co) open the Settings tab and find the API Keys section. Copy the secret API key for this store. Fairing does not offer read-only keys or scopes on dashboard keys, so store it as a secret. This connector only sends GET requests to /api/responses and /api/questions. The key is tied to one store; a brand with several stores needs one key per store."
+            }
+        ],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "config": {
+            "client": {
+                "base_url": "https://app.fairing.co/api/",
+                "auth": {
+                    "type": "api_key",
+                    "name": "Authorization",
+                    "api_key": "{secret:api_key}",
+                    "location": "header"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "responses",
+                    "endpoint": {
+                        "path": "responses",
+                        "params": {
+                            "limit": 1000,
+                            "sort": "updated_at_asc"
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "cursor",
+                            "cursor_path": "data[-1].id",
+                            "cursor_param": "starting_after"
+                        },
+                        "incremental": {
+                            "start_param": "updated_at_min",
+                            "cursor_path": "updated_at",
+                            "initial_value": "2010-01-01T00:00:00Z"
+                        }
+                    }
+                },
+                {
+                    "name": "questions",
+                    "endpoint": {
+                        "path": "questions",
+                        "params": {
+                            "include_targeting": "true"
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "single_page"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Base https://app.fairing.co/api, with the raw API key in the Authorization header (no Bearer prefix; Bearer is only for partner OAuth tokens, which need a client_id from Fairing and are not used here). The OAuth page states the responses and questions read endpoints are available on all Fairing plans. GET /responses returns {data, next, prev}; pagination is cursor-based, sending the id of the last row back as starting_after, limit default 100 and maximum 1000. The spec reads the cursor from the last row (data[-1].id) instead of following the next URL, because the docs do not say whether next is null on the last page; this costs one extra empty request per run and always stops. Incremental on updated_at through updated_at_min with sort=updated_at_asc, merged on id, so responses recategorized in the Fairing UI are re-synced. updated_at_min is inclusive, so the last row of the previous run is read again and merged. Unverified: the docs ask for ISO 8601 UTC timestamps, and the stored cursor is sent back in the form the API returns it (for example 2022-02-16T17:54:35+00:00). GET /questions returns the full question list in one response with no pagination; include_targeting=true adds the targeting object. Question response options and clarification questions are nested and land in child tables. The customer email on each response is removed by the runner's personal-data filter; customer_id, order_id and order_number are kept as identifiers. No other key on the documented response or question objects holds a name, phone or address, so strip_fields is empty. Free-text answers (other_response, and response on open_ended questions, plus original_response and referring_question_response) are typed by shoppers and can contain a person's name such as a friend or influencer; they are kept because they are the attribution answer, and only email addresses inside them are masked. landing_page_path and referring_site are kept as documented. POST /sources (create sources, Advanced Attribution plan) changes the account and is left out. Rate limit 100 requests per minute per store, shared across both endpoints, with 429 and Retry-After when exceeded."
     },
     {
         "slug": "knocommerce",
@@ -2737,5 +3129,169 @@ export const WAREHOUSE_CATALOG = [
         "credentials": [],
         "params": [],
         "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+    },
+    {
+        "slug": "brevo",
+        "name": "Brevo",
+        "category": "email-sms",
+        "readiness": "built",
+        "why": "Not in the 100-tool research. Added in 0.12.0 from the Cosmic AI app's list of common email platforms. No install count on file.",
+        "docs": "https://developers.brevo.com/",
+        "credentials": [
+            {
+                "name": "api_key",
+                "label": "Brevo API key",
+                "help": "In Brevo open the SMTP & API settings page (https://app.brevo.com/settings/keys/api), go to the API keys tab and click Generate a new API key, named Cosmic Lifecycle. Copy the key right away; Brevo shows it only once. Brevo API keys cannot be scoped or made read-only: every key has full account access, so store it as a secret and delete it when you disconnect. This connector only sends GET requests. If Authorized IPs is switched on for your account (your name at the top right, then Security, then Authorized IPs), requests from an IP that is not on the list are rejected even with a valid key, so add the IP this machine connects from."
+            }
+        ],
+        "params": [],
+        "config": {
+            "client": {
+                "base_url": "https://api.brevo.com/v3/",
+                "auth": {
+                    "type": "api_key",
+                    "name": "api-key",
+                    "api_key": "{secret:api_key}",
+                    "location": "header"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "email_campaigns",
+                    "endpoint": {
+                        "path": "emailCampaigns",
+                        "params": {
+                            "statistics": "globalStats",
+                            "excludeHtmlContent": "true",
+                            "sort": "asc"
+                        },
+                        "data_selector": "campaigns",
+                        "paginator": {
+                            "type": "offset",
+                            "limit": 50,
+                            "offset": 0,
+                            "offset_param": "offset",
+                            "limit_param": "limit",
+                            "total_path": null,
+                            "stop_after_empty_page": true
+                        }
+                    }
+                },
+                {
+                    "name": "sms_campaigns",
+                    "endpoint": {
+                        "path": "smsCampaigns",
+                        "params": {
+                            "sort": "asc"
+                        },
+                        "data_selector": "campaigns",
+                        "paginator": {
+                            "type": "offset",
+                            "limit": 100,
+                            "offset": 0,
+                            "offset_param": "offset",
+                            "limit_param": "limit",
+                            "total_path": null,
+                            "stop_after_empty_page": true
+                        }
+                    }
+                },
+                {
+                    "name": "lists",
+                    "endpoint": {
+                        "path": "contacts/lists",
+                        "params": {
+                            "sort": "asc"
+                        },
+                        "data_selector": "lists",
+                        "paginator": {
+                            "type": "offset",
+                            "limit": 10,
+                            "offset": 0,
+                            "offset_param": "offset",
+                            "limit_param": "limit",
+                            "total_path": null,
+                            "stop_after_empty_page": true
+                        }
+                    }
+                },
+                {
+                    "name": "folders",
+                    "endpoint": {
+                        "path": "contacts/folders",
+                        "params": {
+                            "sort": "asc"
+                        },
+                        "data_selector": "folders",
+                        "paginator": {
+                            "type": "offset",
+                            "limit": 10,
+                            "offset": 0,
+                            "offset_param": "offset",
+                            "limit_param": "limit",
+                            "total_path": null,
+                            "stop_after_empty_page": true
+                        }
+                    }
+                },
+                {
+                    "name": "segments",
+                    "endpoint": {
+                        "path": "contacts/segments",
+                        "params": {
+                            "sort": "asc"
+                        },
+                        "data_selector": "segments",
+                        "paginator": {
+                            "type": "offset",
+                            "limit": 50,
+                            "offset": 0,
+                            "offset_param": "offset",
+                            "limit_param": "limit",
+                            "total_path": null,
+                            "stop_after_empty_page": true
+                        }
+                    }
+                },
+                {
+                    "name": "transactional_email_daily_stats",
+                    "primary_key": "date",
+                    "endpoint": {
+                        "path": "smtp/statistics/reports",
+                        "params": {
+                            "days": 30,
+                            "sort": "asc"
+                        },
+                        "data_selector": "reports",
+                        "paginator": {
+                            "type": "offset",
+                            "limit": 10,
+                            "offset": 0,
+                            "offset_param": "offset",
+                            "limit_param": "limit",
+                            "total_path": null,
+                            "maximum_offset": 30,
+                            "stop_after_empty_page": true
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "All GET, base https://api.brevo.com/v3, key sent in the api-key header. Any Brevo account, including Free, can generate a key from its own dashboard; keys are all-access and cannot be made read-only (the docs call the key one all-access secret and point to OAuth machine-to-machine credentials for scoped tokens, which this spec does not use). Every list uses limit and offset. Page sizes are values the reference documents: emailCampaigns default 50, smsCampaigns default 500 and max 1000 (100 used), contacts/lists and contacts/folders default 10 (their maximum is not stated on the reference pages, so the default is used), contacts/segments max 50, smtp/statistics/reports default 10. The count field is described as the number in the account on lists, folders and segments but as the number retrieved on campaigns, so the paginator ignores it and stops on the first empty page instead; that costs one extra request per resource, and how Brevo answers an offset past the end (empty array or missing key) is unverified. No incremental: the only time filter on campaigns is startDate with endDate, both mandatory together, limited to sent campaigns and to a 2 year range, and campaign statistics keep changing after the send, so every resource is a full refresh merged on id. email_campaigns asks for statistics=globalStats (Brevo only fills that for events from the last 6 months; older campaigns need the single-campaign report endpoint, which is left out because it is one request per campaign against a 100 per hour limit) and excludeHtmlContent=true so the email body comes back as an empty string. transactional_email_daily_stats is the per-day aggregate of transactional (SMTP) email for the last 30 days, the maximum range the endpoint allows, merged on date so history builds up run by run; it is empty for stores that do not send transactional email through Brevo. Left out: contacts (GET /contacts exists, but contact attributes are user-defined uppercase keys such as SMS or custom address fields, so a key-name filter cannot be trusted to remove every personal value), contacts in a list, campaign recipient exports and webhook history exports (async export jobs), unaggregated email and SMS event feeds (one row per recipient), WhatsApp campaigns, and the ecommerce attribution endpoints (they need a campaign or workflow id per request). Automation workflows have no list endpoint in the reference. On email campaigns sender.email and the email inside replyTo are removed by the runner; sender.name (the from name) is removed as well, because a brand can send under a person's name. Rate limits on the general tier, which covers Free through Enterprise: 100 requests per hour for emailCampaigns and smsCampaigns (the all other endpoints row), 36,000 per hour and 10 per second under /v3/contacts, 300 per hour under /v3/smtp; a 429 is returned when exceeded. At 50 per page the email campaign list can read about 5,000 campaigns per hour."
+    },
+    {
+        "slug": "google-search-console",
+        "name": "Google Search Console",
+        "category": "analytics",
+        "readiness": "planned",
+        "why": "Not in the 100-tool research. Added in 0.12.0 because it costs almost nothing to add once Google sign-in exists. No usage data behind it.",
+        "docs": "https://developers.google.com/webmaster-tools/v1/api_reference_index",
+        "credentials": [],
+        "params": [],
+        "notes": "Planned as a built-in source, not a warehouse connector. Needs Google sign-in: the owner signs in with Google in the Cosmic AI app and picks a site. The CLI has no connector code for it yet. CSV import of daily clicks and impressions meanwhile."
     }
 ];

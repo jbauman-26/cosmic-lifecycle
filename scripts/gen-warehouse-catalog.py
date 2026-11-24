@@ -1,6 +1,7 @@
 """Builds src/warehouse-catalog.ts from the tool research and the connector specs.
 
   connectors/research-2026-11-07.json   100 tools Shopify stores use, with evidence
+  EXTRA (below)                         tools added later, outside that research
   connectors/specs/<slug>.json          a dlt rest_api spec, validated, per built connector
 
 Run: python3 scripts/gen-warehouse-catalog.py
@@ -38,11 +39,30 @@ CATEGORY = {
 
 # Looked at closely and not built, with the reason a buyer should hear.
 SKIPPED = {
-    "postscript": "Custom API access is enterprise-only, and it lists subscribers only. CSV import meanwhile.",
+    "postscript": "API keys only work on Postscript's enterprise plan; every other shop needs an integration partner's token, and the one list endpoint is subscribers (https://developers.postscript.io/docs/who-has-access-to-the-partner-api). CSV import meanwhile.",
+    "attentive": "A merchant can make a custom app key, but the public API has no read endpoints for campaigns, messages, journeys or results; those leave Attentive by SFTP feed and webhook only (https://docs.attentive.com/docs/create-and-manage-custom-apps). CSV import meanwhile.",
     "okendo": "API is usable, but its relative next-page links need a custom pager in the runner. Planned. CSV import meanwhile.",
-    "northbeam": "Attribution data only comes through an export to your own cloud bucket, which needs a custom export job. Planned.",
+    "rebuy": "The public API is storefront only: product recommendations out, analytics events in. Nothing returns a merchant's own results (https://developers.rebuyengine.com/reference/rebuy-analytic-v2-endpoints/). CSV import meanwhile.",
+    "northbeam": "Attribution data only leaves Northbeam through an export job: create, poll, then download a CSV or read a cloud bucket (https://docs.northbeam.io/docs/northbeam-api-data-exports-overview). That needs an export runner, not a REST spec. Planned.",
     "taxjar": "List endpoints return only IDs and skip transactions synced from Shopify, so a connector would mislead. CSV import instead.",
+    "google-ads": "Planned as a built-in source, not a warehouse connector. Needs Google sign-in: the owner signs in with Google in the Cosmic AI app and picks an ad account. The CLI has no connector code for it yet, and Google Ads also needs a developer token that Cosmic holds. CSV import meanwhile.",
 }
+
+# Tools that are not in the research file. Each says plainly where it came from,
+# so no usage number is invented for it.
+EXTRA = [
+    {
+        "slug": "brevo", "name": "Brevo", "category": "email-sms",
+        "why": "Not in the 100-tool research. Added in 0.12.0 from the Cosmic AI app's list of common email platforms. No install count on file.",
+        "docs": "https://developers.brevo.com/",
+    },
+    {
+        "slug": "google-search-console", "name": "Google Search Console", "category": "analytics",
+        "why": "Not in the 100-tool research. Added in 0.12.0 because it costs almost nothing to add once Google sign-in exists. No usage data behind it.",
+        "docs": "https://developers.google.com/webmaster-tools/v1/api_reference_index",
+        "notes": "Planned as a built-in source, not a warehouse connector. Needs Google sign-in: the owner signs in with Google in the Cosmic AI app and picks a site. The CLI has no connector code for it yet. CSV import of daily clicks and impressions meanwhile.",
+    },
+]
 
 entries = []
 for r in research:
@@ -62,6 +82,8 @@ for r in research:
             "credentials": spec["credentials"], "params": spec.get("params", []), "config": spec["config"],
             "notes": (spec.get("notes") or "").strip(),
         }
+        if spec.get("strip_fields"):
+            e["stripFields"] = spec["strip_fields"]
     else:
         if r["api"] == "no":
             note = "No public data API. Bring daily totals in with lifecycle sources import."
@@ -75,6 +97,24 @@ for r in research:
         e = {
             "slug": slug, "name": r["name"], "category": CATEGORY[r["category"]], "readiness": "planned",
             "why": why, "docs": docs, "credentials": [], "params": [], "notes": note,
+        }
+    entries.append(e)
+
+for x in EXTRA:
+    spec = specs.pop(x["slug"], None)
+    if spec:
+        e = {
+            "slug": x["slug"], "name": spec.get("name", x["name"]), "category": x["category"],
+            "readiness": "built", "why": x["why"], "docs": spec.get("docs") or x["docs"],
+            "credentials": spec["credentials"], "params": spec.get("params", []), "config": spec["config"],
+            "notes": (spec.get("notes") or "").strip(),
+        }
+        if spec.get("strip_fields"):
+            e["stripFields"] = spec["strip_fields"]
+    else:
+        e = {
+            "slug": x["slug"], "name": x["name"], "category": x["category"], "readiness": "planned",
+            "why": x["why"], "docs": x["docs"], "credentials": [], "params": [], "notes": x["notes"],
         }
     entries.append(e)
 

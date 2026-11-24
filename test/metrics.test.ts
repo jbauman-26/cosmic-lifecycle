@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 import { migrate, wrapPglite, type Db } from '../src/db.js'
 import { findMetric, formatValue, listMetrics, METRICS, runMetric, sinceDate } from '../src/metrics.js'
-import { CATALOG, kitPrompt, LLMS_URL, sourceStatus } from '../src/sources-catalog.js'
+import { CATALOG, kitPrompt, QUICKSTART_COMMAND, sourceStatus } from '../src/sources-catalog.js'
 import { DOCS } from '../src/docs.js'
 
 let db: Db
@@ -121,7 +121,9 @@ describe('source catalog and setup prompts', () => {
   it('builds a paste-ready prompt that never asks for a key in chat', () => {
     const p = kitPrompt({ name: 'flow-audit', title: 'Flow audit', needs: ['klaviyo'] })
     expect(p).toContain('lifecycle kits add flow-audit')
-    expect(p).toContain(LLMS_URL)
+    expect(p).toContain(QUICKSTART_COMMAND)
+    // The repo is private: no link that a reader cannot open.
+    expect(p).not.toMatch(/https?:\/\//)
     expect(p).toMatch(/Never ask me to paste a key/)
   })
 

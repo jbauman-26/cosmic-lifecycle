@@ -1,0 +1,331 @@
+{
+  "source": "https://developers.brevo.com/reference/get-email-campaigns.md, https://developers.brevo.com/reference/get-sms-campaigns.md, https://developers.brevo.com/reference/get-lists.md, https://developers.brevo.com/reference/get-folders.md, https://developers.brevo.com/reference/get-segments.md, https://developers.brevo.com/reference/get-smtp-report.md",
+  "resources": {
+    "email_campaigns": {
+      "response": {
+        "campaigns": [
+          {
+            "id": 12,
+            "name": "EN - Sales Summer 2017",
+            "status": "sent",
+            "type": "classic",
+            "createdAt": "2017-05-01T12:30:00Z",
+            "footer": "[DEFAULT_FOOTER]",
+            "header": "[DEFAULT_HEADER]",
+            "htmlContent": "",
+            "modifiedAt": "2017-05-01T12:30:00Z",
+            "replyTo": "maya.okafor@example.com",
+            "sender": {
+              "email": "jonas.weller@example.com",
+              "id": 26,
+              "name": "Marketing"
+            },
+            "testSent": true,
+            "recipients": {
+              "exclusionLists": [
+                13
+              ],
+              "lists": [
+                5
+              ]
+            },
+            "statistics": {
+              "campaignStats": [
+                {
+                  "appleMppOpens": 10,
+                  "clickers": 2665,
+                  "complaints": 1,
+                  "delivered": 19765,
+                  "hardBounces": 87,
+                  "opensRate": 29.54,
+                  "sent": 19887,
+                  "softBounces": 100,
+                  "trackableViews": 5661,
+                  "uniqueClicks": 2300,
+                  "uniqueViews": 7779,
+                  "unsubscriptions": 2,
+                  "viewed": 8999,
+                  "deferred": 30,
+                  "listId": 5
+                }
+              ],
+              "globalStats": {
+                "appleMppOpens": 10,
+                "clickers": 2665,
+                "complaints": 1,
+                "delivered": 19765,
+                "hardBounces": 87,
+                "opensRate": 29.54,
+                "sent": 19887,
+                "softBounces": 100,
+                "trackableViews": 5661,
+                "uniqueClicks": 2300,
+                "uniqueViews": 7779,
+                "unsubscriptions": 2,
+                "viewed": 8999,
+                "estimatedViews": 560,
+                "trackableViewsRate": 23.45
+              },
+              "linksStats": {},
+              "mirrorClick": 120,
+              "remaining": 1000
+            },
+            "previewText": "Don't miss the sale!",
+            "scheduledAt": "2017-06-01T12:30:00Z",
+            "subject": "20% OFF for 2017 Summer Sales",
+            "inlineImageActivation": true,
+            "mirrorActive": true,
+            "recurring": false,
+            "shareLink": "http://example.com/fhsgccc.html?t=9865448900",
+            "tag": "Newsletter",
+            "toField": "{FNAME} {LNAME}"
+          },
+          {
+            "id": 22,
+            "name": "Weekly - 1",
+            "status": "draft",
+            "type": "classic",
+            "createdAt": "2017-05-01T12:30:00Z",
+            "footer": "[DEFAULT_FOOTER]",
+            "header": "[DEFAULT_HEADER]",
+            "htmlContent": "",
+            "modifiedAt": "2017-05-01T12:30:00Z",
+            "replyTo": "maya.okafor@example.com",
+            "sender": {
+              "email": "jonas.weller@example.com",
+              "id": 26,
+              "name": "Newsletter"
+            },
+            "testSent": false,
+            "recipients": {
+              "exclusionLists": [
+                45
+              ],
+              "lists": [
+                10
+              ]
+            },
+            "statistics": {
+              "campaignStats": [],
+              "globalStats": {
+                "appleMppOpens": 0,
+                "clickers": 0,
+                "complaints": 0,
+                "delivered": 0,
+                "hardBounces": 0,
+                "opensRate": 0,
+                "sent": 0,
+                "softBounces": 0,
+                "trackableViews": 0,
+                "uniqueClicks": 0,
+                "uniqueViews": 0,
+                "unsubscriptions": 0,
+                "viewed": 0,
+                "estimatedViews": 0,
+                "trackableViewsRate": 0
+              },
+              "linksStats": {},
+              "mirrorClick": 0,
+              "remaining": 0
+            },
+            "previewText": "your weekly newsletter!",
+            "scheduledAt": "",
+            "subject": "Week 1 - Newsletter",
+            "inlineImageActivation": true,
+            "mirrorActive": true,
+            "recurring": false,
+            "shareLink": "http://example.com/fhsgccc.html?t=9865448900",
+            "tag": "Newsletter",
+            "tags": [
+              "Newsletter",
+              "Weekly"
+            ],
+            "toField": "{FNAME} {LNAME}"
+          }
+        ],
+        "count": 2
+      }
+    },
+    "sms_campaigns": {
+      "response": {
+        "campaigns": [
+          {
+            "content": "Visit our Store and get some discount !",
+            "createdAt": "2017-06-01T12:30:00Z",
+            "id": 2,
+            "modifiedAt": "2017-05-01T12:30:00Z",
+            "name": "PROMO CODE",
+            "sender": "MyCompany",
+            "status": "sent",
+            "recipients": {
+              "exclusionLists": [
+                13
+              ],
+              "lists": [
+                21
+              ]
+            },
+            "statistics": {
+              "answered": 2,
+              "delivered": 2987,
+              "hardBounces": 1,
+              "processing": 0,
+              "sent": 3000,
+              "softBounces": 3,
+              "unsubscriptions": 3
+            },
+            "organisationPrefix": "MyCompany",
+            "scheduledAt": "2017-06-01T12:30:00Z",
+            "sentDate": "2017-06-01T12:30:00Z",
+            "unsubscribeInstruction": "send Stop if you want to unsubscribe."
+          },
+          {
+            "content": "Summer Sale is starting tomorrow. Get extra 10% with this code:SUM17",
+            "createdAt": "2017-06-01T12:30:00Z",
+            "id": 10,
+            "modifiedAt": "2017-05-01T12:30:00Z",
+            "name": "SUMMER SALE",
+            "sender": "MyCompany",
+            "status": "draft",
+            "recipients": {
+              "exclusionLists": [
+                13
+              ],
+              "lists": [
+                21
+              ]
+            },
+            "statistics": {
+              "answered": 2,
+              "delivered": 2987,
+              "hardBounces": 1,
+              "processing": 0,
+              "sent": 3000,
+              "softBounces": 3,
+              "unsubscriptions": 3
+            },
+            "organisationPrefix": "",
+            "scheduledAt": "2017-08-04T12:30:00Z",
+            "unsubscribeInstruction": ""
+          }
+        ],
+        "count": 12
+      }
+    },
+    "lists": {
+      "response": {
+        "count": 2,
+        "lists": [
+          {
+            "id": 53,
+            "name": "Spanish_Speakers",
+            "totalBlacklisted": 65,
+            "totalSubscribers": 5432,
+            "uniqueSubscribers": 5497,
+            "folderId": 1
+          },
+          {
+            "id": 50,
+            "name": "Other",
+            "totalBlacklisted": 765,
+            "totalSubscribers": 10976,
+            "uniqueSubscribers": 11741,
+            "folderId": 2
+          }
+        ]
+      }
+    },
+    "folders": {
+      "response": {
+        "count": 2,
+        "folders": [
+          {
+            "id": 42,
+            "name": "Ninja_Form",
+            "totalBlacklisted": 98,
+            "totalSubscribers": 4567,
+            "uniqueSubscribers": 4665
+          },
+          {
+            "id": 29,
+            "name": "Prestashop",
+            "totalBlacklisted": 10,
+            "totalSubscribers": 6543,
+            "uniqueSubscribers": 6553
+          }
+        ]
+      }
+    },
+    "segments": {
+      "response": {
+        "count": 2,
+        "segments": [
+          {
+            "categoryName": "Name1",
+            "id": 53,
+            "segmentName": "Segment1",
+            "updatedAt": "2017-03-12T12:30:00Z"
+          },
+          {
+            "categoryName": "Name2",
+            "id": 50,
+            "segmentName": "Segment2",
+            "updatedAt": "2017-03-12T12:30:00Z"
+          }
+        ]
+      }
+    },
+    "transactional_email_daily_stats": {
+      "response": {
+        "reports": [
+          {
+            "blocked": 519,
+            "clicks": 1026,
+            "date": "2017-04-30",
+            "delivered": 10103,
+            "hardBounces": 21,
+            "invalid": 1,
+            "opens": 5091,
+            "requests": 10756,
+            "softBounces": 137,
+            "spamReports": 0,
+            "uniqueClicks": 720,
+            "uniqueOpens": 2318,
+            "unsubscribed": 0
+          },
+          {
+            "blocked": 920,
+            "clicks": 1514,
+            "date": "2017-05-01",
+            "delivered": 17499,
+            "hardBounces": 34,
+            "invalid": 2,
+            "opens": 10089,
+            "requests": 18812,
+            "softBounces": 254,
+            "spamReports": 0,
+            "uniqueClicks": 1090,
+            "uniqueOpens": 4393,
+            "unsubscribed": 0
+          }
+        ]
+      }
+    }
+  },
+  "personal": [
+    "maya.okafor@example.com",
+    "jonas.weller@example.com",
+    "Marketing"
+  ],
+  "kept": [
+    "EN - Sales Summer 2017",
+    "20% OFF for 2017 Summer Sales",
+    "PROMO CODE",
+    "MyCompany",
+    "Spanish_Speakers",
+    "Ninja_Form",
+    "Segment1",
+    "2017-04-30",
+    "sent"
+  ]
+}

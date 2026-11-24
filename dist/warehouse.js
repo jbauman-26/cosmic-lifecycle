@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { z } from 'zod';
 import { readConfig, writeConfig } from './config.js';
 import { appHome } from './paths.js';
@@ -19,6 +19,7 @@ const CustomSpec = z.object({
     credentials: z.array(z.object({ name: z.string(), label: z.string().default(''), help: z.string().default('') })).default([]),
     params: z.array(z.object({ name: z.string(), label: z.string().default(''), example: z.string().default('') })).default([]),
     config: z.record(z.string(), z.unknown()),
+    stripFields: z.array(z.string()).optional(),
 });
 const SLUG = /^[a-z0-9][a-z0-9-]{1,40}$/;
 const customDir = () => join(appHome(), 'custom-apis');
@@ -82,9 +83,32 @@ function runnerPath() {
         throw new CliError('The connector runner is missing from this install.', 'Reinstall Cosmic Lifecycle.', 'broken_install');
     return path;
 }
-export function uvAvailable() {
-    return spawnSync('uv', ['--version'], { encoding: 'utf8' }).status === 0;
+// Which uv to run. LIFECYCLE_UV_PATH names a bundled binary (the Cosmic AI app and Cosmic Cloud
+// ship one), so an owner never installs anything. uv downloads its own Python on first use.
+// Without it, uv is looked up on PATH. This package never ships uv itself.
+export function uvCommand(env = process.env) {
+    const bundled = env.LIFECYCLE_UV_PATH;
+    if (!bundled)
+        return 'uv';
+    if (!isAbsolute(bundled))
+        throw new CliError('LIFECYCLE_UV_PATH must be an absolute path to a uv binary.', 'Set it to the full path, or unset it to use uv from PATH.', 'missing_uv');
+    if (!existsSync(bundled))
+        throw new CliError('LIFECYCLE_UV_PATH points at a file that does not exist.', 'Reinstall the app, or unset LIFECYCLE_UV_PATH to use uv from PATH.', 'missing_uv');
+    return bundled;
 }
+// LIFECYCLE_UV_CACHE_DIR keeps uv's downloads (Python and dlt) in a folder the caller owns.
+export function uvEnv(env = process.env) {
+    return env.LIFECYCLE_UV_CACHE_DIR ? { UV_CACHE_DIR: env.LIFECYCLE_UV_CACHE_DIR } : {};
+}
+export function uvAvailable(env = process.env) {
+    try {
+        return spawnSync(uvCommand(env), ['--version'], { encoding: 'utf8' }).status === 0;
+    }
+    catch {
+        return false;
+    }
+}
+const MISSING_UV_NEXT = 'In the Cosmic AI app this is built in: update the app. From a terminal: curl -LsSf https://astral.sh/uv/install.sh | sh, or set LIFECYCLE_UV_PATH to a uv binary.';
 function destination(config) {
     if (config.database.kind === 'postgres') {
         const url = getSecret('database-url');
@@ -98,17 +122,24 @@ function destination(config) {
 // Starts the Python runner in its own uv environment. The job goes in on stdin and
 // secrets go in as environment variables, so neither shows in the process list.
 export function runRunner(job, env, opts = {}) {
+    let uv;
+    try {
+        uv = uvCommand();
+    }
+    catch (e) {
+        return Promise.reject(e);
+    }
     if (!uvAvailable()) {
-        return Promise.reject(new CliError('Warehouse sources need uv, the Python runner.', 'curl -LsSf https://astral.sh/uv/install.sh | sh', 'missing_uv'));
+        return Promise.reject(new CliError(process.env.LIFECYCLE_UV_PATH ? 'The uv binary at LIFECYCLE_UV_PATH did not run.' : 'Warehouse sources need uv, the Python runner, and it is not installed.', MISSING_UV_NEXT, 'missing_uv'));
     }
     const args = ['run', '--quiet', '--no-project', '--python', PYTHON_VERSION, '--with', `dlt[postgres,duckdb]==${DLT_VERSION}`, 'python', runnerPath()];
     return new Promise((resolve, reject) => {
-        const child = spawn('uv', args, { env: { ...process.env, ...env, RUNTIME__LOG_LEVEL: 'WARNING' }, stdio: ['pipe', 'pipe', opts.verbose ? 'inherit' : 'pipe'] });
+        const child = spawn(uv, args, { env: { ...process.env, ...uvEnv(), ...env, RUNTIME__LOG_LEVEL: 'WARNING' }, stdio: ['pipe', 'pipe', opts.verbose ? 'inherit' : 'pipe'] });
         let out = '';
         let err = '';
         child.stdout?.on('data', (d) => (out += d));
         child.stderr?.on('data', (d) => (err += d));
-        child.on('error', (e) => reject(new CliError(`Could not start uv: ${e.message}`, 'uv --version', 'missing_uv')));
+        child.on('error', (e) => reject(new CliError(`Could not start uv: ${e.message}`, MISSING_UV_NEXT, 'missing_uv')));
         child.on('close', () => {
             const last = out.trim().split('\n').pop() ?? '';
             try {
@@ -179,7 +210,7 @@ export async function connectSource(slug, opts) {
     let check = null;
     if (!opts.skipCheck) {
         const { dest, env: destEnv } = destination(config);
-        const r = await runRunner({ action: 'check', source: { slug, config: source.config }, params, destination: dest, dataset: datasetFor(slug), pipelines_dir: pipelinesDir() }, { ...env, ...destEnv });
+        const r = await runRunner({ action: 'check', source: { slug, config: source.config, strip_fields: source.stripFields ?? [] }, params, destination: dest, dataset: datasetFor(slug), pipelines_dir: pipelinesDir() }, { ...env, ...destEnv });
         if (!r.ok)
             throw new CliError(`${source.name} check failed: ${explain(r.error)}`, `lifecycle warehouse show ${slug}`, 'check_failed');
         check = r;
@@ -242,7 +273,7 @@ export async function syncSources(slugs, opts = {}) {
             const source = findSource(c.slug);
             if (!source.config)
                 throw new Error(`${source.name} has no connector in this version.`);
-            const r = await runRunner({ action: 'sync', source: { slug: c.slug, config: source.config }, params: c.params, personal_data: c.personalData, destination: dest, dataset: datasetFor(c.slug), pipelines_dir: pipelinesDir(), verbose: opts.verbose }, { ...secretEnv(source), ...destEnv }, opts);
+            const r = await runRunner({ action: 'sync', source: { slug: c.slug, config: source.config, strip_fields: source.stripFields ?? [] }, params: c.params, personal_data: c.personalData, destination: dest, dataset: datasetFor(c.slug), pipelines_dir: pipelinesDir(), verbose: opts.verbose }, { ...secretEnv(source), ...destEnv }, opts);
             result = r.ok
                 ? { source: c.slug, status: 'ok', rows: Number(r.rows ?? 0), tables: r.tables }
                 : { source: c.slug, status: 'failed', rows: 0, detail: explain(r.error) };

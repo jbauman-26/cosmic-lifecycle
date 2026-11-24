@@ -151,3 +151,65 @@ describe.skipIf(!uvAvailable())('built connectors load in dlt', () => {
     }, 60_000)
   }
 })
+
+// 0.12.0: a next link relative to the API's base path (Okendo's shape), a person object
+// with a bare name, and a spec's own stripFields, end to end through uv and dlt.
+describe.skipIf(!uvAvailable())('relative next links and person objects, end to end', () => {
+  let home: string
+  let server: Server
+  const seen: string[] = []
+
+  beforeAll(async () => {
+    home = mkdtempSync(join(tmpdir(), 'lc-wh2-'))
+    process.env.LIFECYCLE_HOME = home
+    process.env.LIFECYCLE_NO_KEYCHAIN = '1'
+    server = createServer((req, res) => {
+      const url = new URL(req.url ?? '/', 'http://x')
+      seen.push(url.pathname + url.search)
+      if (url.pathname !== '/enterprise/reviews') {
+        res.writeHead(404).end()
+        return
+      }
+      const second = url.searchParams.get('lastEvaluated') === 'abc'
+      const row = (id: string) => ({ reviewId: id, rating: 5, productName: 'Linen Shirt', reviewer: { name: `Person ${id}`, displayName: 'P.', avatarUrl: `https://cdn.example.com/${id}.jpg`, isVerified: true }, product: { name: 'Linen Shirt' } })
+      const body = second ? { reviews: [row('r3')] } : { reviews: [row('r1'), row('r2')], nextUrl: '/reviews?lastEvaluated=abc' }
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(body))
+    })
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()))
+    const port = (server.address() as { port: number }).port
+    writeConfig({ database: { kind: 'local' } })
+    writeFileSync(join(home, 'spec.json'), JSON.stringify({
+      name: 'Mock Reviews',
+      category: 'reviews',
+      credentials: [{ name: 'api_key', label: 'API key' }],
+      stripFields: ['avatarUrl'],
+      config: {
+        client: { base_url: `http://127.0.0.1:${port}/enterprise/`, auth: { type: 'bearer', token: '{secret:api_key}' } },
+        resources: [{ name: 'reviews', primary_key: 'reviewId', write_disposition: 'merge', endpoint: { path: 'reviews', data_selector: 'reviews', paginator: { type: 'json_link_from_base', next_url_path: 'nextUrl' } } }],
+      },
+    }))
+  }, 60_000)
+
+  afterAll(() => {
+    server?.close()
+    rmSync(home, { recursive: true, force: true })
+    delete process.env.LIFECYCLE_HOME
+    delete process.env.LIFECYCLE_NO_KEYCHAIN
+    delete process.env.LIFECYCLE_SRC_MOCK_REVIEWS_API_KEY
+  })
+
+  it('follows the link under the base path, and strips the reviewer but not the product', async () => {
+    addCustomSource('mock-reviews', join(home, 'spec.json'))
+    process.env.LIFECYCLE_SRC_MOCK_REVIEWS_API_KEY = 'tok'
+    await connectSource('mock-reviews', {})
+    const r = await syncSources(['mock-reviews'])
+    expect(r[0]).toMatchObject({ status: 'ok', rows: 3 })
+    expect(seen).toContain('/enterprise/reviews?lastEvaluated=abc')
+    expect(seen.some((u) => u.startsWith('/reviews'))).toBe(false)
+    const cols = (await duckSchema('mock-reviews')).map((c) => c.column)
+    expect(cols).toEqual(expect.arrayContaining(['review_id', 'product_name', 'product__name', 'reviewer__is_verified']))
+    expect(cols.some((c) => /reviewer__name|display_name|avatar/.test(c))).toBe(false)
+    const q = await duckQuery('select review_id, product__name from src_mock_reviews.reviews order by 1')
+    expect(q.rows).toEqual([{ review_id: 'r1', product__name: 'Linen Shirt' }, { review_id: 'r2', product__name: 'Linen Shirt' }, { review_id: 'r3', product__name: 'Linen Shirt' }])
+  }, 180_000)
+})
