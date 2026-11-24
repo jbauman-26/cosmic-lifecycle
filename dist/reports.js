@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { trustLine } from './reconcile.js';
 import { reportsVerified } from './sources/klaviyo.js';
+import { settingValue } from './config.js';
 const num = (v) => (v === null || v === undefined ? 0 : Number(v));
 const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 const money = (n) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -8,7 +9,7 @@ export const ATTRIBUTION_NOTE = 'Revenue here is what Klaviyo attributes to each
 const UNTESTED_NOTE = 'Flow report parsing has not yet been verified on real sends.';
 // NorthSignal's working line for a brand under-using owned channels.
 export const OWNED_SHARE_LINE = 15;
-export async function revenuePerFlow(db, days = 90) {
+export async function revenuePerFlow(db, days = settingValue('metrics.default_days')) {
     const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
     const rows = await db.query(`SELECT f.flow_id, coalesce(d.name, f.flow_id) AS name, coalesce(d.status, 'unknown') AS status, sum(f.recipients) AS recipients, sum(f.revenue) AS revenue, sum(f.conversions) AS conversions
      FROM fact_flow_daily f LEFT JOIN dim_flow d USING (flow_id) WHERE f.date >= $1 GROUP BY 1, 2, 3`, [since]);

@@ -2,8 +2,11 @@ import { createHash } from 'node:crypto'
 import type { Db, Tx } from './db.js'
 import { CliError } from './errors.js'
 import { MIGRATIONS } from './schema.js'
+import { settingValue } from './config.js'
 
+// The default. lifecycle config set query.row_cap changes it.
 export const ROW_CAP = 1000
+export const rowCap = () => settingValue('query.row_cap')
 
 // Layered on purpose: this check gives a clear message, and the read-only
 // transaction is what actually stops a write.
@@ -17,16 +20,16 @@ export function assertReadOnlySql(sql: string) {
   return body
 }
 
-export async function runQuery(db: Db, sql: string) {
+export async function runQuery(db: Db, sql: string, cap = rowCap()) {
   const body = assertReadOnlySql(sql)
   let rows
   try {
-    rows = await db.readOnly(`SELECT * FROM (${body}) AS q LIMIT ${ROW_CAP + 1}`)
+    rows = await db.readOnly(`SELECT * FROM (${body}) AS q LIMIT ${cap + 1}`)
   } catch (e) {
     throw new CliError(`Query failed: ${e instanceof Error ? e.message : e}`, 'lifecycle schema', 'query_failed')
   }
-  const truncated = rows.length > ROW_CAP
-  return { rows: truncated ? rows.slice(0, ROW_CAP) : rows, rowCount: Math.min(rows.length, ROW_CAP), truncated }
+  const truncated = rows.length > cap
+  return { rows: truncated ? rows.slice(0, cap) : rows, rowCount: Math.min(rows.length, cap), truncated }
 }
 
 // Normalized so the same question asked with different spacing or case counts once.

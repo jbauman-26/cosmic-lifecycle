@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { buildDashboard, dashboardHtml } from './dashboard.js';
-import { listMetrics, runMetric } from './metrics.js';
+import { defaultDays, listMetrics, runMetric } from './metrics.js';
 import { auditFlows, revenuePerFlow } from './reports.js';
 import { trustLine } from './reconcile.js';
 import { VERSION } from './version.js';
@@ -12,8 +12,9 @@ const json = (res, status, body) => {
     res.end(JSON.stringify(body, null, 2));
 };
 const days = (url) => {
-    const d = Number(url.searchParams.get('days') ?? 90);
-    return Number.isInteger(d) && d >= 1 && d <= 730 ? d : 90;
+    const fallback = defaultDays();
+    const d = Number(url.searchParams.get('days') ?? fallback);
+    return Number.isInteger(d) && d >= 1 && d <= 730 ? d : fallback;
 };
 export const ROUTES = ['/', '/api/status', '/api/metrics', '/api/metrics/:name', '/api/reconcile', '/api/flows', '/api/audit'];
 export function createHandler(db) {

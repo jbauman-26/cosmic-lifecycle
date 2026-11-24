@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { fetchJson } from '../http.js';
+import { fetchJson, HttpError } from '../http.js';
 import { CliError } from '../errors.js';
 const VERSION = '2026-10';
 export async function shopifyToken(store, clientId, clientSecret) {
@@ -25,6 +25,26 @@ const ORDERS_QUERY = `query($c: String) {
     }
   }
 }`;
+const SCOPE_NEXT = 'In the Shopify admin open Settings, then Apps and sales channels, then Develop apps, then your app, then Configuration, and add the read_orders scope. Install the app again, then lifecycle connect shopify.';
+function scopeDenied(text) {
+    const scope = /`?(read_[a-z_]+)`?/.exec(text)?.[1];
+    return new CliError(`Shopify did not let this app read orders${scope ? `. It needs the ${scope} scope` : ', because the app is missing a scope'}.`, SCOPE_NEXT, 'scope_denied');
+}
+// Turns Shopify's GraphQL errors into one plain sentence and a code the app can map.
+export function shopifyQueryError(errors) {
+    const list = Array.isArray(errors) ? errors : [errors];
+    const text = JSON.stringify(errors);
+    if (text.includes('not approved to access')) {
+        return new CliError('Shopify blocked order access for this app.', 'In the Partner Dashboard open your app, then API access requests, then Protected customer data access, and select Analytics. Leave name, email, phone and address unselected.', 'shopify_protected_data');
+    }
+    const denied = list.find((e) => e?.extensions?.code === 'ACCESS_DENIED' || /access denied|required access/i.test(String(e?.message ?? '')));
+    if (denied)
+        return scopeDenied(String(denied.message ?? ''));
+    if (list.some((e) => e?.extensions?.code === 'THROTTLED')) {
+        return new CliError('Shopify is rate limiting this app.', 'Wait a few minutes, then run lifecycle sync again.', 'rate_limited');
+    }
+    return new CliError('Shopify rejected the orders query.', 'lifecycle doctor', 'shopify_query');
+}
 export async function fetchOrders(store, token) {
     const out = [];
     let cursor = null;
@@ -33,14 +53,14 @@ export async function fetchOrders(store, token) {
             method: 'POST',
             headers: { 'content-type': 'application/json', 'x-shopify-access-token': token },
             body: JSON.stringify({ query: ORDERS_QUERY, variables: { c: cursor } }),
-        }, 'Shopify orders request');
-        if (body.errors) {
-            const text = JSON.stringify(body.errors);
-            if (text.includes('not approved to access')) {
-                throw new CliError('Shopify blocked order access for this app.', 'In the Partner Dashboard open your app, then API access requests, then Protected customer data access, and select Analytics. Leave name, email, phone and address unselected.', 'shopify_protected_data');
-            }
-            throw new CliError('Shopify rejected the orders query.', 'lifecycle doctor');
-        }
+        }, 'Shopify orders request').catch((e) => {
+            // A missing scope can also come back as a plain 403.
+            if (e instanceof HttpError && e.status === 403)
+                throw scopeDenied(e.body);
+            throw e;
+        });
+        if (body.errors)
+            throw shopifyQueryError(body.errors);
         out.push(...body.data.orders.nodes);
         cursor = body.data.orders.pageInfo.hasNextPage ? body.data.orders.pageInfo.endCursor : null;
     } while (cursor);

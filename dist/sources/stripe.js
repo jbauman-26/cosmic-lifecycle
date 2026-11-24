@@ -59,7 +59,7 @@ export class Stripe {
         }
         catch (e) {
             if (e instanceof HttpError && (e.status === 401 || e.status === 403)) {
-                throw new CliError('Stripe refused this key for charges.', 'Create a restricted key with Read on Charges and Subscriptions, then connect again.', 'stripe_key');
+                throw new CliError('Stripe refused this key for charges.', 'Create a restricted key with Read on Charges and Subscriptions, then connect again.', e.status === 401 ? 'key_rejected' : 'stripe_key');
             }
             throw e;
         }

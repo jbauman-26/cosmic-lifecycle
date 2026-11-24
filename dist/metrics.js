@@ -1,6 +1,9 @@
 import { CliError } from './errors.js';
 import { trustLine } from './reconcile.js';
 import { ATTRIBUTION_NOTE } from './reports.js';
+import { settingValue } from './config.js';
+// 90 unless someone ran lifecycle config set metrics.default_days.
+export const defaultDays = () => settingValue('metrics.default_days');
 const ratio = (num, den, scale = 1) => `SELECT CASE WHEN (${den}) > 0 THEN (${num}) * ${scale}.0 / (${den}) END AS value, (${num}) AS numerator, (${den}) AS denominator`;
 const ORDERS = `(SELECT coalesce(sum(orders), 0) FROM fact_orders_daily WHERE date >= $1)`;
 const NET = `(SELECT coalesce(sum(net_revenue), 0) FROM fact_orders_daily WHERE date >= $1)`;
@@ -73,7 +76,7 @@ const round = (n, d) => (n === null ? null : Math.round(n * 10 ** d) / 10 ** d);
 export function sinceDate(days, now = Date.now()) {
     return new Date(now - days * 86400000).toISOString().slice(0, 10);
 }
-export async function runMetric(db, name, days = 90, now = Date.now()) {
+export async function runMetric(db, name, days = defaultDays(), now = Date.now()) {
     const m = findMetric(name);
     if (!Number.isInteger(days) || days < 1 || days > 730)
         throw new CliError('Days must be a whole number from 1 to 730.', `lifecycle metrics run ${name} --days 90`, 'bad_days');

@@ -113,7 +113,7 @@ describe('MetaAds client', () => {
   it('explains an expired token, a missing permission and a bad account in plain words', async () => {
     const err = (status: number, code: number, message: string) => new HttpError('Meta', status, JSON.stringify({ error: { message, code } }))
     const client = (e: Error) => new MetaAds('tok', '1234567890', fake([e]).fetcher)
-    await expect(client(err(400, 190, 'Error validating access token: Session has expired')).check()).rejects.toMatchObject({ code: 'meta_token', next: expect.stringMatching(/ads_read/) })
+    await expect(client(err(400, 190, 'Error validating access token: Session has expired')).check()).rejects.toMatchObject({ code: 'key_rejected', next: expect.stringMatching(/ads_read/) })
     await expect(client(err(403, 200, 'Ad account owner has NOT grant ads_read permission')).check()).rejects.toMatchObject({ code: 'meta_permission' })
     await expect(client(err(400, 100, 'Unsupported get request. Object with ID act_1 does not exist')).check()).rejects.toMatchObject({ code: 'meta_error', message: expect.stringMatching(/does not exist/) })
     await expect(client(new HttpError('Meta', 500, '<html>')).check()).rejects.toBeInstanceOf(HttpError)

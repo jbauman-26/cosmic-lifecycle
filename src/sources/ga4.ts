@@ -1,4 +1,5 @@
-import { fetchJson } from '../http.js'
+import { fetchJson, HttpError } from '../http.js'
+import { CliError } from '../errors.js'
 
 export type Ga4Day = { date: string; channel: string; sessions: number; purchases: number; revenue: number }
 
@@ -11,7 +12,13 @@ export async function ga4AccessToken(clientId: string, clientSecret: string, ref
       body: new URLSearchParams({ grant_type: 'refresh_token', client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken }),
     },
     'Google token request',
-  )
+  ).catch((e) => {
+    // Google answers a revoked refresh token or a wrong client secret with 400 invalid_grant or 401 invalid_client.
+    if (e instanceof HttpError && (e.status === 400 || e.status === 401) && /invalid_grant|invalid_client|unauthorized_client/.test(e.body)) {
+      throw new CliError('Google rejected the saved GA4 sign-in.', 'Create a new refresh token, then lifecycle connect ga4 --property ID --client-id ID --secret-env NAME --refresh-token-env NAME', 'key_rejected')
+    }
+    throw e
+  })
   return body.access_token
 }
 

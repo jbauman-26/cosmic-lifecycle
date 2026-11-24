@@ -4,14 +4,22 @@ Your agent should not quote a Klaviyo number it can't prove.
 
 Cosmic Lifecycle gives Claude Code a clean view of your Shopify and Klaviyo results. It syncs totals into a database you own, checks that the numbers agree, and shows you which flows to fix first.
 
-It is for the person running lifecycle at a Shopify brand who already works in Claude Code. It is free and open source, from [Cosmic AI](https://store.jakebauman.io/community).
+It is for the person running lifecycle at a Shopify brand who already works in Claude Code. It is free, from [Cosmic AI](https://store.jakebauman.io/community).
+
+## Install
+
+The CLI ships inside the Cosmic AI Mac app and Cosmic Cloud, so if you use either, you already have it. The repo is private. If you have access to it, install a release directly:
+
+```sh
+gh release download --repo jbauman-26/cosmic-lifecycle --pattern cosmic-lifecycle.tgz
+npm install -g ./cosmic-lifecycle.tgz
+```
 
 ## See it in 60 seconds
 
 No keys and no accounts. This runs on invented sample data.
 
 ```sh
-npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
 lifecycle demo
 ```
 
@@ -24,13 +32,13 @@ FAIL Orders pulled against Shopify's own count: 787 against 801, off by 1.75%.
 
 ## Or let your agent set it up
 
-Paste this into Claude Code, Cursor or Codex:
+With the CLI installed, paste this into Claude Code, Cursor or Codex:
 
 ```
-Set up Cosmic Lifecycle using https://raw.githubusercontent.com/jbauman-26/cosmic-lifecycle/main/llms.txt
+Set up Cosmic Lifecycle by following the output of lifecycle docs quickstart
 ```
 
-[llms.txt](llms.txt) is a setup playbook written for agents. It connects one source, checks the numbers, and gives you one verified figure before it offers anything else.
+`lifecycle docs quickstart` (the same text as [llms.txt](llms.txt)) is a setup playbook written for agents. It connects one source, checks the numbers, and gives you one verified figure before it offers anything else.
 
 ## What it does
 
@@ -127,10 +135,36 @@ lifecycle logs --follow    # wait for a running sync to finish, then show its lo
 ```sh
 lifecycle status       # setup, sources, trust line, daily sync, updates
 lifecycle dashboard    # one local HTML page with every check, metric and fix
-lifecycle logs         # recent syncs on this machine
+lifecycle logs         # recent syncs on this machine, with an error code on any that failed
 lifecycle secrets list # where each key comes from, never its value
-lifecycle config list  # registry.uri, deploy.repo, update.check
+lifecycle config list  # every setting, with its default
 ```
+
+Sync one source on its own schedule, or remove one:
+
+```sh
+lifecycle sync --only meta              # also --only shopify,klaviyo or a repeated --only
+lifecycle disconnect stripe             # forget its settings and saved keys, keep its data
+lifecycle disconnect stripe --delete-data
+```
+
+Settings you can change. Each one starts at the value the CLI has always used, so nothing changes until you set it:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `reconcile.tolerance.klaviyo_orders` | 3 | Percent Klaviyo orders may differ from Shopify before the check fails |
+| `reconcile.tolerance.ga4_purchases` | 15 | Percent GA4 purchases may differ from Shopify before the check fails |
+| `reconcile.attributed_share_flag` | 60 | Warn when Klaviyo credits flows with more than this percent of revenue |
+| `reconcile.freshness_days` | 2 | Days without a sync before the freshness check fails |
+| `query.row_cap` | 1000 | Most rows `lifecycle query` returns |
+| `metrics.default_days` | 90 | Window for metrics, reports and sync pulls when none is given |
+
+```sh
+lifecycle config set reconcile.tolerance.ga4_purchases 20
+lifecycle config get query.row_cap
+```
+
+With `--format json`, a failure carries a `code` the app and scripts can act on: `key_rejected` (the source refused the key), `rate_limited` (it asked to slow down), `scope_denied` (Shopify refused a field or scope), `not_connected` and `unknown_source`.
 
 ## More from the command line
 

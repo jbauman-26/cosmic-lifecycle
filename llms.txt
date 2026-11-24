@@ -1,15 +1,15 @@
 # Cosmic Lifecycle: agent setup playbook
 
 This is the setup guide for any coding or chat agent installing Cosmic Lifecycle.
-A person starts it by pasting one line into their agent:
+A person with the CLI installed starts it by pasting one line into their agent:
 
-  Set up Cosmic Lifecycle using https://raw.githubusercontent.com/jbauman-26/cosmic-lifecycle/main/llms.txt
+  Set up Cosmic Lifecycle by following the output of lifecycle docs quickstart
 
 Follow this playbook in order, then stop and report what is live. Do not invent another setup flow.
 
 ## What it is
 
-A free, open source CLI that gives an agent a clean view of a Shopify brand's
+A free CLI that gives an agent a clean view of a Shopify brand's
 Klaviyo results. It syncs totals into a database the user owns, checks that the
 sources agree, and finds what to fix. It never sends a message, stores no
 customer records, and has no account or server of ours in the path.
@@ -24,8 +24,10 @@ customer records, and has no account or server of ours in the path.
 
 ## Fastest path to a trusted number
 
-1. Install:
-     npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
+1. Install. The CLI ships inside the Cosmic AI app and Cosmic Cloud, so most
+   people already have it. With access to the private repo, install it directly:
+     gh release download --repo jbauman-26/cosmic-lifecycle --pattern cosmic-lifecycle.tgz
+     npm install -g ./cosmic-lifecycle.tgz
 2. Show it working with no keys, on labeled sample data:
      lifecycle demo
 3. Set up the local database:

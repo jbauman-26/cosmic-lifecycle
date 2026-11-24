@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import type { Db, Tx } from './db.js'
+import { CliError } from './errors.js'
+import { settingValue } from './config.js'
 import { aggregateOrders, type RawOrder } from './sources/shopify.js'
 import type { Ga4Day } from './sources/ga4.js'
 import { toDaily, type RawInsight } from './sources/meta.js'
 import { aggregateCharges, aggregateSubscriptions, type RawCharge, type RawSubscription } from './sources/stripe.js'
 import { Klaviyo, isNoReportData, reportsVerified, type FlowDailyRow } from './sources/klaviyo.js'
 
-export type SourceResult = { source: string; status: 'ok' | 'warning' | 'failed'; rows: number; detail?: string }
+export type SourceResult = { source: string; status: 'ok' | 'warning' | 'failed'; rows: number; detail?: string; code?: string }
 const now = () => new Date().toISOString()
 
 async function recordRun(db: Db, source: string, fn: () => Promise<Omit<SourceResult, 'source'>>): Promise<SourceResult> {
@@ -18,8 +20,9 @@ async function recordRun(db: Db, source: string, fn: () => Promise<Omit<SourceRe
     return { source, ...r }
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e)
-    await db.query(`UPDATE meta_sync_run SET finished_at = $2, status = 'failed', detail = $3 WHERE run_id = $1`, [runId, now(), detail])
-    return { source, status: 'failed', rows: 0, detail }
+    const code = e instanceof CliError ? e.code : 'error'
+    await db.query(`UPDATE meta_sync_run SET finished_at = $2, status = 'failed', detail = $3, code = $4 WHERE run_id = $1`, [runId, now(), detail, code])
+    return { source, status: 'failed', rows: 0, detail, code }
   }
 }
 
@@ -120,7 +123,7 @@ export async function syncKlaviyo(db: Db, k: Klaviyo, opts: { since?: string; un
       }
     })
     const end = opts.until ?? new Date().toISOString()
-    const start = opts.since ?? new Date(Date.now() - 90 * 86400000).toISOString()
+    const start = opts.since ?? new Date(Date.now() - settingValue('metrics.default_days') * 86400000).toISOString()
     let base = flows.length + campaigns.length + segments.length
     if (metricId) {
       const placed = await k.placedOrdersDaily(metricId, start, end)
@@ -232,7 +235,7 @@ export async function syncMeta(db: Db, load: (since: string, until: string) => P
   return recordRun(db, 'meta', async () => {
     const until = opts.today ?? now().slice(0, 10)
     // The same first day a 90-day metric uses, so a default window never holds a day of revenue with no spend pulled for it.
-    const since = new Date(Date.parse(`${until}T00:00:00Z`) - (opts.days ?? 90) * 86400000).toISOString().slice(0, 10)
+    const since = new Date(Date.parse(`${until}T00:00:00Z`) - (opts.days ?? settingValue('metrics.default_days')) * 86400000).toISOString().slice(0, 10)
     const raw = await load(since, until)
     const { rows } = await writeMeta(db, raw, since, opts.currency ?? '', opts.account ?? '')
     await setTotal(db, 'meta', 'rows_pulled', raw.length)
