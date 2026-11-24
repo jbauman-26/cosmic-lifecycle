@@ -3,6 +3,7 @@ import { formatValue, runMetric } from './metrics.js'
 import { auditFlows, esc, htmlPage, revenuePerFlow } from './reports.js'
 import { trustLine } from './reconcile.js'
 import { loadChecklist } from './checklist.js'
+import { settingValue } from './config.js'
 
 // One local page with what an owner checks on a Monday: the trust line, every reconcile
 // check, the headline metrics, revenue per flow, the audit and recent syncs.
@@ -12,7 +13,7 @@ export const DASHBOARD_METRICS = [
   'flow_revenue_share', 'flow_revenue_per_recipient', 'flow_unsubscribe_rate', 'flow_spam_rate',
 ]
 
-export async function buildDashboard(db: Tx, days = 90) {
+export async function buildDashboard(db: Tx, days = settingValue('metrics.default_days')) {
   const trust = await trustLine(db)
   const checklist = await loadChecklist(db)
   const checks = await db.query(`SELECT check_name, status, detail FROM meta_reconcile_result ORDER BY check_name`)

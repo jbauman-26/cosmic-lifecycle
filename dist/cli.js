@@ -27,13 +27,13 @@ import { CATALOG, CUSTOM_SOURCE_NOTE, kitPrompt, sourceStatus } from './sources-
 import { startMcp } from './mcp.js';
 import { runDemo } from './demo.js';
 import { deploy, deployLogs, deployPlan, deployRun, deployRunById, deployStatus, followRun, warehouseSecrets, writeProject } from './deploy.js';
-import { getSetting, listSettings, setSetting, unsetSetting } from './config.js';
+import { defaultOf, getSetting, listSettings, setSetting, unsetSetting } from './config.js';
 import { deleteSecret, secretStatus, setSecret, SECRET_NAMES } from './secrets.js';
 import { buildDashboard, dashboardHtml } from './dashboard.js';
 import { SECRET_FOR, checklistLines, loadChecklist } from './checklist.js';
 import { checkForUpdate, UPDATE_COMMAND } from './update.js';
 import { trustLine } from './reconcile.js';
-import { metricCandidates } from './metrics.js';
+import { defaultDays, metricCandidates } from './metrics.js';
 import { recordCustomQuery } from './query.js';
 import { basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -49,6 +49,7 @@ import { applyPlan, buildPlan, readPlan, suggestLapsedDays, writePlan } from './
 import { addCustomSource, connectSource, connectedSources, datasetFor, disconnectSource, duckQuery, duckSchema, findSource, searchCatalog, syncSources } from './warehouse.js';
 import { READINESS_LEGEND } from './warehouse-catalog.js';
 import { randomUUID } from 'node:crypto';
+import { NATIVE, chooseSources, disconnectNative, isNative, parseOnly } from './native.js';
 const program = new Command('lifecycle')
     .description('A clean view of Shopify and Klaviyo for Claude Code. Read-only. Nothing sends.')
     .version(VERSION)
@@ -87,46 +88,63 @@ connect.command('meta').description('Read-only: daily spend and results by campa
     const r = await connectMeta(opts);
     emit(format(), r, () => `Connected to Meta ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).\nNext: lifecycle sync`);
 }));
-program.command('sync').description('Pull fresh totals from connected sources').option('--since <date>', 'start of the Klaviyo report window').action(run(async (opts) => {
+const collectList = (v, prev = []) => [...prev, v];
+program.command('sync').description('Pull fresh totals from connected sources, then reconcile')
+    .option('--since <date>', 'start of the Klaviyo report window')
+    .option('--only <source>', `sync only this built-in source: ${NATIVE.join(', ')} (repeatable, or a comma list)`, collectList)
+    .action(run(async (opts) => {
     const config = readConfig();
+    const only = parseOnly(opts.only);
+    const shopifySecret = getSecret('shopify-client-secret');
+    const key = getSecret('klaviyo-read-key');
+    const ga4Secret = getSecret('ga4-client-secret');
+    const ga4Refresh = getSecret('ga4-refresh-token');
+    const stripeKey = getSecret('stripe-read-key');
+    const metaToken = getSecret('meta-ads-token');
+    const chosen = chooseSources(only, {
+        shopify: Boolean(config.shopify && shopifySecret),
+        klaviyo: Boolean(key),
+        ga4: Boolean(config.ga4 && ga4Secret && ga4Refresh),
+        stripe: Boolean(config.stripe && stripeKey),
+        meta: Boolean(config.meta && metaToken),
+    });
+    if (!chosen.length)
+        throw new CliError('No sources connected.', 'lifecycle connect klaviyo --key-env NAME', 'not_connected');
     const db = await openDb();
     try {
         await migrate(db);
         const results = [];
-        const shopifySecret = getSecret('shopify-client-secret');
-        if (config.shopify && shopifySecret) {
-            const { store, clientId } = config.shopify;
-            const token = await shopifyToken(store, clientId, shopifySecret);
-            results.push(await syncShopify(db, () => fetchOrders(store, token), () => fetchOrderCount(store, token)));
+        // Each source is its own run row, so one failing never hides another's result.
+        for (const source of chosen) {
+            if (source === 'shopify') {
+                const { store, clientId } = config.shopify;
+                let token;
+                const tok = async () => (token ??= await shopifyToken(store, clientId, shopifySecret));
+                results.push(await syncShopify(db, async () => fetchOrders(store, await tok()), async () => fetchOrderCount(store, await tok())));
+            }
+            else if (source === 'klaviyo') {
+                results.push(await syncKlaviyo(db, new Klaviyo(key), opts));
+            }
+            else if (source === 'ga4') {
+                const { property, clientId } = config.ga4;
+                const start = new Date(Date.now() - defaultDays() * 86400000).toISOString().slice(0, 10);
+                const end = new Date().toISOString().slice(0, 10);
+                results.push(await syncGa4(db, async () => fetchGa4Daily(property, await ga4AccessToken(clientId, ga4Secret, ga4Refresh), start, end)));
+            }
+            else if (source === 'stripe') {
+                const stripe = new Stripe(stripeKey);
+                results.push(await syncStripe(db, { charges: () => stripe.charges(), subscriptions: () => stripe.subscriptions() }));
+            }
+            else {
+                const meta = new MetaAds(metaToken, config.meta.account);
+                results.push(await syncMeta(db, (since, until) => meta.insights(since, until), { currency: config.meta.currency, account: config.meta.account }));
+            }
         }
-        const key = getSecret('klaviyo-read-key');
-        if (key)
-            results.push(await syncKlaviyo(db, new Klaviyo(key), opts));
-        const ga4Secret = getSecret('ga4-client-secret');
-        const ga4Refresh = getSecret('ga4-refresh-token');
-        if (config.ga4 && ga4Secret && ga4Refresh) {
-            const { property, clientId } = config.ga4;
-            const start = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
-            const end = new Date().toISOString().slice(0, 10);
-            results.push(await syncGa4(db, async () => fetchGa4Daily(property, await ga4AccessToken(clientId, ga4Secret, ga4Refresh), start, end)));
-        }
-        const stripeKey = getSecret('stripe-read-key');
-        if (config.stripe && stripeKey) {
-            const stripe = new Stripe(stripeKey);
-            results.push(await syncStripe(db, { charges: () => stripe.charges(), subscriptions: () => stripe.subscriptions() }));
-        }
-        const metaToken = getSecret('meta-ads-token');
-        if (config.meta && metaToken) {
-            const meta = new MetaAds(metaToken, config.meta.account);
-            results.push(await syncMeta(db, (since, until) => meta.insights(since, until), { currency: config.meta.currency, account: config.meta.account }));
-        }
-        if (!results.length)
-            throw new CliError('No sources connected.', 'lifecycle connect klaviyo --key-env NAME');
         const check = await reconcile(db);
         const failed = check.checks.filter((c) => c.status === 'fail');
         // One JSON document per command, so an agent can parse stdout whole.
         emit(format(), { results, reconcile: check }, () => [
-            ...results.map((r) => `${r.source}: ${r.status}, ${r.rows} rows${r.detail ? `. ${r.detail}` : ''}`),
+            ...results.map((r) => `${r.source}: ${r.status}, ${r.rows} rows${r.detail ? `. ${r.detail}` : ''}${r.code ? ` (${r.code})` : ''}`),
             failed.length ? `Reconcile: ${failed.length} failed. Run lifecycle reconcile for details.` : 'Reconcile: passed.',
         ].join('\n'));
         if (results.some((r) => r.status === 'failed'))
@@ -134,6 +152,33 @@ program.command('sync').description('Pull fresh totals from connected sources').
     }
     finally {
         await db.close();
+    }
+}));
+program.command('disconnect').argument('<source>', `${NATIVE.join(', ')}, or a warehouse source`)
+    .description('Forget a source: its settings and saved keys. Loaded data is kept unless --delete-data')
+    .option('--delete-data', 'also delete the data this source loaded')
+    .action(run(async (source, opts) => {
+    if (!isNative(source)) {
+        if (opts.deleteData)
+            throw new CliError('--delete-data works for built-in sources only.', `lifecycle warehouse disconnect ${source}, then drop its schema yourself`, 'bad_value');
+        const r = disconnectSource(source);
+        emit(format(), { source, ...r }, () => `Disconnected ${source}. ${r.keysRemoved} key(s) removed. ${r.note}`);
+        return;
+    }
+    readConfig();
+    const db = await openDb().catch((e) => {
+        if (opts.deleteData)
+            throw e;
+        return null;
+    });
+    try {
+        if (db)
+            await migrate(db);
+        const r = await disconnectNative(source, { deleteData: opts.deleteData, db });
+        emit(format(), r, () => `Disconnected ${source}. ${r.keysRemoved.length} saved key(s) removed.${r.configRemoved ? ' Settings removed.' : ''} ${r.note}`);
+    }
+    finally {
+        await db?.close();
     }
 }));
 program.command('reconcile').description('Prove the numbers agree across sources').action(run(async () => {
@@ -189,10 +234,10 @@ metrics.command('show').argument('<name>').description('Show what a metric measu
     const m = findMetric(name);
     emit(format(), m, () => [`${m.title} (${m.name})`, m.description, `Needs: ${m.needs.join(', ')}. Unit: ${m.unit}.`, ...(m.notes ?? []), '', 'SQL ($1 is the first day of the window):', m.sql].join('\n'));
 }));
-metrics.command('run').argument('<names...>').option('--days <n>', 'window in days', '90').description('Run one or more metrics').action(run(async (names, opts) => {
+metrics.command('run').argument('<names...>').option('--days <n>', 'window in days (default: metrics.default_days, 90)').description('Run one or more metrics').action(run(async (names, opts) => {
     const db = await openDb();
     try {
-        const days = Number(opts.days);
+        const days = opts.days === undefined ? defaultDays() : Number(opts.days);
         const results = [];
         for (const n of names)
             results.push(await runMetric(db, n, days));
@@ -263,11 +308,11 @@ sources.command('list').description('Which sources are connected, and when each 
     }
 }));
 const report = program.command('report').description('Reports, each with a trust line');
-report.command('revenue-per-flow').option('--days <n>', 'window in days', '90').option('--html <file>', 'also write an HTML report').action(run(async (opts) => {
+report.command('revenue-per-flow').option('--days <n>', 'window in days (default: metrics.default_days, 90)').option('--html <file>', 'also write an HTML report').action(run(async (opts) => {
     const db = await openDb();
     try {
         await migrate(db);
-        const r = await revenuePerFlow(db, Number(opts.days));
+        const r = await revenuePerFlow(db, opts.days === undefined ? defaultDays() : Number(opts.days));
         if (opts.html) {
             const html = revenueHtml(r);
             writeHtml(opts.html, html);
@@ -467,22 +512,25 @@ program.command('logs').description('Recent sync runs on this machine. --cloud s
     }
     const db = await openDb();
     try {
-        const rows = await db.query(`SELECT source, status, rows_written, started_at, finished_at, detail FROM meta_sync_run ORDER BY started_at DESC LIMIT $1`, [Number(opts.limit)]);
-        const runs = rows.map((r) => ({ source: String(r.source), status: String(r.status), rows: Number(r.rows_written), startedAt: new Date(String(r.started_at)).toISOString(), detail: r.detail ? String(r.detail) : null }));
-        emit(format(), runs, () => (runs.length ? runs.map((r) => `${r.startedAt.slice(0, 16).replace('T', ' ')}  ${r.source.padEnd(8)} ${r.status.padEnd(8)} ${r.rows} rows${r.detail ? `  ${r.detail}` : ''}`).join('\n') : 'Nothing synced yet. Run lifecycle sync'));
+        await migrate(db);
+        const rows = await db.query(`SELECT source, status, rows_written, started_at, finished_at, detail, code FROM meta_sync_run ORDER BY started_at DESC LIMIT $1`, [Number(opts.limit)]);
+        const runs = rows.map((r) => ({ source: String(r.source), status: String(r.status), rows: Number(r.rows_written), startedAt: new Date(String(r.started_at)).toISOString(), detail: r.detail ? String(r.detail) : null, code: r.code ? String(r.code) : null }));
+        emit(format(), runs, () => (runs.length ? runs.map((r) => `${r.startedAt.slice(0, 16).replace('T', ' ')}  ${r.source.padEnd(8)} ${r.status.padEnd(8)} ${r.rows} rows${r.detail ? `  ${r.detail}` : ''}${r.code ? ` (${r.code})` : ''}`).join('\n') : 'Nothing synced yet. Run lifecycle sync'));
     }
     finally {
         await db.close();
     }
 }));
-const configCmd = program.command('config').description('Settings: registry.uri, deploy.repo, update.check');
+const configCmd = program.command('config').description('Settings, such as reconcile tolerances, the query row cap and the default window. lifecycle config list shows them all');
 configCmd.command('list').action(run(async () => {
     const s = listSettings();
-    emit(format(), s, () => s.map((x) => `${x.key} = ${x.value ?? '(not set)'}    ${x.description}`).join('\n'));
+    emit(format(), s, () => s.map((x) => `${x.key} = ${x.value ?? (x.default !== null ? `${x.default} (default)` : '(not set)')}    ${x.description}`).join('\n'));
 }));
 configCmd.command('get').argument('<key>').action(run(async (key) => {
-    const value = getSetting(key) ?? null;
-    emit(format(), { key, value }, () => String(value ?? '(not set)'));
+    const set = getSetting(key);
+    const d = defaultOf(key) ?? null;
+    const value = set ?? d;
+    emit(format(), { key, value, default: d, isDefault: set === undefined && d !== null }, () => (value === null ? '(not set)' : `${value}${set === undefined && d !== null ? ' (default)' : ''}`));
 }));
 configCmd.command('set').argument('<key>').argument('<value>').action(run(async (key, value) => {
     const v = setSetting(key, value);
@@ -514,11 +562,11 @@ secretsCmd.command('delete').argument('<name>').action(run(async (name) => {
 }));
 program.command('dashboard').description('Write one local HTML page: trust line, checks, metrics, flows, fixes and syncs')
     .option('--html <file>', 'where to write it', 'lifecycle-dashboard.html')
-    .option('--days <n>', 'window in days', '90')
+    .option('--days <n>', 'window in days (default: metrics.default_days, 90)')
     .action(run(async (opts) => {
     const db = await openDb();
     try {
-        const d = await buildDashboard(db, Number(opts.days));
+        const d = await buildDashboard(db, opts.days === undefined ? defaultDays() : Number(opts.days));
         const html = dashboardHtml(d);
         writeHtml(opts.html, html);
         saveArtifact(basename(opts.html), html);

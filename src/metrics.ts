@@ -2,6 +2,10 @@ import type { Tx } from './db.js'
 import { CliError } from './errors.js'
 import { trustLine } from './reconcile.js'
 import { ATTRIBUTION_NOTE } from './reports.js'
+import { settingValue } from './config.js'
+
+// 90 unless someone ran lifecycle config set metrics.default_days.
+export const defaultDays = () => settingValue('metrics.default_days')
 
 // Verified metrics: fixed, reviewed SQL an agent picks from instead of writing its own.
 // The same metric and window always run the same SQL, so a number asked for on Monday
@@ -101,7 +105,7 @@ export function sinceDate(days: number, now = Date.now()) {
   return new Date(now - days * 86400000).toISOString().slice(0, 10)
 }
 
-export async function runMetric(db: Tx, name: string, days = 90, now = Date.now()) {
+export async function runMetric(db: Tx, name: string, days = defaultDays(), now = Date.now()) {
   const m = findMetric(name)
   if (!Number.isInteger(days) || days < 1 || days > 730) throw new CliError('Days must be a whole number from 1 to 730.', `lifecycle metrics run ${name} --days 90`, 'bad_days')
   const since = sinceDate(days, now)

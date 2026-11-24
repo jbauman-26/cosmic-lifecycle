@@ -41,7 +41,11 @@ describe('config', () => {
     expect(() => setSetting('database.kind', 'local')).toThrow(/Unknown setting/)
     unsetSetting('deploy.repo')
     expect(getSetting('deploy.repo')).toBeUndefined()
-    expect(listSettings().map((s) => s.key)).toEqual(['registry.uri', 'deploy.repo', 'update.check'])
+    expect(listSettings().map((s) => s.key)).toEqual([
+      'registry.uri', 'deploy.repo', 'update.check',
+      'reconcile.tolerance.klaviyo_orders', 'reconcile.tolerance.ga4_purchases', 'reconcile.attributed_share_flag', 'reconcile.freshness_days',
+      'query.row_cap', 'metrics.default_days',
+    ])
   })
 
   it('keeps settings when connect rewrites the config', () => {

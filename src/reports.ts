@@ -2,6 +2,7 @@ import { writeFileSync } from 'node:fs'
 import type { Tx } from './db.js'
 import { trustLine } from './reconcile.js'
 import { reportsVerified } from './sources/klaviyo.js'
+import { settingValue } from './config.js'
 
 const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v))
 const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d
@@ -14,7 +15,7 @@ export const OWNED_SHARE_LINE = 15
 
 export type FlowRevenueRow = { flowId: string; name: string; status: string; recipients: number; revenue: number; revenuePerRecipient: number; conversions: number }
 
-export async function revenuePerFlow(db: Tx, days = 90) {
+export async function revenuePerFlow(db: Tx, days = settingValue('metrics.default_days')) {
   const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
   const rows = await db.query(
     `SELECT f.flow_id, coalesce(d.name, f.flow_id) AS name, coalesce(d.status, 'unknown') AS status, sum(f.recipients) AS recipients, sum(f.revenue) AS revenue, sum(f.conversions) AS conversions

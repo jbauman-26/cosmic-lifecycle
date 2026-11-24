@@ -1,9 +1,22 @@
 import type { Db, Tx } from './db.js'
+import { settingValue } from './config.js'
 
 export type CheckStatus = 'pass' | 'warn' | 'fail' | 'skipped'
 export type Check = { name: string; status: CheckStatus; expected: number | null; actual: number | null; diffPct: number | null; detail: string }
 
+// The defaults. Each one can be changed with lifecycle config set, see tolerances().
 export const TOLERANCE = { klaviyoOrders: 3, ga4Purchases: 15, attributedShareFlag: 60, freshnessDays: 2 }
+export type Tolerances = typeof TOLERANCE & { days: number }
+
+export function tolerances(): Tolerances {
+  return {
+    klaviyoOrders: settingValue('reconcile.tolerance.klaviyo_orders'),
+    ga4Purchases: settingValue('reconcile.tolerance.ga4_purchases'),
+    attributedShareFlag: settingValue('reconcile.attributed_share_flag'),
+    freshnessDays: settingValue('reconcile.freshness_days'),
+    days: settingValue('metrics.default_days'),
+  }
+}
 
 const pct = (expected: number, actual: number) => (expected === 0 ? (actual === 0 ? 0 : 100) : (Math.abs(expected - actual) / expected) * 100)
 const round = (n: number) => Math.round(n * 100) / 100
@@ -22,9 +35,9 @@ const skip = (name: string, detail: string): Check => ({ name, status: 'skipped'
 
 const one = async (db: Tx, sql: string, params: unknown[] = []) => (await db.query(sql, params))[0] ?? {}
 
-export async function runChecks(db: Tx): Promise<Check[]> {
+export async function runChecks(db: Tx, t: Tolerances = tolerances()): Promise<Check[]> {
   const checks: Check[] = []
-  const days = 90
+  const days = t.days
   const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
 
   // 1. Did the pull get everything Shopify says exists? This is the check that
@@ -51,18 +64,18 @@ export async function runChecks(db: Tx): Promise<Check[]> {
   const period = kFrom === since ? `last ${days} days` : `${kFrom} to ${kTo}, the days Klaviyo was synced for`
   const sk = await one(db, `SELECT sum(orders) AS orders FROM fact_orders_daily WHERE date >= $1 AND date <= $2`, [kFrom, kTo])
   const ko = await one(db, `SELECT sum(placed_orders) AS orders FROM fact_klaviyo_orders_daily WHERE date >= $1 AND date <= $2`, [kFrom, kTo])
-  const klaviyoSynced = (await db.query(`SELECT 1 FROM meta_sync_run WHERE source = 'klaviyo' AND status <> 'failed' LIMIT 1`)).length > 0
+  const klaviyoSynced = (await db.query(`SELECT 1 FROM meta_sync_run WHERE source = 'klaviyo' AND status NOT IN ('failed', 'disconnected', 'running') LIMIT 1`)).length > 0
   if (so.orders === null || so.orders === undefined || !klaviyoSynced) checks.push(skip('klaviyo_orders', 'Needs both Shopify and Klaviyo synced.'))
   else if (!num(sk.orders) && !num(ko.orders)) checks.push(skip('klaviyo_orders', `Neither source has orders in ${period}.`))
   else if (num(ko.orders) === 0) {
     checks.push({ name: 'klaviyo_orders', status: 'fail', expected: num(sk.orders), actual: 0, diffPct: 100, detail: `Shopify has ${num(sk.orders)} orders in ${period}, and Klaviyo has none. The store may not be connected to this Klaviyo account.` })
-  } else checks.push(compare('klaviyo_orders', num(sk.orders), num(ko.orders), TOLERANCE.klaviyoOrders, `Klaviyo Placed Order against Shopify orders, ${period}`))
+  } else checks.push(compare('klaviyo_orders', num(sk.orders), num(ko.orders), t.klaviyoOrders, `Klaviyo Placed Order against Shopify orders, ${period}`))
 
   // 4. Is GA4 seeing the same purchases?
   const ga = await one(db, `SELECT sum(purchases) AS purchases FROM fact_ga4_daily WHERE date >= $1`, [since])
   checks.push(ga.purchases === null || ga.purchases === undefined || so.orders === null || so.orders === undefined
     ? skip('ga4_purchases', 'Needs both GA4 and Shopify synced.')
-    : compare('ga4_purchases', num(so.orders), num(ga.purchases), TOLERANCE.ga4Purchases, `GA4 purchases against Shopify orders, last ${days} days`))
+    : compare('ga4_purchases', num(so.orders), num(ga.purchases), t.ga4Purchases, `GA4 purchases against Shopify orders, last ${days} days`))
 
   // 5. Does the attributed revenue look believable?
   const fl = await one(db, `SELECT sum(revenue) AS revenue FROM fact_flow_daily WHERE date >= $1`, [since])
@@ -70,7 +83,7 @@ export async function runChecks(db: Tx): Promise<Check[]> {
   else {
     const share = round((num(fl.revenue) / num(so.net)) * 100)
     checks.push({
-      name: 'attributed_share', status: share > TOLERANCE.attributedShareFlag ? 'warn' : 'pass', expected: num(so.net), actual: num(fl.revenue), diffPct: share,
+      name: 'attributed_share', status: share > t.attributedShareFlag ? 'warn' : 'pass', expected: num(so.net), actual: num(fl.revenue), diffPct: share,
       detail: `Klaviyo attributes ${share}% of Shopify net revenue to flows. This is Klaviyo's attribution, not proof of causation.`,
     })
   }
@@ -83,22 +96,28 @@ export async function runChecks(db: Tx): Promise<Check[]> {
     checks.push(compare('flow_totals', num(w.recipients), num(f.recipients), 0.5, 'Daily flow recipients against Klaviyo’s flow totals'))
   }
 
-  // 7. Is anything stale?
-  const last = await db.query(`SELECT source, max(finished_at) AS at FROM meta_sync_run WHERE status <> 'failed' GROUP BY source`)
+  // 7. Is anything stale? A source whose latest entry is a disconnect is left out,
+  // so removing a source never turns into a stale warning two days later.
+  const last = await db.query(
+    `SELECT source, max(finished_at) AS at FROM meta_sync_run r WHERE status NOT IN ('failed', 'disconnected', 'running')
+       AND NOT EXISTS (SELECT 1 FROM meta_sync_run d WHERE d.source = r.source AND d.status = 'disconnected'
+         AND d.started_at >= (SELECT max(x.started_at) FROM meta_sync_run x WHERE x.source = r.source))
+     GROUP BY source`,
+  )
   if (!last.length) checks.push(skip('freshness', 'Nothing has synced yet.'))
   else {
     const ages = last.map((r) => ({ source: String(r.source), days: (Date.now() - new Date(r.at as string).getTime()) / 86400000 }))
-    const stale = ages.filter((a) => a.days > TOLERANCE.freshnessDays)
+    const stale = ages.filter((a) => a.days > t.freshnessDays)
     checks.push({
-      name: 'freshness', status: stale.length ? 'fail' : 'pass', expected: TOLERANCE.freshnessDays, actual: round(Math.max(...ages.map((a) => a.days))), diffPct: null,
-      detail: stale.length ? `Stale: ${stale.map((s) => s.source).join(', ')}.` : 'All connected sources synced within 2 days.',
+      name: 'freshness', status: stale.length ? 'fail' : 'pass', expected: t.freshnessDays, actual: round(Math.max(...ages.map((a) => a.days))), diffPct: null,
+      detail: stale.length ? `Stale: ${stale.map((s) => s.source).join(', ')}.` : `All connected sources synced within ${t.freshnessDays} day${t.freshnessDays === 1 ? '' : 's'}.`,
     })
   }
   return checks
 }
 
-export async function reconcile(db: Db) {
-  const checks = await runChecks(db)
+export async function reconcile(db: Db, t: Tolerances = tolerances()) {
+  const checks = await runChecks(db, t)
   const at = new Date().toISOString()
   await db.transaction(async (tx) => {
     for (const c of checks) {

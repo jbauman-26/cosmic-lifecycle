@@ -48,15 +48,15 @@ Run it every day from your own GitHub:
   quickstart: `# Cosmic Lifecycle: agent setup playbook
 
 This is the setup guide for any coding or chat agent installing Cosmic Lifecycle.
-A person starts it by pasting one line into their agent:
+A person with the CLI installed starts it by pasting one line into their agent:
 
-  Set up Cosmic Lifecycle using https://raw.githubusercontent.com/jbauman-26/cosmic-lifecycle/main/llms.txt
+  Set up Cosmic Lifecycle by following the output of lifecycle docs quickstart
 
 Follow this playbook in order, then stop and report what is live. Do not invent another setup flow.
 
 ## What it is
 
-A free, open source CLI that gives an agent a clean view of a Shopify brand's
+A free CLI that gives an agent a clean view of a Shopify brand's
 Klaviyo results. It syncs totals into a database the user owns, checks that the
 sources agree, and finds what to fix. It never sends a message, stores no
 customer records, and has no account or server of ours in the path.
@@ -71,8 +71,10 @@ customer records, and has no account or server of ours in the path.
 
 ## Fastest path to a trusted number
 
-1. Install:
-     npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
+1. Install. The CLI ships inside the Cosmic AI app and Cosmic Cloud, so most
+   people already have it. With access to the private repo, install it directly:
+     gh release download --repo jbauman-26/cosmic-lifecycle --pattern cosmic-lifecycle.tgz
+     npm install -g ./cosmic-lifecycle.tgz
 2. Show it working with no keys, on labeled sample data:
      lifecycle demo
 3. Set up the local database:
@@ -120,7 +122,7 @@ If the tool is not set up yet, follow \`lifecycle docs quickstart\` instead.
 1. Run \`lifecycle status --format json\` first, then \`lifecycle doctor --format json\` if anything looks wrong.
 2. Run \`lifecycle reconcile\` before quoting any number. If a check failed, say so first.
 3. For a standard number, use a verified metric: \`lifecycle metrics list\`, then \`lifecycle metrics run NAME --format json\`. The same metric always runs the same SQL, so answers stay comparable over time. Quote the metric name with the number.
-4. Write your own SQL only when no metric fits. Run \`lifecycle schema --format json\` first and never guess column names. Query with \`lifecycle query "SELECT ..." --format json\`. Queries are read-only and capped at 1,000 rows. Tell the user the number came from custom SQL, and show it.
+4. Write your own SQL only when no metric fits. Run \`lifecycle schema --format json\` first and never guess column names. Query with \`lifecycle query "SELECT ..." --format json\`. Queries are read-only and capped at 1,000 rows unless \`query.row_cap\` is set. Tell the user the number came from custom SQL, and show it.
 5. Report the sync warnings. Do not hide them from the user.
 6. For a fact only the live API has, such as the current flow list or Shopify's own order count, use a tool: \`lifecycle tools catalog\`, then \`lifecycle tools run TOOL --format json\`. These built-in tools are read-only and return no personal data. For images, video, voice or scraping, any Kie, fal, Apify or ScrapeCreators id also runs on the user's own account with that provider. Read \`lifecycle docs tools\` first: those jobs cost money and must never be started twice.
 7. Saved reports, dashboards and plans are in \`lifecycle files ls\`. Read one with \`lifecycle files cat PATH\`.
@@ -178,7 +180,8 @@ lifecycle connect shopify --store STORE --client-id ID --secret-env NAME
 lifecycle connect ga4 --property ID --client-id ID --secret-env NAME --refresh-token-env NAME
 lifecycle connect stripe --key-env NAME
 lifecycle connect meta --account ID --token-env NAME
-lifecycle sync [--since DATE]
+lifecycle sync [--since DATE] [--only SOURCE[,SOURCE]]
+lifecycle disconnect SOURCE [--delete-data]
 lifecycle schema [TABLE]
 lifecycle query "SELECT ..."
 lifecycle metrics list|show NAME|run NAME... [--days N]|candidates
@@ -203,6 +206,10 @@ lifecycle logs [--cloud] [--follow]
 lifecycle dashboard [--html FILE] [--days N]
 lifecycle status
 lifecycle config list|get|set|unset KEY [VALUE]
+  keys: registry.uri, deploy.repo, update.check,
+        reconcile.tolerance.klaviyo_orders (3), reconcile.tolerance.ga4_purchases (15),
+        reconcile.attributed_share_flag (60), reconcile.freshness_days (2),
+        query.row_cap (1000), metrics.default_days (90)
 lifecycle secrets list|set NAME --from-env VAR|delete NAME
 lifecycle mcp
 lifecycle doctor
@@ -341,7 +348,8 @@ Meta refused the token, or says it cannot read the ad account:
   then lifecycle connect meta --account ID --token-env NAME.
 
 Meta spend looks low for the last few days:
-  Meta restates recent days as late conversions arrive. Each sync pulls the last 90 days again,
+  Meta restates recent days as late conversions arrive. Each sync pulls the last 90 days
+  (metrics.default_days) again,
   so the numbers settle after a few syncs.
 
 Stripe says the key cannot read subscriptions:
@@ -350,5 +358,21 @@ Stripe says the key cannot read subscriptions:
 
 Flow report warning:
   An account with no sends has nothing to report. The warning clears once
-  flows have sent.`,
+  flows have sent.
+
+Error codes (the "code" field with --format json, and in lifecycle logs):
+  key_rejected     The source refused the saved key (401). Make a new key, then connect again.
+  rate_limited     The source asked to slow down (429) after the retries. Wait, then sync again.
+  scope_denied     Shopify refused a field or scope. Add the scope it names to the app, then connect again.
+  not_connected    sync --only or disconnect named a source that is not connected.
+  unknown_source   Not one of shopify, klaviyo, ga4, stripe, meta.
+
+Sync one source on its own schedule:
+  lifecycle sync --only meta
+  Each source keeps its own run in lifecycle logs. Reconcile runs after every sync.
+
+Remove a source:
+  lifecycle disconnect stripe removes its settings and saved keys and keeps its data.
+  Add --delete-data to delete what it loaded too. A key set in a LIFECYCLE_* variable
+  stays in use until you unset it.`,
 }

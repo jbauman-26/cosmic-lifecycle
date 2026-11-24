@@ -54,6 +54,8 @@ export const MIGRATIONS = [
     date DATE NOT NULL, campaign_id TEXT NOT NULL, campaign_name TEXT NOT NULL, spend NUMERIC NOT NULL, impressions BIGINT NOT NULL, clicks BIGINT NOT NULL,
     purchases NUMERIC NOT NULL, purchase_value NUMERIC NOT NULL, currency TEXT NOT NULL, account_id TEXT NOT NULL,
     source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, campaign_id))`,
+    // The error code of a failed run, such as key_rejected or rate_limited, so the app can say what went wrong without the raw reply.
+    `ALTER TABLE meta_sync_run ADD COLUMN IF NOT EXISTS code TEXT`,
     // Custom SQL that agents ran because no verified metric fit. Repeated ones become new metrics.
     `CREATE TABLE IF NOT EXISTS meta_custom_query (
     sql_hash TEXT PRIMARY KEY, sql TEXT NOT NULL, runs BIGINT NOT NULL DEFAULT 1, first_seen TIMESTAMPTZ NOT NULL, last_seen TIMESTAMPTZ NOT NULL)`,
