@@ -1,6 +1,6 @@
 # Cosmic Lifecycle and the Graphed CLI, command by command
 
-Graphed's CLI (0.0.24, checked 2026-11-07) runs your marketing on Graphed's cloud. Cosmic Lifecycle gives you the same command surface on your own machine, your own GitHub and your own database, and stores totals only. Every Graphed command has a Cosmic equivalent below. Where the two work differently, the Notes column says how and why.
+Graphed's CLI (0.0.26, checked 2026-11-24) runs your marketing on Graphed's cloud. Cosmic Lifecycle gives you the same command surface on your own machine, your own GitHub and your own database, and stores totals only. Every Graphed command has a Cosmic equivalent below. Where the two work differently, the Notes column says how and why.
 
 | Graphed | Cosmic Lifecycle | Notes |
 |---|---|---|
@@ -11,7 +11,7 @@ Graphed's CLI (0.0.24, checked 2026-11-07) runs your marketing on Graphed's clou
 | `deploy` | `deploy` | A private repo on your GitHub with a daily GitHub Actions sync. Prints the plan first; creates nothing without `--yes`. |
 | `projects list/create/delete` | `provision neon`, `deploy`, `config get deploy.repo` | `provision neon` creates the managed Postgres in your own Neon account; `deploy` creates the sync repo. Deleting either stays your call. |
 | `jobs list/run` | `jobs list/run` | Runs of the daily sync, with the success streak toward the 7-day release test. |
-| `logs` | `logs`, `logs --cloud` | Local sync history, or the log of the last GitHub Actions run. |
+| `logs`, `logs --follow` | `logs`, `logs --cloud`, `logs --follow` | Local sync history, or the log of the last GitHub Actions run. `--follow` waits for a running sync to finish, then shows its log. Graphed streams service logs line by line. A sync here is one short job, so there is no stream to tail. |
 | `services list` | `serve` | The dashboard and a read-only JSON API (`/api/metrics/:name`, `/api/reconcile`, `/api/flows`, `/api/audit`) on 127.0.0.1. |
 | `exec`, `dev run` | `exec -- COMMAND` | Runs any command with your keys and store settings in its environment, so a script or agent can use them without seeing or pasting them. |
 | `secrets set/list/delete` | `secrets set/list/delete` | macOS keychain or `LIFECYCLE_*` variables. `set` reads from an environment variable, never an argument. Values are never printed. |
@@ -19,6 +19,7 @@ Graphed's CLI (0.0.24, checked 2026-11-07) runs your marketing on Graphed's clou
 | 750+ managed source pipelines | `warehouse connect/sync`, `warehouse add-api`, `sources import NAME --csv FILE` | 97 Shopify-stack tools in the catalog, ranked by usage. 20 have warehouse connectors (dlt, one schema per tool), written from vendor docs and not yet run on a real account. Any REST API can be added from a spec. Anything else comes in as daily totals from CSV. Personal data is removed before loading unless you opt in. |
 | `warehouse schema/query`, `databases list/query` | `schema`, `query`, `warehouse schema/query` | Read-only, one statement, 1,000-row cap, system tables blocked. Warehouse queries on a local DuckDB file also block file and network access. |
 | `tools catalog/run/get/abort` | `tools catalog/run/get/runs` | Read-only Klaviyo and Shopify API tools on your own keys. Runs are saved and fetched by id. Calls finish in seconds, so there is nothing to abort. No credits and no markup. |
+| `tools run` with any `apify:`, `kie:`, `fal:` or `scrapecreators:` ref (0.0.26) | Not built | Graphed runs any actor, model or path from those four providers, listed or not. Cosmic has no image, video or scraping tools yet. |
 | `files ls/cat` | `files ls/cat` | Every report, dashboard and plan the CLI writes, kept by date. |
 | `storage upload/download/url` | `files put/get/path`, `files pull` | `pull` downloads the dashboard the daily sync uploads to your own private repo. No public URLs, because the numbers are a brand's revenue. |
 | MCP `whoami`, `list_source_catalog`, `explore_schema`, `query` | `lifecycle mcp` | Same names where they apply, plus `metric`, `list_metrics`, `metric_candidates`, `list_tool_catalog`, `run_tool`, `list_files`, `read_file`, `reconcile`, `revenue_per_flow`, `audit_flows`. |
@@ -29,7 +30,8 @@ Graphed's CLI (0.0.24, checked 2026-11-07) runs your marketing on Graphed's clou
 | `skills sync/status/push/delete/uninstall` | `skills sync/status/uninstall` | `/lifecycle` and `/lifecycle:kits:NAME` in Claude Code and Cursor. Kits and skills are edited in the registry rather than pushed per account. |
 | `docs` | `docs` | `quickstart`, `setup`, `agents`, `kits`, `commands`, `troubleshooting`. |
 | llms.txt | [llms.txt](../llms.txt) | Generated from `docs quickstart`. CI fails if they differ. |
-| `feedback` | `feedback` | A prefilled GitHub issue with versions only. |
+| `tickets open/list/show/respond/close/reopen/subscribe` (replaced `feedback` in 0.0.26) | `feedback` | A prefilled GitHub issue with versions only. Replies and status live on the issue. |
+| App home: six-step workspace checklist | `status`, `dashboard` | Six setup steps with done or to do, and the one command that finishes each. Hidden once all six are done. |
 | Update notices | `status` | Checks GitHub at most once a day. Turn off with `config set update.check false`. |
 | Forward-deployed engineers | [Setup with Jake at NorthSignal](https://northsignal.studio/lifecycle) | A person sets it up for you, starting with a free call. |
 
@@ -37,6 +39,6 @@ Graphed's CLI (0.0.24, checked 2026-11-07) runs your marketing on Graphed's clou
 
 - **Hosting.** A hosted pilot, Cosmic Cloud, runs the same CLI for brands that want it managed. Each brand gets its own database schema and role, encrypted keys, a daily sync and a dashboard behind sign-in. It is in pilot and onboards brands one at a time under signed terms. Setup starts with a call: https://northsignal.studio/lifecycle
 - **Where things run.** Graphed runs your jobs and services on its servers. Cosmic runs them on your machine and in your GitHub account, so there is no server of ours holding your data.
-- **How tools are paid for.** Graphed charges plan credits per tool call, across 233 tools from 13 providers. Cosmic's tools call Klaviyo and Shopify directly on your own keys, at no cost from us. It covers fewer providers, and only the ones lifecycle work needs.
+- **How tools are paid for.** Graphed charges plan credits per tool call, across 259 tools from 16 providers (their /tools page, 2026-11-24). Cosmic's tools call Klaviyo and Shopify directly on your own keys, at no cost from us. It covers fewer providers, and only the ones lifecycle work needs.
 - **How sources connect.** Graphed resells about 700 Fivetran pipelines into its ClickHouse warehouse. Cosmic connects four natively with reconcile checks (Klaviyo, Shopify, GA4, Stripe), loads 20 more raw into your own database with dlt (Apache 2.0), and lists 77 more as planned with a reason each. Raw loads strip personal data unless you pass --keep-personal-data.
 - **Price.** The CLI is free and MIT licensed. There is no paid plan.

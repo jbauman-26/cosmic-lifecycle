@@ -153,3 +153,21 @@ export function deployLogs(repo, tail = 60) {
     const lines = (r.stdout || r.stderr).trim().split('\n');
     return { repo, run: last, log: lines.slice(-tail).join('\n') };
 }
+// Waits for the newest run to finish. Reports each change of state once. Polls every 5 seconds for
+// up to 17 minutes, which is past the workflow's own 15-minute limit.
+export async function followRun(latest, onChange, wait = () => new Promise((r) => setTimeout(r, 5000)), maxPolls = 204) {
+    let seen = '';
+    for (let i = 0; i < maxPolls; i++) {
+        const run = latest();
+        if (!run)
+            throw new CliError('No runs yet.', 'lifecycle jobs run', 'no_runs');
+        const state = `${run.id}:${run.status}:${run.conclusion}`;
+        if (state !== seen)
+            onChange(run);
+        seen = state;
+        if (run.status === 'completed')
+            return run;
+        await wait();
+    }
+    throw new CliError('The run is still going after 17 minutes.', 'lifecycle jobs list', 'follow_timeout');
+}

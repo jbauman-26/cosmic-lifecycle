@@ -119,6 +119,7 @@ lifecycle provision neon --key-env NEON_API_KEY --yes   # a managed Postgres in 
 lifecycle deploy --repo YOU/lifecycle-sync
 lifecycle jobs list        # recent runs and the success streak
 lifecycle logs --cloud     # the last run's log
+lifecycle logs --follow    # wait for a running sync to finish, then show its log
 ```
 
 ## Check on it
