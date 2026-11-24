@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { aggregateOrders } from './sources/shopify.js';
+import { toDaily } from './sources/meta.js';
 import { aggregateCharges, aggregateSubscriptions } from './sources/stripe.js';
 import { isNoReportData, reportsVerified } from './sources/klaviyo.js';
 const now = () => new Date().toISOString();
@@ -171,5 +172,28 @@ export async function syncStripe(db, load) {
             unpriced ? `${unpriced} subscription items use tiered or metered prices and are left out of MRR.` : null,
         ].filter(Boolean);
         return { status: notes.length ? 'warning' : 'ok', rows, detail: notes.length ? notes.join(' ') : undefined };
+    });
+}
+// Meta restates recent days as late conversions come in, so every sync pulls the whole window again and
+// replaces it in one transaction. Days older than the window keep what the last sync that covered them saw.
+export async function writeMeta(db, rows, since, currency) {
+    const daily = toDaily(rows);
+    const at = now();
+    await db.transaction(async (tx) => {
+        await tx.query('DELETE FROM fact_meta_ads_daily WHERE date >= $1', [since]);
+        for (const d of daily) {
+            await tx.query(`INSERT INTO fact_meta_ads_daily VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (date, campaign_id) DO NOTHING`, [d.date, d.campaignId, d.campaignName, d.spend, d.impressions, d.clicks, d.purchases, d.purchaseValue, currency, at]);
+        }
+    });
+    return { rows: daily.length, spend: Math.round(daily.reduce((n, d) => n + d.spend, 0) * 100) / 100 };
+}
+export async function syncMeta(db, load, opts = {}) {
+    return recordRun(db, 'meta', async () => {
+        const until = opts.today ?? now().slice(0, 10);
+        const since = new Date(Date.parse(`${until}T00:00:00Z`) - ((opts.days ?? 90) - 1) * 86400000).toISOString().slice(0, 10);
+        const raw = await load(since, until);
+        const { rows } = await writeMeta(db, raw, since, opts.currency ?? '');
+        await setTotal(db, 'meta', 'rows_pulled', raw.length);
+        return rows ? { status: 'ok', rows } : { status: 'warning', rows, detail: `Meta returned no campaign activity from ${since} to ${until}.` };
     });
 }

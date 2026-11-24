@@ -1,17 +1,6 @@
 export const READINESS_LEGEND = 'Readiness: native = built in with reconcile checks. tested = warehouse connector run on a real account. built = connector written from the vendor API docs, not yet run on a real account. planned = no connector yet; use lifecycle sources import meanwhile.';
 export const WAREHOUSE_CATALOG = [
     {
-        "slug": "meta-ads",
-        "name": "Meta Ads (Facebook and Instagram)",
-        "category": "ads",
-        "readiness": "planned",
-        "why": "#2 of 100 tools Shopify stores use. StoreLeads: detected on 738,495 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/technology/Facebook%20Pixel",
-        "docs": "https://developers.facebook.com/docs/marketing-apis",
-        "credentials": [],
-        "params": [],
-        "notes": "Needs an OAuth sign-in flow, not built yet. CSV import meanwhile."
-    },
-    {
         "slug": "google-ads",
         "name": "Google Ads",
         "category": "ads",

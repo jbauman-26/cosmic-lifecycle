@@ -142,7 +142,7 @@ lifecycle tools providers                        # Kie, fal, Apify and ScrapeCre
 lifecycle tools run kie:gpt-image-2-text-to-image --input '{"prompt":"A red running shoe"}' --wait
 lifecycle exec -- node my-report.js              # run a script with your keys in its environment
 lifecycle sources import meta_ads --csv ads.csv  # any other tool's daily totals
-lifecycle sources catalog --category reviews      # 97 Shopify-stack tools, ranked by usage
+lifecycle sources catalog --category reviews      # 96 Shopify-stack tools, ranked by usage
 lifecycle warehouse connect gorgias --secret api_key=GORGIAS_KEY --set subdomain=you --set username=you@store.com
 lifecycle warehouse sync && lifecycle warehouse query "select status, count(*) from src_gorgias.tickets group by 1"
 lifecycle files ls                               # every saved report, dashboard and plan
@@ -168,6 +168,7 @@ This is an early release. Here is what has and has not been tested.
 - A real brand's flow revenue, because our test send had no conversions.
 - The `flow_totals` check, because Klaviyo has returned no totals for our test flow yet.
 - GA4 with live data.
+- Meta Ads on any real ad account. The connector was written from the Ads Insights API docs and is covered by unit tests against recorded answers only.
 - Stripe on a live account. Refunds, several currencies and tiered prices are covered by unit tests only.
 - `deploy` running for days on end.
 

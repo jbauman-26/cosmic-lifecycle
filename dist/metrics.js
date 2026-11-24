@@ -24,6 +24,11 @@ const STRIPE_STARTED = `(SELECT coalesce(sum(started), 0) FROM fact_stripe_subsc
 // $1 is unused here, since MRR is a point in time, but every metric takes it.
 const STRIPE_MRR = `(SELECT mrr FROM fact_stripe_mrr WHERE date = (SELECT max(date) FROM fact_stripe_mrr) AND $1::date IS NOT NULL ORDER BY active_subscriptions DESC, currency LIMIT 1)`;
 const CCY_NOTE = 'Stripe amounts are in the account\'s main currency for the window: the one with the most charges. Other currencies are left out, not converted.';
+const META_SPEND = `(SELECT coalesce(sum(spend), 0) FROM fact_meta_ads_daily WHERE date >= $1)`;
+const META_VALUE = `(SELECT coalesce(sum(purchase_value), 0) FROM fact_meta_ads_daily WHERE date >= $1)`;
+const META_PURCHASES = `(SELECT coalesce(sum(purchases), 0) FROM fact_meta_ads_daily WHERE date >= $1)`;
+const META_CLAIM_NOTE = 'Purchases and purchase value are what Meta attributes to its own ads, in its own attribution window. They are a claim, not orders. Do not add them to Shopify revenue or to email revenue.';
+const META_CCY_NOTE = 'Spend is in the ad account\'s currency and is not converted. It is shown with a dollar sign either way.';
 const single = (expr) => `SELECT ${expr} AS value, NULL::numeric AS numerator, NULL::numeric AS denominator`;
 export const METRICS = [
     { name: 'shopify_orders', title: 'Shopify orders', description: 'Orders placed in Shopify in the window.', unit: 'count', needs: ['shopify'], sql: single(ORDERS) },
@@ -43,10 +48,14 @@ export const METRICS = [
     { name: 'stripe_subscriptions_started', title: 'Subscriptions started', description: 'Stripe subscriptions created in the window.', unit: 'count', needs: ['stripe'], sql: single(STRIPE_STARTED) },
     { name: 'stripe_subscriptions_ended', title: 'Subscriptions ended', description: 'Stripe subscriptions that ended in the window: canceled and gone, not just set to cancel later.', unit: 'count', needs: ['stripe'], sql: single(STRIPE_ENDED) },
     { name: 'stripe_mrr', title: 'Stripe MRR', description: 'Monthly recurring revenue at the last sync: active and past_due subscriptions at list price, scaled to a month. Ignores the window.', unit: 'usd', needs: ['stripe'], sql: single(STRIPE_MRR), notes: ['Discounts are not applied. Tiered and metered prices are left out; lifecycle sync reports how many.', CCY_NOTE] },
+    { name: 'meta_ad_spend', title: 'Meta ad spend', description: 'What the Meta ad account spent in the window.', unit: 'usd', needs: ['meta'], sql: single(META_SPEND), notes: [META_CCY_NOTE] },
+    { name: 'meta_attributed_purchases', title: 'Meta attributed purchases', description: 'Purchases Meta attributes to its ads in the window.', unit: 'count', needs: ['meta'], sql: single(META_PURCHASES), notes: [META_CLAIM_NOTE] },
+    { name: 'meta_reported_roas', title: 'Meta reported ROAS', description: 'Purchase value Meta attributes to its ads, divided by spend. Meta\'s own claim.', unit: 'ratio', needs: ['meta'], sql: ratio(META_VALUE, META_SPEND), notes: [META_CLAIM_NOTE, META_CCY_NOTE] },
+    { name: 'marketing_efficiency_ratio', title: 'Marketing efficiency ratio', description: 'Shopify net revenue divided by Meta ad spend. All store revenue over ad spend, with no attribution at all.', unit: 'ratio', needs: ['shopify', 'meta'], sql: ratio(NET, META_SPEND), notes: ['Only Meta spend is counted. Other paid channels are not in the spend, so the true ratio is lower if you run them.', 'Assumes the store and the ad account use the same currency.', 'Meta days follow the ad account\'s time zone, so a single day can differ slightly from Shopify\'s. Use a window of a week or more.'] },
     { name: 'ga4_purchase_rate', title: 'GA4 purchase rate', description: 'GA4 purchases divided by GA4 sessions.', unit: 'percent', needs: ['ga4'], sql: ratio(PURCHASES, SESSIONS, 100) },
 ];
 // Which table proves each source has synced at all.
-const SOURCE_TABLE = { shopify: 'fact_orders_daily', klaviyo: 'fact_flow_daily', ga4: 'fact_ga4_daily', stripe: 'fact_stripe_daily' };
+const SOURCE_TABLE = { shopify: 'fact_orders_daily', klaviyo: 'fact_flow_daily', ga4: 'fact_ga4_daily', stripe: 'fact_stripe_daily', meta: 'fact_meta_ads_daily' };
 export function findMetric(name) {
     const m = METRICS.find((x) => x.name === name);
     if (!m)
@@ -98,6 +107,8 @@ export function formatValue(unit, v) {
         return `$${v.toFixed(4)} per recipient`;
     if (unit === 'percent')
         return `${v.toFixed(2)}%`;
+    if (unit === 'ratio')
+        return `${v.toFixed(2)}x`;
     return v.toLocaleString('en-US');
 }
 // Custom queries run more than once are candidates for a new verified metric.

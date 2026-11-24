@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { Db, Tx } from './db.js'
 import { aggregateOrders, type RawOrder } from './sources/shopify.js'
 import type { Ga4Day } from './sources/ga4.js'
+import { toDaily, type RawInsight } from './sources/meta.js'
 import { aggregateCharges, aggregateSubscriptions, type RawCharge, type RawSubscription } from './sources/stripe.js'
 import { Klaviyo, isNoReportData, reportsVerified, type FlowDailyRow } from './sources/klaviyo.js'
 
@@ -209,5 +210,30 @@ export async function syncStripe(db: Db, load: { charges: () => Promise<RawCharg
       unpriced ? `${unpriced} subscription items use tiered or metered prices and are left out of MRR.` : null,
     ].filter(Boolean)
     return { status: notes.length ? ('warning' as const) : ('ok' as const), rows, detail: notes.length ? notes.join(' ') : undefined }
+  })
+}
+
+// Meta restates recent days as late conversions come in, so every sync pulls the whole window again and
+// replaces it in one transaction. Days older than the window keep what the last sync that covered them saw.
+export async function writeMeta(db: Db, rows: RawInsight[], since: string, currency: string) {
+  const daily = toDaily(rows)
+  const at = now()
+  await db.transaction(async (tx: Tx) => {
+    await tx.query('DELETE FROM fact_meta_ads_daily WHERE date >= $1', [since])
+    for (const d of daily) {
+      await tx.query(`INSERT INTO fact_meta_ads_daily VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (date, campaign_id) DO NOTHING`, [d.date, d.campaignId, d.campaignName, d.spend, d.impressions, d.clicks, d.purchases, d.purchaseValue, currency, at])
+    }
+  })
+  return { rows: daily.length, spend: Math.round(daily.reduce((n, d) => n + d.spend, 0) * 100) / 100 }
+}
+
+export async function syncMeta(db: Db, load: (since: string, until: string) => Promise<RawInsight[]>, opts: { days?: number; currency?: string; today?: string } = {}) {
+  return recordRun(db, 'meta', async () => {
+    const until = opts.today ?? now().slice(0, 10)
+    const since = new Date(Date.parse(`${until}T00:00:00Z`) - ((opts.days ?? 90) - 1) * 86400000).toISOString().slice(0, 10)
+    const raw = await load(since, until)
+    const { rows } = await writeMeta(db, raw, since, opts.currency ?? '')
+    await setTotal(db, 'meta', 'rows_pulled', raw.length)
+    return rows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Meta returned no campaign activity from ${since} to ${until}.` }
   })
 }

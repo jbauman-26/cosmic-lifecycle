@@ -4,7 +4,7 @@ import { getSecret } from './secrets.js';
 import { sourceStatus } from './sources-catalog.js';
 import { trustLine } from './reconcile.js';
 import { targetDir } from './skills.js';
-export const SECRET_FOR = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret', stripe: 'stripe-read-key' };
+export const SECRET_FOR = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret', stripe: 'stripe-read-key', meta: 'meta-ads-token' };
 // The six steps from an empty machine to a daily sync an agent can use, in the order to do them.
 // Each unfinished step names the one command that finishes it.
 export function setupChecklist(i) {

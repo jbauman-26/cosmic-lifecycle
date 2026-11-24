@@ -81,8 +81,11 @@ describe('verified metrics', () => {
     await db.query(`INSERT INTO fact_stripe_daily VALUES (CURRENT_DATE - 5, 'usd', 10, 500, 50, 450, 2, 4, 6, 0, now())`)
     await db.query(`INSERT INTO fact_stripe_subscriptions_daily VALUES (CURRENT_DATE - 5, 'usd', 3, 1, now())`)
     await db.query(`INSERT INTO fact_stripe_mrr VALUES (CURRENT_DATE, 'usd', 7, 210, 0, now())`)
+    await db.query(`INSERT INTO fact_meta_ads_daily VALUES (CURRENT_DATE - 5, 'c1', 'Prospecting', 250, 10000, 200, 6, 750, 'USD', now())`)
     for (const m of METRICS) expect((await runMetric(db, m.name, 90)).status, m.name).toBe('ok')
     expect((await runMetric(db, 'ga4_purchase_rate', 90)).value).toBe(2)
+    expect(Number((await runMetric(db, 'meta_reported_roas', 90)).value)).toBe(3)
+    expect(Number((await runMetric(db, 'marketing_efficiency_ratio', 90)).value)).toBe(4)
   })
 
   it('rejects unknown metrics and bad windows', async () => {
@@ -95,6 +98,7 @@ describe('verified metrics', () => {
     expect(formatValue('usd', 1234.5)).toBe('$1,234.50')
     expect(formatValue('percent', 15)).toBe('15.00%')
     expect(formatValue('count', 1200)).toBe('1,200')
+    expect(formatValue('ratio', 3.456)).toBe('3.46x')
     expect(formatValue('usd', null)).toBe('no value')
     expect(sinceDate(1, Date.UTC(2026, 0, 2))).toBe('2026-01-01')
   })
@@ -102,7 +106,7 @@ describe('verified metrics', () => {
 
 describe('source catalog and setup prompts', () => {
   it('lists only sources with a working connector', () => {
-    expect(CATALOG.map((s) => s.slug)).toEqual(['klaviyo', 'shopify', 'ga4', 'stripe'])
+    expect(CATALOG.map((s) => s.slug)).toEqual(['klaviyo', 'shopify', 'ga4', 'stripe', 'meta'])
   })
 
   it('reports connected sources and the next step for the rest', async () => {

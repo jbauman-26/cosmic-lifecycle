@@ -5,6 +5,7 @@ import { Klaviyo } from '../sources/klaviyo.js';
 import { shopifyToken } from '../sources/shopify.js';
 import { ga4AccessToken, fetchGa4Daily } from '../sources/ga4.js';
 import { Stripe, isRestrictedKey, stripeMode } from '../sources/stripe.js';
+import { MetaAds, normalizeAccountId } from '../sources/meta.js';
 const fromEnv = (name) => {
     const value = name ? process.env[name] : undefined;
     if (!value)
@@ -67,4 +68,17 @@ export async function connectStripe(opts) {
         subscriptions,
         note: isRestrictedKey(key) ? null : 'This is a full secret key, which can also write. A restricted key with Read on Charges and Subscriptions is safer.',
     };
+}
+export async function connectMeta(opts) {
+    if (!opts.account)
+        throw new CliError('The ad account id is required.', 'lifecycle connect meta --account 1234567890 --token-env META_ADS_TOKEN');
+    const account = normalizeAccountId(opts.account);
+    const token = opts.tokenEnv ? fromEnv(opts.tokenEnv) : getSecret('meta-ads-token');
+    if (!token)
+        throw new CliError('No Meta token given.', 'lifecycle connect meta --account ID --token-env META_ADS_TOKEN', 'missing_secret');
+    const a = await new MetaAds(token, account).check();
+    if (opts.tokenEnv)
+        setSecret('meta-ads-token', token);
+    writeConfig({ ...readConfig(), meta: { account: a.id, name: a.name, currency: a.currency, timezone: a.timezone } });
+    return { connected: true, account: a.id, name: a.name, currency: a.currency, timezone: a.timezone };
 }

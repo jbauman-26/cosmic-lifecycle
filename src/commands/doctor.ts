@@ -6,6 +6,7 @@ import { openDb, type Db } from '../db.js'
 import { Klaviyo, reportsVerified } from '../sources/klaviyo.js'
 import { shopifyToken } from '../sources/shopify.js'
 import { Stripe } from '../sources/stripe.js'
+import { MetaAds } from '../sources/meta.js'
 
 type Check = { name: string; ok: boolean; detail: string; next?: string }
 
@@ -41,6 +42,18 @@ export async function doctor(): Promise<{ healthy: boolean; checks: Check[] }> {
   }
 
   // Stripe is optional, so it is only checked once connected.
+  // Meta Ads is optional too.
+  const metaToken = getSecret('meta-ads-token')
+  if (config.meta && !metaToken) checks.push({ name: 'meta', ok: false, detail: 'Connected, but the token is missing.', next: 'lifecycle connect meta --account ID --token-env NAME' })
+  else if (config.meta && metaToken) {
+    try {
+      const a = await new MetaAds(metaToken, config.meta.account).check()
+      checks.push({ name: 'meta', ok: true, detail: `Token reads insights for ${a.name || a.id} in ${a.currency}` })
+    } catch (e) {
+      checks.push({ name: 'meta', ok: false, detail: e instanceof Error ? e.message : 'Token was refused.', next: 'Create a new system user token with ads_read, then lifecycle connect meta --account ID --token-env NAME' })
+    }
+  }
+
   const stripeKey = getSecret('stripe-read-key')
   if (config.stripe && !stripeKey) checks.push({ name: 'stripe', ok: false, detail: 'Connected, but the key is missing.', next: 'lifecycle connect stripe --key-env NAME' })
   else if (config.stripe && stripeKey) {

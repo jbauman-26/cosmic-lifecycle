@@ -49,6 +49,11 @@ export const MIGRATIONS = [
   `CREATE TABLE IF NOT EXISTS fact_stripe_mrr (
     date DATE NOT NULL, currency TEXT NOT NULL, active_subscriptions BIGINT NOT NULL, mrr NUMERIC NOT NULL, unpriced_items BIGINT NOT NULL,
     source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, currency))`,
+  // Meta's own numbers for its own ads. Purchases and their value are what Meta attributes to itself, not orders.
+  `CREATE TABLE IF NOT EXISTS fact_meta_ads_daily (
+    date DATE NOT NULL, campaign_id TEXT NOT NULL, campaign_name TEXT NOT NULL, spend NUMERIC NOT NULL, impressions BIGINT NOT NULL, clicks BIGINT NOT NULL,
+    purchases NUMERIC NOT NULL, purchase_value NUMERIC NOT NULL, currency TEXT NOT NULL,
+    source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, campaign_id))`,
   // Custom SQL that agents ran because no verified metric fit. Repeated ones become new metrics.
   `CREATE TABLE IF NOT EXISTS meta_custom_query (
     sql_hash TEXT PRIMARY KEY, sql TEXT NOT NULL, runs BIGINT NOT NULL DEFAULT 1, first_seen TIMESTAMPTZ NOT NULL, last_seen TIMESTAMPTZ NOT NULL)`,
@@ -57,6 +62,6 @@ export const MIGRATIONS = [
 export const PUBLIC_TABLES = [
   'dim_flow', 'dim_campaign', 'dim_segment', 'fact_flow_daily',
   'fact_orders_daily', 'fact_cohort_monthly', 'fact_klaviyo_orders_daily', 'fact_flow_window', 'fact_ga4_daily',
-  'fact_stripe_daily', 'fact_stripe_subscriptions_daily', 'fact_stripe_mrr',
+  'fact_stripe_daily', 'fact_stripe_subscriptions_daily', 'fact_stripe_mrr', 'fact_meta_ads_daily',
   'meta_sync_run', 'meta_source_total', 'meta_source_window', 'meta_reconcile_result',
 ] as const

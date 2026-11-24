@@ -2,7 +2,7 @@
 import { Command } from 'commander'
 import { emit, emitError, type Format } from './output.js'
 import { init } from './commands/init.js'
-import { connectGa4, connectKlaviyo, connectShopify, connectStripe } from './commands/connect.js'
+import { connectGa4, connectKlaviyo, connectMeta, connectShopify, connectStripe } from './commands/connect.js'
 import { doctor } from './commands/doctor.js'
 import { openDb, migrate } from './db.js'
 import { readConfig } from './config.js'
@@ -13,7 +13,8 @@ import { fetchGa4Daily, ga4AccessToken } from './sources/ga4.js'
 import { reconcile } from './reconcile.js'
 import { Klaviyo } from './sources/klaviyo.js'
 import { Stripe } from './sources/stripe.js'
-import { syncGa4, syncKlaviyo, syncShopify, syncStripe, type SourceResult } from './sync.js'
+import { MetaAds } from './sources/meta.js'
+import { syncGa4, syncKlaviyo, syncMeta, syncShopify, syncStripe, type SourceResult } from './sync.js'
 import { runQuery } from './query.js'
 import { PUBLIC_TABLES } from './schema.js'
 import { VERSION } from './version.js'
@@ -88,6 +89,11 @@ connect.command('stripe').description('Read-only: charges, refunds, subscription
   emit(format(), r, () => [`Connected to Stripe (${r.mode} mode)${r.subscriptions ? '' : '. This key cannot read subscriptions, so MRR is off.'}`, r.note].filter(Boolean).join('\n'))
 }))
 
+connect.command('meta').description('Read-only: daily spend and results by campaign. No audiences, people or creative.').option('--account <id>', 'ad account id from Ads Manager').option('--token-env <name>', 'environment variable holding a system user token with ads_read').action(run(async (opts) => {
+  const r = await connectMeta(opts)
+  emit(format(), r, () => `Connected to Meta ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).\nNext: lifecycle sync`)
+}))
+
 program.command('sync').description('Pull fresh totals from connected sources').option('--since <date>', 'start of the Klaviyo report window').action(run(async (opts) => {
   const config = readConfig()
   const db = await openDb()
@@ -114,6 +120,11 @@ program.command('sync').description('Pull fresh totals from connected sources').
     if (config.stripe && stripeKey) {
       const stripe = new Stripe(stripeKey)
       results.push(await syncStripe(db, { charges: () => stripe.charges(), subscriptions: () => stripe.subscriptions() }))
+    }
+    const metaToken = getSecret('meta-ads-token')
+    if (config.meta && metaToken) {
+      const meta = new MetaAds(metaToken, config.meta.account)
+      results.push(await syncMeta(db, (since, until) => meta.insights(since, until), { currency: config.meta.currency }))
     }
     if (!results.length) throw new CliError('No sources connected.', 'lifecycle connect klaviyo --key-env NAME')
     const check = await reconcile(db)
@@ -396,7 +407,7 @@ program.command('deploy').description('Run the daily sync from your own GitHub a
     emit(format(), plan, () => [`This would create:`, ...plan.creates.map((c) => `  ${c}`), `Secrets to set: ${plan.secrets.join(', ')}`, `Cost: ${plan.expectedCost}`, `Nothing was created. Add --yes to go ahead.`].join('\n'))
     return
   }
-  const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key' } as const
+  const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token' } as const
   const secrets: Record<string, string> = {}
   const wh = new Map(warehouseSecrets(config).map((w) => [w.env, w]))
   for (const s of plan.secrets) {

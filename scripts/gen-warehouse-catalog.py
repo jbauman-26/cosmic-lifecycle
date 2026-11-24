@@ -13,7 +13,7 @@ research = json.loads((ROOT / "connectors/research-2026-11-07.json").read_text()
 specs = {p.stem: json.loads(p.read_text()) for p in sorted((ROOT / "connectors/specs").glob("*.json"))}
 
 # Built into the CLI already, with reconcile checks.
-NATIVE = {"klaviyo", "google-analytics-4", "stripe"}
+NATIVE = {"klaviyo", "google-analytics-4", "stripe", "meta-ads-facebook-and-instagram"}
 SHORT = {
     "meta-ads-facebook-and-instagram": "meta-ads",
     "amazon-seller-central-sp-api": "amazon-seller-central",
