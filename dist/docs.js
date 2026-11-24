@@ -113,7 +113,7 @@ If the tool is not set up yet, follow \`lifecycle docs quickstart\` instead.
 3. For a standard number, use a verified metric: \`lifecycle metrics list\`, then \`lifecycle metrics run NAME --format json\`. The same metric always runs the same SQL, so answers stay comparable over time. Quote the metric name with the number.
 4. Write your own SQL only when no metric fits. Run \`lifecycle schema --format json\` first and never guess column names. Query with \`lifecycle query "SELECT ..." --format json\`. Queries are read-only and capped at 1,000 rows. Tell the user the number came from custom SQL, and show it.
 5. Report the sync warnings. Do not hide them from the user.
-6. For a fact only the live API has, such as the current flow list or Shopify's own order count, use a tool: \`lifecycle tools catalog\`, then \`lifecycle tools run TOOL --format json\`. Tools are read-only and return no personal data.
+6. For a fact only the live API has, such as the current flow list or Shopify's own order count, use a tool: \`lifecycle tools catalog\`, then \`lifecycle tools run TOOL --format json\`. These built-in tools are read-only and return no personal data. For images, video, voice or scraping, any Kie, fal, Apify or ScrapeCreators id also runs on the user's own account with that provider. Read \`lifecycle docs tools\` first: those jobs cost money and must never be started twice.
 7. Saved reports, dashboards and plans are in \`lifecycle files ls\`. Read one with \`lifecycle files cat PATH\`.
 8. For a named job, such as a flow audit, use a kit: \`lifecycle kits search "flow audit"\`, then \`lifecycle kits add NAME\`, then follow its AGENT.md through the Verify checklist.
 
@@ -172,7 +172,7 @@ lifecycle schema [TABLE]
 lifecycle query "SELECT ..."
 lifecycle metrics list|show NAME|run NAME... [--days N]|candidates
 lifecycle sources list|catalog|import NAME --csv FILE [--date-column NAME]
-lifecycle tools catalog|run TOOL [--input JSON]|get RUN [--out FILE]|runs
+lifecycle tools catalog [--query TEXT]|providers|run TOOL [--input JSON] [--wait] [--timeout SECONDS] [--out FILE]|get RUN [--out FILE]|runs
 lifecycle exec -- COMMAND [ARGS]
 lifecycle serve [--port N]
 lifecycle provision neon --key-env NEON_API_KEY [--name N] [--region R] [--yes]
@@ -199,6 +199,60 @@ lifecycle warehouse show|connect|sync|schema|query|list|disconnect|add-api
 lifecycle docs quickstart|setup|agents|kits|commands|warehouse|troubleshooting
 
 Add --format json to any command.`,
+    tools: `# Tools
+
+Two kinds of tool run from \`lifecycle tools run\`.
+
+## Built-in tools
+
+Read-only calls to Klaviyo and Shopify on the store's own keys. They finish in seconds and return no personal data.
+
+\`\`\`sh
+lifecycle tools catalog
+lifecycle tools catalog --query orders
+lifecycle tools run shopify.order_count
+\`\`\`
+
+## Open provider refs
+
+Any model, actor or path from four providers runs by its id, with no list to be on. Each one bills the account the key belongs to. Cosmic adds no markup and holds no account.
+
+| Ref | Key | Where ids are listed |
+|---|---|---|
+| \`kie:<model>\` | \`kie-api-key\` | https://kie.ai/market |
+| \`fal:<endpoint_id>\` | \`fal-key\` | https://fal.ai/models |
+| \`apify:<owner~actor>\` | \`apify-token\` | https://apify.com/store |
+| \`scrapecreators:<path>\` | \`scrapecreators-key\` | https://docs.scrapecreators.com |
+
+\`lifecycle tools providers\` shows which keys are set. Save a key from an environment variable, never from the command line:
+
+\`\`\`sh
+lifecycle secrets set kie-api-key --from-env KIE_KEY
+\`\`\`
+
+Input is the JSON that provider's own page documents for that id. Read that page before the first run.
+
+\`\`\`sh
+lifecycle tools run kie:gpt-image-2-text-to-image --input '{"prompt":"A red running shoe on white","aspect_ratio":"3:4"}' --wait --out shoe.json
+lifecycle tools run fal:fal-ai/minimax/voice-clone --input '{"audio_url":"https://..."}' --wait
+lifecycle tools run apify:apimaestro~linkedin-profile-posts --input '{"username":"someone"}' --wait --timeout 600
+lifecycle tools run scrapecreators:v1/reddit/search --input '{"query":"welcome email"}'
+\`\`\`
+
+- Kie, fal and Apify jobs finish later. Without \`--wait\` the command prints a run id and returns. \`lifecycle tools get RUN\` checks the job and saves the result when it is done.
+- ScrapeCreators answers in the same call. Input becomes query parameters. Pass \`--method POST\` for its POST endpoints.
+- Apify output is the run's dataset, up to 1,000 items. The rest stay in the dataset on Apify.
+- Kie chat models answer directly and are not supported. Use image, video and audio models.
+- A finished run shows what it cost when the provider reports it: Kie and ScrapeCreators in credits, Apify in US dollars. fal does not report a cost.
+
+## Rules for agents
+
+1. **Never run a job twice to get its result.** If \`--wait\` times out, the job is still going and still billing. Check it with \`lifecycle tools get RUN\`. Starting it again pays twice.
+2. If a start fails with "No answer from the provider", look in that provider's dashboard before trying again. The job may have started.
+3. These jobs cost the user money. Say what you are about to run and why before a batch.
+4. Scrapers return public profiles and posts. That is personal data. Do not load it into the warehouse, and keep only what the task needs.
+5. Open refs are not in the MCP server. They run from the command line only, where the user can see each call.
+`,
     warehouse: `# The warehouse
 
 Raw tables from the tools a store runs on, one schema per source
