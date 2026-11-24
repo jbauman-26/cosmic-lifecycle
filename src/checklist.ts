@@ -13,12 +13,13 @@ export type Checklist = { steps: Step[]; done: number; total: number }
 
 // The six steps from an empty machine to a daily sync an agent can use, in the order to do them.
 // Each unfinished step names the one command that finishes it.
-export function setupChecklist(i: { setUp: boolean; sources: Pick<SourceStatus, 'slug' | 'connected' | 'lastSync'>[]; trust: 'unchecked' | 'failed' | 'passed' | null; deployed: boolean; skills: boolean }): Checklist {
+export function setupChecklist(i: { setUp: boolean; sources: Pick<SourceStatus, 'slug' | 'connected' | 'lastStatus'>[]; trust: 'unchecked' | 'failed' | 'passed' | null; deployed: boolean; skills: boolean }): Checklist {
   const has = (slug: string) => i.sources.some((s) => s.slug === slug && s.connected)
   const steps: Step[] = [
     { step: 'Set up the database', done: i.setUp, next: 'lifecycle init' },
     { step: 'Connect Shopify and Klaviyo', done: has('shopify') && has('klaviyo'), next: 'lifecycle connect' },
-    { step: 'Run the first sync', done: i.sources.some((s) => s.lastSync), next: 'lifecycle sync' },
+    // A failed or still-running attempt leaves a timestamp too, so only a finished sync that loaded data counts.
+    { step: 'Run the first sync', done: i.sources.some((s) => s.lastStatus === 'ok' || s.lastStatus === 'warning'), next: 'lifecycle sync' },
     { step: 'Prove the numbers agree', done: i.trust === 'passed', next: i.trust === 'failed' ? 'lifecycle reconcile, then fix the failed checks it names' : 'lifecycle reconcile' },
     { step: 'Install the skills for your agent', done: i.skills, next: 'lifecycle skills sync' },
     { step: 'Deploy the daily sync', done: i.deployed, next: 'lifecycle deploy --repo OWNER/NAME' },

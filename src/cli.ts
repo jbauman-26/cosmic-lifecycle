@@ -26,7 +26,7 @@ import { CATALOG, CUSTOM_SOURCE_NOTE, kitPrompt, sourceStatus } from './sources-
 import type { Config } from './config.js'
 import { startMcp } from './mcp.js'
 import { runDemo } from './demo.js'
-import { deploy, deployLogs, deployPlan, deployRun, deployStatus, followRun, warehouseSecrets, writeProject } from './deploy.js'
+import { deploy, deployLogs, deployPlan, deployRun, deployRunById, deployStatus, followRun, warehouseSecrets, writeProject } from './deploy.js'
 import { getSetting, listSettings, setSetting, unsetSetting } from './config.js'
 import { deleteSecret, secretStatus, setSecret, SECRET_NAMES, type SecretName } from './secrets.js'
 import { buildDashboard, dashboardHtml } from './dashboard.js'
@@ -426,14 +426,15 @@ program.command('logs').description('Recent sync runs on this machine. --cloud s
   .option('--limit <n>', 'runs to show', '10')
   .option('--repo <owner/name>')
   .action(run(async (opts) => {
+    let followed: Awaited<ReturnType<typeof followRun>> | undefined
     if (opts.follow) {
       const repo = opts.repo ?? readConfig().deploy?.repo
       const text = format() === 'text'
-      const last = await followRun(() => deployStatus(repo, 1).runs[0], (r) => { if (text) console.error(`${new Date().toISOString().slice(11, 19)}  ${r.conclusion ?? r.status}`) })
-      if (last.conclusion !== 'success') process.exitCode = 1
+      followed = await followRun(() => deployStatus(repo, 1).runs[0], (id) => deployRunById(repo, id), (r) => { if (text) console.error(`${new Date().toISOString().slice(11, 19)}  ${r.conclusion ?? r.status}`) })
+      if (followed.conclusion !== 'success') process.exitCode = 1
     }
     if (opts.cloud || opts.follow) {
-      const r = deployLogs(opts.repo ?? readConfig().deploy?.repo)
+      const r = deployLogs(opts.repo ?? readConfig().deploy?.repo, 60, followed)
       emit(format(), r, () => `${r.run.url}\n${r.log}`)
       return
     }

@@ -162,7 +162,7 @@ describe('provision', () => {
 })
 
 describe('setup checklist', () => {
-  const src = (slug: string, connected: boolean, lastSync: string | null = null) => ({ slug, connected, lastSync })
+  const src = (slug: string, connected: boolean, lastStatus: string | null = null) => ({ slug, connected, lastStatus })
 
   it('starts at zero with the first command to run', () => {
     const c = setupChecklist({ setUp: false, sources: [], trust: null, deployed: false, skills: false })
@@ -173,7 +173,7 @@ describe('setup checklist', () => {
   })
 
   it('needs both Shopify and Klaviyo, and a passing reconcile', () => {
-    const c = setupChecklist({ setUp: true, sources: [src('shopify', true, '2026-11-24T09:17:00.000Z'), src('klaviyo', false)], trust: 'failed', deployed: false, skills: true })
+    const c = setupChecklist({ setUp: true, sources: [src('shopify', true, 'warning'), src('klaviyo', false)], trust: 'failed', deployed: false, skills: true })
     const by = Object.fromEntries(c.steps.map((s) => [s.step, s]))
     expect(by['Connect Shopify and Klaviyo']!.done).toBe(false)
     expect(by['Run the first sync']!.done).toBe(true)
@@ -182,8 +182,17 @@ describe('setup checklist', () => {
     expect(c.done).toBe(3)
   })
 
+  it('does not count a failed or running sync as the first sync', () => {
+    for (const status of ['failed', 'running']) {
+      const c = setupChecklist({ setUp: true, sources: [src('shopify', true, status), src('klaviyo', true, null)], trust: null, deployed: false, skills: false })
+      const step = c.steps.find((s) => s.step === 'Run the first sync')!
+      expect(step.done).toBe(false)
+      expect(step.next).toBe('lifecycle sync')
+    }
+  })
+
   it('is complete when every step is done', () => {
-    const c = setupChecklist({ setUp: true, sources: [src('shopify', true, 'x'), src('klaviyo', true, 'x')], trust: 'passed', deployed: true, skills: true })
+    const c = setupChecklist({ setUp: true, sources: [src('shopify', true, 'ok'), src('klaviyo', true, 'ok')], trust: 'passed', deployed: true, skills: true })
     expect(c.done).toBe(6)
     expect(c.steps.every((s) => s.next === null)).toBe(true)
   })
@@ -204,20 +213,29 @@ describe('logs --follow', () => {
     const states = [run('queued', null), run('in_progress', null), run('in_progress', null), run('completed', 'success')]
     const seen: string[] = []
     let polls = 0
-    const last = await followRun(() => states[polls++], (r) => seen.push(r.conclusion ?? r.status), async () => {})
+    const last = await followRun(() => states[polls++], () => states[polls++]!, (r) => seen.push(r.conclusion ?? r.status), async () => {})
     expect(seen).toEqual(['queued', 'in_progress', 'success'])
     expect(last.conclusion).toBe('success')
   })
 
+  it('stays on the first run when a newer one is dispatched', async () => {
+    // The newest run is now #8 and it succeeded. The run being followed, #7, failed.
+    const asked: number[] = []
+    const last = await followRun(() => (asked.length ? run('completed', 'success', 8) : run('in_progress', null, 7)), (id) => { asked.push(id); return run('completed', 'failure', id) }, () => {}, async () => {})
+    expect(asked).toEqual([7])
+    expect(last.id).toBe(7)
+    expect(last.conclusion).toBe('failure')
+  })
+
   it('returns at once when the newest run already finished', async () => {
     let waits = 0
-    const last = await followRun(() => run('completed', 'failure'), () => {}, async () => { waits++ })
+    const last = await followRun(() => run('completed', 'failure'), () => run('completed', 'failure'), () => {}, async () => { waits++ })
     expect(last.conclusion).toBe('failure')
     expect(waits).toBe(0)
   })
 
   it('fails clearly with no runs, and stops after the poll limit', async () => {
-    await expect(followRun(() => undefined, () => {}, async () => {})).rejects.toThrow(/No runs yet/)
-    await expect(followRun(() => run('in_progress', null), () => {}, async () => {}, 3)).rejects.toThrow(/still going/)
+    await expect(followRun(() => undefined, () => run('queued', null), () => {}, async () => {})).rejects.toThrow(/No runs yet/)
+    await expect(followRun(() => run('in_progress', null), () => run('in_progress', null), () => {}, async () => {}, 3)).rejects.toThrow(/still going/)
   })
 })

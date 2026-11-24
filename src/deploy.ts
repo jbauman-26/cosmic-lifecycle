@@ -148,22 +148,32 @@ export function deployRun(repo: string | undefined) {
   return { repo, started: true, next: 'lifecycle deploy status' }
 }
 
-export function deployLogs(repo: string | undefined, tail = 60) {
-  const { runs } = deployStatus(repo, 1)
-  const last = runs[0]
+// One run by id, so a follow stays on the run it started with even when a newer one is dispatched.
+export function deployRunById(repo: string | undefined, id: number): WorkflowRun {
+  const r = gh(['run', 'view', String(id), '--repo', requireRepo(repo), '--json', 'databaseId,status,conclusion,event,createdAt,url'])
+  if (r.status !== 0) throw new CliError(`Could not read run ${id} for ${repo}: ${r.stderr.trim().slice(0, 160)}`, 'lifecycle jobs list', 'gh_runs')
+  const x = JSON.parse(r.stdout)
+  return { id: x.databaseId, status: x.status, conclusion: x.conclusion, event: x.event, createdAt: x.createdAt, url: x.url }
+}
+
+// The log of one run. Without `run`, the newest one.
+export function deployLogs(repo: string | undefined, tail = 60, run?: WorkflowRun) {
+  const last = run ?? deployStatus(repo, 1).runs[0]
   if (!last) throw new CliError('No runs yet.', 'lifecycle deploy run', 'no_runs')
   const r = gh(['run', 'view', String(last.id), '--repo', repo!, '--log'])
   const lines = (r.stdout || r.stderr).trim().split('\n')
   return { repo, run: last, log: lines.slice(-tail).join('\n') }
 }
 
-// Waits for the newest run to finish. Reports each change of state once. Polls every 5 seconds for
+// Waits for one run to finish: the first one `latest` returns. `byId` re-reads that same run on later polls. Reports each change of state once. Polls every 5 seconds for
 // up to 17 minutes, which is past the workflow's own 15-minute limit.
-export async function followRun(latest: () => WorkflowRun | undefined, onChange: (run: WorkflowRun) => void, wait: () => Promise<unknown> = () => new Promise((r) => setTimeout(r, 5000)), maxPolls = 204): Promise<WorkflowRun> {
+export async function followRun(latest: () => WorkflowRun | undefined, byId: (id: number) => WorkflowRun, onChange: (run: WorkflowRun) => void, wait: () => Promise<unknown> = () => new Promise((r) => setTimeout(r, 5000)), maxPolls = 204): Promise<WorkflowRun> {
   let seen = ''
+  let id: number | undefined
   for (let i = 0; i < maxPolls; i++) {
-    const run = latest()
+    const run = id === undefined ? latest() : byId(id)
     if (!run) throw new CliError('No runs yet.', 'lifecycle jobs run', 'no_runs')
+    id = run.id
     const state = `${run.id}:${run.status}:${run.conclusion}`
     if (state !== seen) onChange(run)
     seen = state
