@@ -1,6 +1,7 @@
 import { formatValue, runMetric } from './metrics.js';
 import { auditFlows, esc, htmlPage, revenuePerFlow } from './reports.js';
 import { trustLine } from './reconcile.js';
+import { loadChecklist } from './checklist.js';
 // One local page with what an owner checks on a Monday: the trust line, every reconcile
 // check, the headline metrics, revenue per flow, the audit and recent syncs.
 // It is a file on your machine, never a public URL.
@@ -10,6 +11,7 @@ export const DASHBOARD_METRICS = [
 ];
 export async function buildDashboard(db, days = 90) {
     const trust = await trustLine(db);
+    const checklist = await loadChecklist(db);
     const checks = await db.query(`SELECT check_name, status, detail FROM meta_reconcile_result ORDER BY check_name`);
     const revenue = await revenuePerFlow(db, days);
     const audit = await auditFlows(db);
@@ -20,6 +22,7 @@ export async function buildDashboard(db, days = 90) {
     return {
         days,
         trust,
+        checklist,
         checks: checks.map((c) => ({ name: String(c.check_name), status: String(c.status), detail: String(c.detail) })),
         metrics: metrics.map((m) => ({ name: m.metric, title: m.title, unit: m.unit, value: m.value, status: m.status, detail: m.detail })),
         revenue,
@@ -45,6 +48,7 @@ export function dashboardHtml(d) {
     const body = [
         STYLE,
         `<p class="m">Last ${d.days} days.</p>`,
+        d.checklist.done < d.checklist.total ? `<h2>Setup: ${d.checklist.done} of ${d.checklist.total} steps done</h2><ul>${d.checklist.steps.map((s) => `<li>${s.done ? 'Done' : 'To do'}: ${esc(s.step)}${s.next ? `<br><span class="m">Next: <code>${esc(s.next)}</code></span>` : ''}</li>`).join('')}</ul>` : '',
         `<div class="grid">${cards}</div>`,
         `<h2>Reconcile</h2><table><tr><th>Check</th><th>Result</th><th>Detail</th></tr>${checks || '<tr><td colspan="3">Not checked yet. Run lifecycle reconcile.</td></tr>'}</table>`,
         `<h2>Revenue per flow</h2><table><tr><th>Flow</th><th class="n">Recipients</th><th class="n">Attributed revenue</th><th class="n">Per recipient</th></tr>${flows || '<tr><td colspan="4">No flow sends in this window.</td></tr>'}</table>`,

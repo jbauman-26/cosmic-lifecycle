@@ -25,10 +25,11 @@ import { findMetric, formatValue, listMetrics, runMetric } from './metrics.js';
 import { CATALOG, CUSTOM_SOURCE_NOTE, kitPrompt, sourceStatus } from './sources-catalog.js';
 import { startMcp } from './mcp.js';
 import { runDemo } from './demo.js';
-import { deploy, deployLogs, deployPlan, deployRun, deployStatus, warehouseSecrets, writeProject } from './deploy.js';
+import { deploy, deployLogs, deployPlan, deployRun, deployRunById, deployStatus, followRun, warehouseSecrets, writeProject } from './deploy.js';
 import { getSetting, listSettings, setSetting, unsetSetting } from './config.js';
 import { deleteSecret, secretStatus, setSecret, SECRET_NAMES } from './secrets.js';
 import { buildDashboard, dashboardHtml } from './dashboard.js';
+import { SECRET_FOR, checklistLines, loadChecklist } from './checklist.js';
 import { checkForUpdate, UPDATE_COMMAND } from './update.js';
 import { trustLine } from './reconcile.js';
 import { metricCandidates } from './metrics.js';
@@ -206,7 +207,6 @@ metrics.command('candidates').description('Custom queries run more than once: ca
         await db.close();
     }
 }));
-const SECRET_FOR = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret', stripe: 'stripe-read-key' };
 const sources = program.command('sources').description('What can be connected, and what is connected');
 sources
     .command('catalog')
@@ -434,13 +434,23 @@ jobs.command('run').description('Start the daily sync now').option('--repo <owne
     const r = deployRun(opts.repo ?? readConfig().deploy?.repo);
     emit(format(), r, () => `Started a sync in ${r.repo}. Check it with lifecycle jobs list`);
 }));
-program.command('logs').description('Recent sync runs on this machine, or with --cloud, the last GitHub Actions log')
+program.command('logs').description('Recent sync runs on this machine. --cloud shows the last GitHub Actions log, --follow waits for a running one')
     .option('--cloud', 'show the log of the last daily sync in GitHub Actions')
+    .option('--follow', 'wait for the daily sync that is running in GitHub Actions to finish, then show its log')
     .option('--limit <n>', 'runs to show', '10')
     .option('--repo <owner/name>')
     .action(run(async (opts) => {
-    if (opts.cloud) {
-        const r = deployLogs(opts.repo ?? readConfig().deploy?.repo);
+    let followed;
+    if (opts.follow) {
+        const repo = opts.repo ?? readConfig().deploy?.repo;
+        const text = format() === 'text';
+        followed = await followRun(() => deployStatus(repo, 1).runs[0], (id) => deployRunById(repo, id), (r) => { if (text)
+            console.error(`${new Date().toISOString().slice(11, 19)}  ${r.conclusion ?? r.status}`); });
+        if (followed.conclusion !== 'success')
+            process.exitCode = 1;
+    }
+    if (opts.cloud || opts.follow) {
+        const r = deployLogs(opts.repo ?? readConfig().deploy?.repo, 60, followed);
         emit(format(), r, () => `${r.run.url}\n${r.log}`);
         return;
     }
@@ -757,13 +767,15 @@ program.command('status').description('One-screen summary: setup, sources, trust
         const sources = await sourceStatus(config, (slug) => Boolean(getSecret(SECRET_FOR[slug])), db);
         const trust = db ? await trustLine(db).catch(() => null) : null;
         const update = await checkForUpdate();
-        const out = { version: VERSION, setUp: Boolean(config), database: config?.database.kind ?? null, sources, trust, deployRepo: config?.deploy?.repo ?? null, update };
+        const checklist = await loadChecklist(db, config);
+        const out = { version: VERSION, setUp: Boolean(config), database: config?.database.kind ?? null, sources, trust, deployRepo: config?.deploy?.repo ?? null, update, checklist };
         emit(format(), out, () => [
             `lifecycle ${VERSION}${update.newer ? `  (update available: ${update.latest}. Run: ${UPDATE_COMMAND})` : ''}`,
             config ? `Database: ${config.database.kind}` : 'Not set up. Run lifecycle init, or follow lifecycle docs quickstart',
             ...sources.map((s) => `${s.connected ? 'connected    ' : 'not connected'} ${s.name}${s.lastSync ? `, last sync ${s.lastSync.slice(0, 16).replace('T', ' ')}` : ''}`),
             trust ? `Trust: ${trust.line}` : '',
             `Daily sync: ${config?.deploy?.repo ?? 'not deployed. lifecycle deploy --repo OWNER/NAME'}`,
+            ...(checklist.done < checklist.total ? checklistLines(checklist) : []),
         ].filter(Boolean).join('\n'));
     }
     finally {

@@ -188,7 +188,7 @@ lifecycle skills sync|status|uninstall [--target claude|cursor|all]
 lifecycle feedback MESSAGE [--open]
 lifecycle deploy [--repo OWNER/NAME] [--yes] [--write DIR]
 lifecycle jobs list|run
-lifecycle logs [--cloud]
+lifecycle logs [--cloud] [--follow]
 lifecycle dashboard [--html FILE] [--days N]
 lifecycle status
 lifecycle config list|get|set|unset KEY [VALUE]
