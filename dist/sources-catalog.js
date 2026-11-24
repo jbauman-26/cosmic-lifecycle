@@ -35,6 +35,15 @@ export const CATALOG = [
         connect: 'lifecycle connect stripe --key-env STRIPE_READ_KEY',
         tested: 'Run live on a Stripe test-mode account, and every total matched the Stripe API. Refunds and several currencies are unit tested only. Not yet run on a live account.',
     },
+    {
+        slug: 'meta',
+        name: 'Meta Ads',
+        syncs: 'Daily spend, impressions, clicks, and the purchases and purchase value Meta attributes to its ads, by campaign. No audiences, people or creative.',
+        credential: 'System user access token with ads_read only, plus the ad account id.',
+        setupMinutes: 10,
+        connect: 'lifecycle connect meta --account ID --token-env META_ADS_TOKEN',
+        tested: 'Written from the Ads Insights API docs (v27.0) and tested against recorded answers. Not yet run on a live ad account.',
+    },
 ];
 // Connected means configured with a key present. lastSync comes from the database when it is reachable.
 export async function sourceStatus(config, hasKey, db) {

@@ -7,17 +7,6 @@ export const READINESS_LEGEND =
 
 export const WAREHOUSE_CATALOG: WarehouseSource[] = [
   {
-    "slug": "meta-ads",
-    "name": "Meta Ads (Facebook and Instagram)",
-    "category": "ads",
-    "readiness": "planned",
-    "why": "#2 of 100 tools Shopify stores use. StoreLeads: detected on 738,495 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/technology/Facebook%20Pixel",
-    "docs": "https://developers.facebook.com/docs/marketing-apis",
-    "credentials": [],
-    "params": [],
-    "notes": "Needs an OAuth sign-in flow, not built yet. CSV import meanwhile."
-  },
-  {
     "slug": "google-ads",
     "name": "Google Ads",
     "category": "ads",

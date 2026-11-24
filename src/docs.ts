@@ -23,6 +23,15 @@ Stripe, about 3 minutes (optional, for subscriptions and repeat payments):
 3. export STRIPE_READ_KEY=rk_live_...
 4. lifecycle connect stripe --key-env STRIPE_READ_KEY
 
+Meta Ads, about 10 minutes (optional, for ad spend next to revenue):
+1. In Meta Business Settings open Users, System users, and add a system user.
+2. Give that system user access to the ad account, with view performance only.
+3. Generate a token for it with one permission: ads_read. Nothing else.
+4. Copy the ad account id from Ads Manager. It is the number after act_.
+5. export META_ADS_TOKEN=...
+6. lifecycle connect meta --account 1234567890 --token-env META_ADS_TOKEN
+Meta's menu names change. If a step is not where this says, search Meta's help for "system user access token".
+
 Then:
   lifecycle sync
   lifecycle reconcile
@@ -120,7 +129,8 @@ If the tool is not set up yet, follow \`lifecycle docs quickstart\` instead.
 Rules:
 - The database holds totals only. It has no customer names, emails, phones or addresses.
 - Revenue in fact_flow_daily is Klaviyo attributed revenue. Say so, and never present it as proof of causation.
-- Nothing in this tool sends a message.
+- Purchases and purchase value in fact_meta_ads_daily are what Meta attributes to its own ads. They are a claim, not orders. Never add them to Shopify revenue or to email revenue. For a number with no attribution in it, use the marketing_efficiency_ratio metric.
+- Nothing in this tool sends a message, and nothing changes an ad account. Meta Ads is read only.
 `,
   kits: `# Kits
 
@@ -167,6 +177,7 @@ lifecycle connect klaviyo --key-env NAME
 lifecycle connect shopify --store STORE --client-id ID --secret-env NAME
 lifecycle connect ga4 --property ID --client-id ID --secret-env NAME --refresh-token-env NAME
 lifecycle connect stripe --key-env NAME
+lifecycle connect meta --account ID --token-env NAME
 lifecycle sync [--since DATE]
 lifecycle schema [TABLE]
 lifecycle query "SELECT ..."
@@ -274,7 +285,7 @@ Find and connect a source:
   lifecycle warehouse list | disconnect SLUG
 
 Readiness, said plainly:
-  native   built in, with reconcile checks (Shopify, Klaviyo, GA4, Stripe)
+  native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads). Shopify, Klaviyo and GA4 have reconcile checks
   tested   a warehouse connector that has synced a real account
   built    written from the vendor's API docs, not yet run on a real account.
            Expect the first sync to need a fix. Report it: lifecycle feedback
@@ -323,6 +334,15 @@ Your orders live under a custom Klaviyo metric:
 Klaviyo returns 401:
   The key was revoked or the account changed. Create a Read-Only key and run
   lifecycle connect klaviyo again.
+
+Meta refused the token, or says it cannot read the ad account:
+  System user tokens can be set to never expire. A token made in the Graph API Explorer lasts hours.
+  Make a system user token with ads_read, give the system user access to the ad account,
+  then lifecycle connect meta --account ID --token-env NAME.
+
+Meta spend looks low for the last few days:
+  Meta restates recent days as late conversions arrive. Each sync pulls the last 90 days again,
+  so the numbers settle after a few syncs.
 
 Stripe says the key cannot read subscriptions:
   Charges still sync. To add MRR and churn, edit the restricted key in the
