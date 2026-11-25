@@ -9,7 +9,7 @@ import { getSecret, getSourceSecret, setSourceSecret, deleteSourceSecret, source
 import { CliError } from './errors.js';
 import { WAREHOUSE_CATALOG } from './warehouse-catalog.js';
 import { assertReadOnlySql } from './query.js';
-import { PERSONAL_RULES, classifyColumn, EMAIL_PATTERN, PHONE_PATTERN, REMOVED } from './personal.js';
+import { PERSONAL_RULES, classifyColumn, scrubRows, EMAIL_PATTERN, PHONE_PATTERN, REMOVED } from './personal.js';
 import { assertNoPersonalColumns, markCatalog } from './sql-guard.js';
 import { datasetFor, isWarehouseSchema, sourceOfSchema } from './warehouse-names.js';
 // The pipeline engine is dlt (Apache 2.0), pinned so every machine loads data the same way.
@@ -329,7 +329,8 @@ export async function duckQuery(sql, limit = 1000) {
     const r = await runRunner({ action: 'query', sql: body, limit, destination: { kind: 'duckdb', path: warehouseDuckPath() } }, {});
     if (!r.ok)
         throw new CliError(r.error, 'lifecycle warehouse schema', 'query_failed');
-    return { columns: r.columns, rows: r.rows };
+    const clean = scrubRows(r.rows);
+    return { columns: r.columns, rows: clean.rows, ...(clean.redacted ? { redacted: clean.redacted } : {}) };
 }
 const TEXT = /char|text|string/i;
 /**

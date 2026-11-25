@@ -74,6 +74,8 @@ When no column is marked personal, nothing is refused. When a table has one, SQL
 
 The check reads the SQL into tokens exactly. It is not a full parser, so it allows only what it can prove safe. A safe statement can be refused. An unsafe one should never pass.
 
+The answer is cleaned on the way out as well: an email address or a phone number in returned text is replaced by `[removed]`, and the JSON carries `redacted` with the number of cells changed. A name inside free text still comes back, which is the known risk above.
+
 Always refused, with `blocked_object`: functions that run SQL given as text or read the database's own statistics (`query_to_xml`, `ts_stat`, `query()`, `query_table()`, anything starting `pg_` or `duckdb_`).
 
 ## An older warehouse
@@ -95,7 +97,6 @@ lifecycle warehouse scrub --confirm    # empties them
 
 - A name inside free text that is kept.
 - A phone number inside text that is not free text, unless it is the whole value and starts with `+`.
-- Free text an older version stored, until `warehouse scrub --confirm` is run. `query` refuses personal columns, not free text columns.
 - A field a vendor names in a way no rule expects. The 25 connectors were written from API docs and none has run on a real account. Report one with `lifecycle feedback`.
 - A view someone made in the database by hand over a personal column.
 - A source connected with `--keep-personal-data`. That is the owner's choice. Its columns are marked personal and `query` refuses them.

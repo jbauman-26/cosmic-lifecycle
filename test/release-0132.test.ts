@@ -508,6 +508,12 @@ describe('query, schema and scrub on a Postgres warehouse', () => {
       expect(JSON.stringify(r.rows), sql).not.toContain('Fixtureperson')
     }
     expect((await runQuery(db, 'select name from dim_flow')).rows).toEqual([{ name: 'Welcome series' }])
+    // Free text an older version stored is not refused, so what comes back is cleaned on the way out.
+    const notes = await runQuery(db, 'select id, notes from src_zendesk.users order by id')
+    expect(notes.rows).toEqual([{ id: 1, notes: 'call [removed] or [removed]' }, { id: 2, notes: 'nothing here' }])
+    expect(notes.redacted).toBe(1)
+    expect((await runQuery(db, 'select id from src_zendesk.users')).redacted).toBeUndefined()
+    expect((await runQuery(db, `select '5550100142' as sku, 'FX-555-010-0142' as code, '+15550100142' as raw, 'x@example.org' as e, 'ring 5550100142 now' as line`)).rows).toEqual([{ sku: '5550100142', code: 'FX-555-010-0142', raw: '[removed]', e: '[removed]', line: 'ring [removed] now' }])
   })
 
   it('refuses every statement that could carry the name out, before it runs', async () => {
@@ -770,6 +776,11 @@ describe.skipIf(!uvAvailable())('a local warehouse, end to end', () => {
     expect(await codeOf(duckQuery(`select * from query('select name from src_old_desk.users')`))).toBe('blocked_object')
     expect((await duckQuery('select id, role from src_old_desk.users order by id')).rows).toEqual([{ id: 1, role: 'admin' }, { id: 2, role: 'end-user' }])
     expect((await duckQuery('select count(*) as n from src_old_desk.users')).rows).toEqual([{ n: 2 }])
+
+    const stored = await duckQuery('select notes from src_old_desk.users order by id')
+    expect(stored.rows).toEqual([{ notes: 'Likes a call on [removed]' }, { notes: 'nothing here' }])
+    expect(stored.redacted).toBe(1)
+    expect(JSON.stringify(await duckQuery('select subject from src_old_desk.tickets'))).not.toMatch(/example\.org/)
 
     // Before this release the loader kept a copy of every loaded row in its working folder. This one does not.
     const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]))

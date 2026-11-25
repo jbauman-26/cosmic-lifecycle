@@ -22,6 +22,7 @@ A privacy fix. The promise is that customer names, emails, phone numbers and str
 - **`warehouse.free_text`**, a setting with the values `keep` (the default, as before) and `drop`. Free text is ticket subjects, message bodies, review text and notes. With `keep` it is loaded with email addresses and phone numbers replaced by `[removed]`. With `drop` it is not loaded.
 - **Phone numbers are taken out of kept free text.** Email addresses already were. A value that is nothing but a phone number starting with `+` is removed under any key.
 - Open-ended fields (`custom_fields`, `metadata`, `properties`) are free text as a whole, and are removed when they sit inside a person. `created_by`, `updated_by`, `assigned_to` and the like hold a person.
+- **A query's answer is cleaned on the way out.** An email address or a phone number in returned text is replaced by `[removed]`, whatever column it came from, and the JSON gains `redacted` with the number of cells changed. This covers free text an older version stored, until `warehouse scrub` has run. A single word or code keeps its digits, so an id or a SKU is not touched.
 - More functions are blocked in every query with `blocked_object`, because they run SQL given as text or read the database's statistics: `query_to_xml`, `ts_stat`, `query()`, `query_table()`, and any name starting `pg_` or `duckdb_`.
 
 ### Changed
@@ -40,6 +41,7 @@ A privacy fix. The promise is that customer names, emails, phone numbers and str
 | New error code | `scrub_failed`: `warehouse scrub` could not read or change the warehouse. |
 | New setting | `warehouse.free_text`: `keep` or `drop`. `lifecycle config set warehouse.free_text drop`. |
 | New command | `lifecycle warehouse scrub [--confirm] --format json`: `{ applied, database, freeText, tables: [{ table, rows, columns: [{ column, why, action, rows, status }] }], totals, loaderFiles: { files, removed }, rebuilt, note, next }`. Run it once per store home with `--confirm`. |
+| Query | `query` and `warehouse query` JSON may carry `redacted: N` when text in the answer had an email address or phone number replaced. |
 | Schema | `personal: boolean` and `freeText: boolean` on every column of `schema` and `warehouse schema`. `warehouse schema` is now objects, not strings. |
 | Loader job | Gains `rules` and `free_text`. A job that passes through another program must keep both. |
 | Package | Ships `connectors/personal-rules.json` beside `connectors/run.py`. Bundle both. |
@@ -57,7 +59,6 @@ The Mac app can stop adding name keys to the loader job once it bundles this ver
 - The query check found two real ways through while it was being tested, both now refused and covered: `u.row_to_json` (Postgres reads it as a function on the whole row) and a no-break space in place of a space (DuckDB reads it as a space).
 - A name inside kept free text is not found. That is what `warehouse.free_text drop` is for.
 - A phone number inside text that is not free text, such as a status line, is not found unless it is the whole value and starts with `+`.
-- Until `warehouse scrub --confirm` is run, free text an older version stored can still return phone numbers: `query` does not refuse free text columns.
 - The end to end loader tests need uv, so they run on a developer machine and are skipped in CI.
 
 ## 0.13.1 (2026-11-24)

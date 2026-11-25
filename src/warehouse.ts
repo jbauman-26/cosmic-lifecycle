@@ -10,7 +10,7 @@ import { CliError } from './errors.js'
 import { WAREHOUSE_CATALOG } from './warehouse-catalog.js'
 import { assertReadOnlySql } from './query.js'
 import type { Db } from './db.js'
-import { PERSONAL_RULES, classifyColumn, EMAIL_PATTERN, PHONE_PATTERN, REMOVED, type FieldClass, type FreeTextMode } from './personal.js'
+import { PERSONAL_RULES, classifyColumn, scrubRows, EMAIL_PATTERN, PHONE_PATTERN, REMOVED, type FieldClass, type FreeTextMode } from './personal.js'
 import { assertNoPersonalColumns, markCatalog } from './sql-guard.js'
 import { datasetFor, isWarehouseSchema, sourceOfSchema } from './warehouse-names.js'
 
@@ -369,7 +369,8 @@ export async function duckQuery(sql: string, limit = 1000) {
   if (existsSync(warehouseDuckPath())) assertNoPersonalColumns(body, markCatalog(await duckColumns(undefined, true), sourceOfSchema))
   const r = await runRunner({ action: 'query', sql: body, limit, destination: { kind: 'duckdb', path: warehouseDuckPath() } }, {})
   if (!r.ok) throw new CliError(r.error, 'lifecycle warehouse schema', 'query_failed')
-  return { columns: r.columns as string[], rows: r.rows as Record<string, unknown>[] }
+  const clean = scrubRows(r.rows as Record<string, unknown>[])
+  return { columns: r.columns as string[], rows: clean.rows, ...(clean.redacted ? { redacted: clean.redacted } : {}) }
 }
 
 // ---- warehouse scrub: empty the personal columns an older version stored ----

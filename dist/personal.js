@@ -301,3 +301,29 @@ const PHONE_RE = new RegExp(PHONE_PATTERN, 'g');
 export const scrubEmails = (text) => text.replace(EMAIL_RE, REMOVED);
 /** Free text as it is kept: no email address and no phone number. */
 export const scrubFreeText = (text) => text.replace(EMAIL_RE, REMOVED).replace(PHONE_RE, REMOVED);
+// ---- A query's answer: the last check before text leaves the CLI ----
+const WHOLE_PHONE_RE = /^\s*\+\d[\d ().-]{6,}\d\s*$/;
+function scrubCell(v, count) {
+    if (typeof v === 'string') {
+        // A sentence gets the full free text treatment. A single word or code keeps its digits, so an id
+        // or a SKU that looks like a phone number is not touched.
+        const out = WHOLE_PHONE_RE.test(v) ? REMOVED : /\s/.test(v) ? scrubFreeText(v) : scrubEmails(v);
+        if (out !== v)
+            count.n++;
+        return out;
+    }
+    if (Array.isArray(v))
+        return v.map((x) => scrubCell(x, count));
+    if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype)
+        return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, scrubCell(x, count)]));
+    return v;
+}
+/**
+ * Replaces email addresses and phone numbers in the text a query returns. Free text an older version
+ * stored can still hold them until `warehouse scrub` has run. `redacted` counts the cells changed.
+ */
+export function scrubRows(rows) {
+    const count = { n: 0 };
+    const out = rows.map((r) => scrubCell(r, count));
+    return { rows: count.n ? out : rows, redacted: count.n };
+}
