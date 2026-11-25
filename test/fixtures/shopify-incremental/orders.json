@@ -1,0 +1,241 @@
+{
+ "_source": "Hand-made orders in the shape of the Admin GraphQL Order object (2026-10): id, createdAt, updatedAt, processedAt, cancelledAt, customer { id }, currentTotalPriceSet, totalDiscountsSet. Not recorded from any store; the ids are made up.",
+ "orders": [
+  {
+   "id": "gid://shopify/Order/5001",
+   "createdAt": "2025-01-10T15:00:00Z",
+   "updatedAt": "2025-01-10T15:00:00Z",
+   "processedAt": "2025-01-10T15:00:00Z",
+   "cancelledAt": null,
+   "customer": {
+    "id": "gid://shopify/Customer/901"
+   },
+   "currentTotalPriceSet": {
+    "shopMoney": {
+     "amount": "100.00"
+    }
+   },
+   "totalDiscountsSet": {
+    "shopMoney": {
+     "amount": "10.00"
+    }
+   }
+  },
+  {
+   "id": "gid://shopify/Order/5002",
+   "createdAt": "2025-01-15T09:30:00Z",
+   "updatedAt": "2025-01-15T09:30:00Z",
+   "processedAt": "2025-01-15T09:30:00Z",
+   "cancelledAt": null,
+   "customer": {
+    "id": "gid://shopify/Customer/902"
+   },
+   "currentTotalPriceSet": {
+    "shopMoney": {
+     "amount": "50.00"
+    }
+   },
+   "totalDiscountsSet": {
+    "shopMoney": {
+     "amount": "0.00"
+    }
+   }
+  },
+  {
+   "id": "gid://shopify/Order/5003",
+   "createdAt": "2025-02-03T11:00:00Z",
+   "updatedAt": "2025-02-03T11:00:00Z",
+   "processedAt": "2025-02-03T11:00:00Z",
+   "cancelledAt": null,
+   "customer": {
+    "id": "gid://shopify/Customer/901"
+   },
+   "currentTotalPriceSet": {
+    "shopMoney": {
+     "amount": "30.00"
+    }
+   },
+   "totalDiscountsSet": {
+    "shopMoney": {
+     "amount": "0.00"
+    }
+   }
+  },
+  {
+   "id": "gid://shopify/Order/5004",
+   "createdAt": "2025-02-03T12:00:00Z",
+   "updatedAt": "2025-02-03T12:00:00Z",
+   "processedAt": "2025-02-03T12:00:00Z",
+   "cancelledAt": null,
+   "customer": null,
+   "currentTotalPriceSet": {
+    "shopMoney": {
+     "amount": "20.00"
+    }
+   },
+   "totalDiscountsSet": {
+    "shopMoney": {
+     "amount": "0.00"
+    }
+   }
+  },
+  {
+   "id": "gid://shopify/Order/5005",
+   "createdAt": "2025-03-01T08:00:00Z",
+   "updatedAt": "2025-03-01T08:00:00Z",
+   "processedAt": "2025-03-01T08:00:00Z",
+   "cancelledAt": null,
+   "customer": {
+    "id": "gid://shopify/Customer/903"
+   },
+   "currentTotalPriceSet": {
+    "shopMoney": {
+     "amount": "80.00"
+    }
+   },
+   "totalDiscountsSet": {
+    "shopMoney": {
+     "amount": "5.00"
+    }
+   }
+  },
+  {
+   "id": "gid://shopify/Order/5006",
+   "createdAt": "2025-03-01T10:00:00Z",
+   "updatedAt": "2025-03-01T10:00:00Z",
+   "processedAt": "2025-03-01T10:00:00Z",
+   "cancelledAt": null,
+   "customer": {
+    "id": "gid://shopify/Customer/902"
+   },
+   "currentTotalPriceSet": {
+    "shopMoney": {
+     "amount": "40.00"
+    }
+   },
+   "totalDiscountsSet": {
+    "shopMoney": {
+     "amount": "0.00"
+    }
+   }
+  },
+  {
+   "id": "gid://shopify/Order/5007",
+   "createdAt": "2025-04-20T19:45:00Z",
+   "updatedAt": "2025-04-20T19:45:00Z",
+   "processedAt": "2025-04-20T19:45:00Z",
+   "cancelledAt": null,
+   "customer": {
+    "id": "gid://shopify/Customer/901"
+   },
+   "currentTotalPriceSet": {
+    "shopMoney": {
+     "amount": "25.50"
+    }
+   },
+   "totalDiscountsSet": {
+    "shopMoney": {
+     "amount": "0.00"
+    }
+   }
+  },
+  {
+   "id": "gid://shopify/Order/5008",
+   "createdAt": "2025-05-05T13:10:00Z",
+   "updatedAt": "2025-05-05T13:10:00Z",
+   "processedAt": "2025-05-05T13:10:00Z",
+   "cancelledAt": null,
+   "customer": {
+    "id": "gid://shopify/Customer/903"
+   },
+   "currentTotalPriceSet": {
+    "shopMoney": {
+     "amount": "60.00"
+    }
+   },
+   "totalDiscountsSet": {
+    "shopMoney": {
+     "amount": "0.00"
+    }
+   }
+  },
+  {
+   "id": "gid://shopify/Order/5009",
+   "createdAt": "2025-05-05T13:10:00Z",
+   "updatedAt": "2025-05-05T13:10:00Z",
+   "processedAt": "2025-05-05T13:10:00Z",
+   "cancelledAt": null,
+   "customer": {
+    "id": "gid://shopify/Customer/904"
+   },
+   "currentTotalPriceSet": {
+    "shopMoney": {
+     "amount": "15.25"
+    }
+   },
+   "totalDiscountsSet": {
+    "shopMoney": {
+     "amount": "0.00"
+    }
+   }
+  },
+  {
+   "id": "gid://shopify/Order/5010",
+   "createdAt": "2025-06-12T07:00:00Z",
+   "updatedAt": "2025-06-12T07:00:00Z",
+   "processedAt": "2025-06-12T07:00:00Z",
+   "cancelledAt": null,
+   "customer": null,
+   "currentTotalPriceSet": {
+    "shopMoney": {
+     "amount": "12.00"
+    }
+   },
+   "totalDiscountsSet": {
+    "shopMoney": {
+     "amount": "0.00"
+    }
+   }
+  },
+  {
+   "id": "gid://shopify/Order/5011",
+   "createdAt": "2025-07-01T00:30:00Z",
+   "updatedAt": "2025-07-01T00:30:00Z",
+   "processedAt": "2025-07-01T00:30:00Z",
+   "cancelledAt": null,
+   "customer": {
+    "id": "gid://shopify/Customer/904"
+   },
+   "currentTotalPriceSet": {
+    "shopMoney": {
+     "amount": "99.99"
+    }
+   },
+   "totalDiscountsSet": {
+    "shopMoney": {
+     "amount": "9.99"
+    }
+   }
+  },
+  {
+   "id": "gid://shopify/Order/5012",
+   "createdAt": "2025-08-18T16:20:00Z",
+   "updatedAt": "2025-08-18T16:20:00Z",
+   "processedAt": "2025-08-18T16:20:00Z",
+   "cancelledAt": null,
+   "customer": {
+    "id": "gid://shopify/Customer/902"
+   },
+   "currentTotalPriceSet": {
+    "shopMoney": {
+     "amount": "42.00"
+    }
+   },
+   "totalDiscountsSet": {
+    "shopMoney": {
+     "amount": "0.00"
+    }
+   }
+  }
+ ]
+}

@@ -45,6 +45,7 @@ describe('config', () => {
       'registry.uri', 'deploy.repo', 'update.check', 'cloud.url',
       'reconcile.tolerance.klaviyo_orders', 'reconcile.tolerance.ga4_purchases', 'reconcile.attributed_share_flag', 'reconcile.freshness_days',
       'warehouse.free_text', 'query.row_cap', 'metrics.default_days', 'shopify.bulk_min_orders', 'shopify.export_wait_seconds',
+      'shopify.full_check_days', 'shopify.overlap_days',
     ])
   })
 

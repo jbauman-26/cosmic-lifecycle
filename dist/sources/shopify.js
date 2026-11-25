@@ -15,11 +15,12 @@ export async function shopifyToken(store, clientId, clientSecret) {
 }
 // Deliberately asks for no personal field. At Level 1 access Shopify refuses
 // them anyway, which is the behavior we want.
-const ORDERS_QUERY = `query($c: String) {
-  orders(first: 250, after: $c, sortKey: PROCESSED_AT) {
+// With $q, only the orders Shopify's search matches, such as updated_at:>='...' for an incremental sync.
+const ORDERS_QUERY = (sortKey) => `query($c: String, $q: String) {
+  orders(first: 250, after: $c, sortKey: ${sortKey}, query: $q) {
     pageInfo { hasNextPage endCursor }
     nodes {
-      processedAt cancelledAt
+      id createdAt updatedAt processedAt cancelledAt
       customer { id }
       currentTotalPriceSet { shopMoney { amount } }
       totalDiscountsSet { shopMoney { amount } }
@@ -60,6 +61,7 @@ export function throttleWait(body, attempt) {
 }
 export async function fetchOrders(store, token, opts = {}) {
     const wait = opts.wait ?? sleep;
+    const query = ORDERS_QUERY(opts.query ? 'UPDATED_AT' : 'PROCESSED_AT');
     const retries = opts.retries ?? 5;
     const out = [];
     let cursor = null;
@@ -68,7 +70,7 @@ export async function fetchOrders(store, token, opts = {}) {
         const body = await fetchJson(`https://${store}/admin/api/${VERSION}/graphql.json`, {
             method: 'POST',
             headers: { 'content-type': 'application/json', 'x-shopify-access-token': token },
-            body: JSON.stringify({ query: ORDERS_QUERY, variables: { c: cursor } }),
+            body: JSON.stringify({ query, variables: { c: cursor, q: opts.query ?? null } }),
         }, 'Shopify orders request').catch((e) => {
             // A missing scope can also come back as a plain 403.
             if (e instanceof HttpError && e.status === 403)
@@ -104,6 +106,8 @@ export async function fetchOrderCount(store, token, createdBefore) {
     return c?.precision === 'EXACT' ? c.count : null;
 }
 const hash = (id) => createHash('sha256').update(id).digest('hex');
+// Only the orders changed at or after a moment: what an incremental sync asks for. Sorted by when they changed.
+export const changedSinceQuery = (since) => `updated_at:>='${since}'`;
 const monthOf = (d) => d.slice(0, 7);
 const monthsBetween = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
 const money = (n) => Math.round(n * 100) / 100;

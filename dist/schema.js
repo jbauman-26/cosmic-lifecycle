@@ -1,5 +1,10 @@
-// Aggregates only. There is no column for a name, email, phone or address, and
-// customers exist only as counts. Adding such a column breaks a test on purpose.
+// Aggregates only, with one exception for Shopify (0.15.0). There is no column for a name, email, phone or
+// address anywhere. Customers exist as counts, except in shopify_order_state and shopify_customer_first,
+// which hold a scrambled customer id: HMAC-SHA256 of Shopify's customer id with a random key per store that
+// is kept outside the database (keychain or Cloud's encrypted secrets). The raw Shopify id and the key never
+// land here. The ids let a daily sync rebuild only the days an edited order touches and still count new
+// versus returning customers right. test/sync.test.ts asserts exactly this: the hash is present, the raw id
+// and the key are absent, and no other table has a per-customer column. Adding one breaks it on purpose.
 export const MIGRATIONS = [
     `CREATE TABLE IF NOT EXISTS dim_flow (
     flow_id TEXT PRIMARY KEY, name TEXT, status TEXT, trigger_type TEXT, archived BOOLEAN,
@@ -98,7 +103,31 @@ export const MIGRATIONS = [
     `CREATE TABLE IF NOT EXISTS meta_shopify_bulk (
     op_id TEXT PRIMARY KEY, status TEXT NOT NULL, started_at TIMESTAMPTZ NOT NULL, checked_at TIMESTAMPTZ, consumed_at TIMESTAMPTZ,
     objects BIGINT, error_code TEXT, expected BIGINT)`,
+    // 0.15.0: incremental Shopify sync. One row per order: a keyed hash of its id, a keyed hash of its customer's id
+    // (null for a guest), its day and amounts, and when it last changed. See the rule at the top of this file.
+    `CREATE TABLE IF NOT EXISTS shopify_order_state (
+    order_key TEXT PRIMARY KEY, customer_key TEXT, processed_at TIMESTAMPTZ NOT NULL, processed_day DATE NOT NULL,
+    net NUMERIC NOT NULL, discounts NUMERIC NOT NULL, cancelled BOOLEAN NOT NULL, updated_at TIMESTAMPTZ)`,
+    `CREATE INDEX IF NOT EXISTS shopify_order_state_customer ON shopify_order_state (customer_key)`,
+    `CREATE INDEX IF NOT EXISTS shopify_order_state_day ON shopify_order_state (processed_day)`,
+    // Each customer's first order that was not cancelled, by the same keyed hash, and its day and month.
+    `CREATE TABLE IF NOT EXISTS shopify_customer_first (
+    customer_key TEXT PRIMARY KEY, first_order_key TEXT NOT NULL, first_day DATE NOT NULL, first_month TEXT NOT NULL)`,
+    `CREATE INDEX IF NOT EXISTS shopify_customer_first_month ON shopify_customer_first (first_month)`,
+    // Where the next incremental sync starts, when the last full pull ran, and a check value that says whether the
+    // key in hand made the stored ids. The check is an HMAC of a fixed text, not the key.
+    `CREATE TABLE IF NOT EXISTS meta_shopify_sync (
+    id INT PRIMARY KEY, cursor_at TIMESTAMPTZ, last_full_at TIMESTAMPTZ, key_check TEXT, window_limited BOOLEAN NOT NULL DEFAULT false)`,
 ];
+// The only columns that hold a per-customer (or per-order) value. They are scrambled ids, and a query is
+// refused if it would return one (src/query.ts marks them personal for the SQL guard).
+export const SCRAMBLED_ID_COLUMNS = [
+    { table: 'shopify_order_state', column: 'order_key' },
+    { table: 'shopify_order_state', column: 'customer_key' },
+    { table: 'shopify_customer_first', column: 'customer_key' },
+    { table: 'shopify_customer_first', column: 'first_order_key' },
+];
+export const STATE_TABLES = ['shopify_order_state', 'shopify_customer_first', 'meta_shopify_sync'];
 export const PUBLIC_TABLES = [
     'dim_flow', 'dim_campaign', 'dim_segment', 'fact_flow_daily',
     'fact_orders_daily', 'fact_cohort_monthly', 'fact_klaviyo_orders_daily', 'fact_flow_window', 'fact_ga4_daily',

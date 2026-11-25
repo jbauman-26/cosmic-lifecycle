@@ -559,8 +559,8 @@ describe('0.14.0', () => {
   it('is version 0.14.0 everywhere a version is written, and documents workspaces', async () => {
     const { VERSION } = await import('../src/version.js')
     const { DOCS } = await import('../src/docs.js')
-    // 0.14.1: was toBe('0.14.0'); a version bump has to change it. package.json and the lock must still agree.
-    expect(VERSION).toMatch(/^0\.14\.\d+$/)
+    // 0.14.1: was toBe('0.14.0'); 0.15.0: was a 0.14.x match. A version bump has to change it. package.json and the lock must still agree.
+    expect(VERSION).toMatch(/^0\.1[45]\.\d+$/)
     expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe(VERSION)
     expect(readFileSync('CHANGELOG.md', 'utf8')).toMatch(/^## 0\.14\.0 \(2026-11-24\)/m)
     expect(DOCS.workspaces).toMatch(/unreferenced/)
@@ -584,12 +584,14 @@ describe('doctor and deploy outside a store', () => {
   })
 })
 
-describe('0.14.1', () => {
-  it('is version 0.14.1 everywhere a version is written, and its changelog has no dash a person would not type', async () => {
+// 0.15.0: was the 0.14.1 check; a version bump has to change it.
+describe('0.15.0', () => {
+  it('is version 0.15.0 everywhere a version is written, and its changelog has no dash a person would not type', async () => {
     const { VERSION } = await import('../src/version.js')
-    expect(VERSION).toBe('0.14.1')
-    expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe('0.14.1')
+    expect(VERSION).toBe('0.15.0')
+    expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe('0.15.0')
     const log = readFileSync('CHANGELOG.md', 'utf8')
+    expect(log).toMatch(/^## 0\.15\.0 \(2026-11-25\)/m)
     expect(log).toMatch(/^## 0\.14\.1 \(2026-11-25\)/m)
     expect(log).not.toMatch(/^## Unreleased/m)
     expect(log).not.toMatch(/[–—]/)

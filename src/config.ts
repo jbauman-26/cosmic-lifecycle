@@ -113,6 +113,8 @@ export const SETTINGS = {
   'metrics.default_days': { description: 'Window in days for metrics, reports and sync pulls when none is given', default: 90, parse: numberIn('metrics.default_days', 1, 730, { whole: true, example: '90' }) },
   'shopify.bulk_min_orders': { description: 'Stores with at least this many orders sync Shopify through one bulk export instead of paging. 0 always uses the export', default: 25000, parse: numberIn('shopify.bulk_min_orders', 0, 1000000000, { whole: true, example: '25000' }) },
   'shopify.export_wait_seconds': { description: 'Seconds a sync waits for a Shopify bulk export to finish before leaving it for the next sync', default: 120, parse: numberIn('shopify.export_wait_seconds', 0, 3600, { whole: true, example: '120' }) },
+  'shopify.full_check_days': { description: 'Days between full Shopify pulls once daily syncs fetch only changed orders. The full pull checks and corrects them', default: 7, parse: numberIn('shopify.full_check_days', 1, 90, { whole: true, example: '7' }) },
+  'shopify.overlap_days': { description: 'Days before the last sync an incremental Shopify sync looks again, for late edits and refunds', default: 3, parse: numberIn('shopify.overlap_days', 1, 30, { whole: true, example: '3' }) },
 } satisfies Record<string, Setting>
 
 // Settings added in 0.14.0 for workspaces that are not Shopify stores. They can be set in any

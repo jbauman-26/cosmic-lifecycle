@@ -2,6 +2,16 @@
 
 The promise: customer names, emails, phone numbers and street addresses never enter the warehouse.
 
+## Scrambled Shopify ids (0.15.0)
+
+A daily Shopify sync fetches only the orders changed since the last one. To rebuild the days an edited order touches, and still count new versus returning customers right, the CLI keeps two tables: `shopify_order_state` (per order: a scrambled order id, a scrambled customer id or none for a guest, the day, net, discounts, cancelled, when it last changed) and `shopify_customer_first` (per customer: the scrambled id, the first order's day and month).
+
+- The scrambled id is HMAC-SHA256 of Shopify's id with a random key made for that one store. The key is kept outside the database: this machine's keychain (`shopify-customer-key`), the Cosmic AI app's keychain, or Cosmic Cloud's encrypted secrets, and is handed to the CLI as `LIFECYCLE_SHOPIFY_CUSTOMER_KEY`. Without the key the ids cannot be turned back into Shopify ids, and two stores' ids never match.
+- The raw Shopify ids and the key never land in the database or a log. `meta_shopify_sync` keeps a check value (an HMAC of a fixed text) so a sync can tell whether it holds the same key; the key cannot be worked out from it.
+- No name, email, phone or address is asked for. A query that would return a scrambled id is refused with `personal_column`; `count(*)` is allowed.
+- `lifecycle disconnect shopify` deletes the key and both tables, even when the totals are kept.
+- `test/sync.test.ts` asserts exactly this: the hash is present, the raw id and the key are absent, and no other table has a per-customer column.
+
 One rule list decides what counts as personal: `PERSONAL_RULES` in `src/personal.ts`. Four things read it, so they cannot disagree:
 
 | Where | What it does with the list |

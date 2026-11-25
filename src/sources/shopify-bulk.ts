@@ -1,5 +1,6 @@
 import { fetchJson, HttpError } from '../http.js'
 import { CliError } from '../errors.js'
+import type { StateBuffer } from '../shopify-state.js'
 import { shopifyQueryError, scopeDenied, SHOPIFY_VERSION, type CohortMonthly, type OrdersDaily, type RawOrder } from './shopify.js'
 
 // A store with years of orders is too big to page through: 3 million orders is 12,000 requests of 250, one
@@ -8,13 +9,15 @@ import { shopifyQueryError, scopeDenied, SHOPIFY_VERSION, type CohortMonthly, ty
 // and a later sync picks it up where this one stopped.
 // Docs: https://shopify.dev/docs/api/usage/bulk-operations/queries (2026-01 and later poll with bulkOperation(id:)).
 
-// The same fields as the paged query plus createdAt, and no personal field. customer { id } is an object, not a connection,
+// The same fields as the paged query, and no personal field. The order id and customer id are hashed with the store's key before they are stored. customer { id } is an object, not a connection,
 // so every line of the file is one order and there is no __parentId to follow.
 export const BULK_ORDERS_QUERY = `{
   orders {
     edges {
       node {
+        id
         createdAt
+        updatedAt
         processedAt
         cancelledAt
         customer { id }
@@ -113,7 +116,8 @@ export class CompactOrders {
   private dayIndex = new Map<string, number>()
   private customers = new Map<string, number>()
   earliest: string | null = null
-  constructor(private cutoff = Infinity) {}
+  // With a state buffer, every order (cancelled ones too) is also kept there under keyed hashes, for an incremental sync.
+  constructor(private cutoff = Infinity, readonly state?: StateBuffer) {}
 
   private grow() {
     const n = this.time.length * 2
@@ -127,6 +131,7 @@ export class CompactOrders {
 
   add(o: RawOrder & { createdAt?: string }) {
     this.pulled++
+    this.state?.add(o)
     if (o.createdAt && Date.parse(o.createdAt) <= this.cutoff) this.pulledBefore++
     if (o.cancelledAt) return
     if (this.size === this.time.length) this.grow()

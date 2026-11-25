@@ -9,12 +9,14 @@ const service = () => {
   const ws = workspaceName()
   return ws ? `lifecycle-cli:${ws}` : 'lifecycle-cli'
 }
-export type SecretName = 'hubspot-token' | 'klaviyo-read-key' | 'shopify-client-secret' | 'database-url' | 'klaviyo-write-key' | 'ga4-client-secret' | 'ga4-refresh-token' | 'stripe-read-key' | 'meta-ads-token' | 'google-ads-client-secret' | 'google-ads-refresh-token' | 'kie-api-key' | 'fal-key' | 'apify-token' | 'scrapecreators-key' | 'cloud-token'
+export type SecretName = 'hubspot-token' | 'klaviyo-read-key' | 'shopify-client-secret' | 'shopify-customer-key' | 'database-url' | 'klaviyo-write-key' | 'ga4-client-secret' | 'ga4-refresh-token' | 'stripe-read-key' | 'meta-ads-token' | 'google-ads-client-secret' | 'google-ads-refresh-token' | 'kie-api-key' | 'fal-key' | 'apify-token' | 'scrapecreators-key' | 'cloud-token'
 
 const ENV: Record<SecretName, string> = {
   'klaviyo-read-key': 'LIFECYCLE_KLAVIYO_READ_KEY',
   'klaviyo-write-key': 'LIFECYCLE_KLAVIYO_WRITE_KEY',
   'shopify-client-secret': 'LIFECYCLE_SHOPIFY_CLIENT_SECRET',
+  // 0.15.0: the store's own random key for scrambled customer ids (src/shopify-state.ts). Never stored in the database.
+  'shopify-customer-key': 'LIFECYCLE_SHOPIFY_CUSTOMER_KEY',
   'database-url': 'LIFECYCLE_DATABASE_URL',
   'ga4-client-secret': 'LIFECYCLE_GA4_CLIENT_SECRET',
   'ga4-refresh-token': 'LIFECYCLE_GA4_REFRESH_TOKEN',
@@ -31,7 +33,7 @@ const ENV: Record<SecretName, string> = {
   'cloud-token': 'LIFECYCLE_CLOUD_TOKEN',
 }
 
-const useKeychain = () => process.platform === 'darwin' && !process.env.LIFECYCLE_NO_KEYCHAIN
+export const useKeychain = () => process.platform === 'darwin' && !process.env.LIFECYCLE_NO_KEYCHAIN
 
 // `security -i` reads the command from stdin, so the secret never appears in
 // the process list the way a -w argument would.

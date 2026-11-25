@@ -6,6 +6,11 @@ export const SHOPIFY_VERSION = '2026-10'
 const VERSION = SHOPIFY_VERSION
 
 export type RawOrder = {
+  // The order's id and when it last changed. Ids are hashed with the store's own key before anything is
+  // stored (src/shopify-state.ts); the raw id never reaches the database.
+  id?: string
+  createdAt?: string
+  updatedAt?: string
   processedAt: string
   cancelledAt: string | null
   customer: { id: string } | null
@@ -32,11 +37,12 @@ export async function shopifyToken(store: string, clientId: string, clientSecret
 
 // Deliberately asks for no personal field. At Level 1 access Shopify refuses
 // them anyway, which is the behavior we want.
-const ORDERS_QUERY = `query($c: String) {
-  orders(first: 250, after: $c, sortKey: PROCESSED_AT) {
+// With $q, only the orders Shopify's search matches, such as updated_at:>='...' for an incremental sync.
+const ORDERS_QUERY = (sortKey: 'PROCESSED_AT' | 'UPDATED_AT') => `query($c: String, $q: String) {
+  orders(first: 250, after: $c, sortKey: ${sortKey}, query: $q) {
     pageInfo { hasNextPage endCursor }
     nodes {
-      processedAt cancelledAt
+      id createdAt updatedAt processedAt cancelledAt
       customer { id }
       currentTotalPriceSet { shopMoney { amount } }
       totalDiscountsSet { shopMoney { amount } }
@@ -84,8 +90,9 @@ export function throttleWait(body: any, attempt: number) {
   return Math.min(60000, 2 ** attempt * 1000)
 }
 
-export async function fetchOrders(store: string, token: string, opts: { wait?: (ms: number) => Promise<void>; retries?: number } = {}): Promise<RawOrder[]> {
+export async function fetchOrders(store: string, token: string, opts: { wait?: (ms: number) => Promise<void>; retries?: number; query?: string } = {}): Promise<RawOrder[]> {
   const wait = opts.wait ?? sleep
+  const query = ORDERS_QUERY(opts.query ? 'UPDATED_AT' : 'PROCESSED_AT')
   const retries = opts.retries ?? 5
   const out: RawOrder[] = []
   let cursor: string | null = null
@@ -96,7 +103,7 @@ export async function fetchOrders(store: string, token: string, opts: { wait?: (
       {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-shopify-access-token': token },
-        body: JSON.stringify({ query: ORDERS_QUERY, variables: { c: cursor } }),
+        body: JSON.stringify({ query, variables: { c: cursor, q: opts.query ?? null } }),
       },
       'Shopify orders request',
     ).catch((e) => {
@@ -136,6 +143,9 @@ export async function fetchOrderCount(store: string, token: string, createdBefor
 }
 
 const hash = (id: string) => createHash('sha256').update(id).digest('hex')
+
+// Only the orders changed at or after a moment: what an incremental sync asks for. Sorted by when they changed.
+export const changedSinceQuery = (since: string) => `updated_at:>='${since}'`
 const monthOf = (d: string) => d.slice(0, 7)
 const monthsBetween = (a: string, b: string) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7))
 const money = (n: number) => Math.round(n * 100) / 100

@@ -87,7 +87,7 @@ Set up Cosmic Lifecycle by following the output of lifecycle docs quickstart
 ## What it will not do
 
 - **It does not send.** No campaign, no flow edit, no message. The only write is creating a Klaviyo segment after a reviewed plan.
-- **It does not store customer records.** The database holds totals. Shopify access is set up so name, email, phone and address fields are refused.
+- **It does not store customer records.** The database holds totals. Shopify access is set up so name, email, phone and address fields are refused. Since 0.15.0 it keeps one scrambled id per Shopify customer (a keyed hash; the key is held in your keychain, outside the database, and the id cannot be turned back into a Shopify id without it) so a daily sync can fetch only the orders that changed and still count new versus returning customers right.
 - **It does not hold your data.** Your keys stay in your keychain, and your database is yours. There is no Cosmic AI server in the path.
 - **It does not prove causation.** Flow revenue is what Klaviyo attributes. Every report says so.
 
@@ -166,6 +166,7 @@ Sync one source on its own schedule, or remove one:
 
 ```sh
 lifecycle sync --only meta              # also --only shopify,klaviyo or a repeated --only
+lifecycle sync --only shopify --full    # read the whole order history now, not only what changed
 lifecycle disconnect stripe             # forget its settings and saved keys, keep its data
 lifecycle disconnect stripe --delete-data
 ```
@@ -180,6 +181,8 @@ Settings you can change. Each one starts at the value the CLI has always used, s
 | `reconcile.freshness_days` | 2 | Days without a sync before the freshness check fails |
 | `query.row_cap` | 1000 | Most rows `lifecycle query` returns |
 | `metrics.default_days` | 90 | Window for metrics, reports and sync pulls when none is given |
+| `shopify.full_check_days` | 7 | Days between full Shopify pulls once daily syncs fetch only changed orders |
+| `shopify.overlap_days` | 3 | Days before the last sync an incremental Shopify sync looks again, for late edits and refunds |
 
 ```sh
 lifecycle config set reconcile.tolerance.ga4_purchases 20
