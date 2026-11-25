@@ -1,0 +1,7 @@
+{
+  "results": [
+    { "productPerformanceView": { "date": { "year": 2026, "month": 11, "day": 22 }, "marketingMethod": "ORGANIC", "clicks": "120", "impressions": "4100", "conversions": 3.5, "conversionValue": { "amountMicros": "412350000", "currencyCode": "USD" } } },
+    { "productPerformanceView": { "date": { "year": 2026, "month": 11, "day": 22 }, "marketingMethod": "ADS", "clicks": "40", "impressions": "2900" } }
+  ],
+  "nextPageToken": "page-2-token"
+}

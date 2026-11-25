@@ -1,0 +1,6 @@
+{
+  "results": [
+    { "productView": { "id": "online~en~US~sku-4", "aggregatedReportingContextStatus": "PENDING" } },
+    { "productView": { "id": "online~en~US~sku-5", "aggregatedReportingContextStatus": "ELIGIBLE" } }
+  ]
+}

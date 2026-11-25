@@ -2236,17 +2236,6 @@ export const WAREHOUSE_CATALOG = [
         "notes": "Needs an OAuth sign-in flow, not built yet. CSV import meanwhile."
     },
     {
-        "slug": "google-merchant-center",
-        "name": "Google Merchant Center",
-        "category": "product-feeds",
-        "readiness": "planned",
-        "why": "#59 of 100 tools Shopify stores use. Ranking position is judgment. No count. Required for Shopping ads, which run on the Google Ads base (1.12M Shopify stores with Google Ads Pixel per StoreLeads). Source: https://storeleads.app/reports/shopify",
-        "docs": "https://developers.google.com/merchant/api",
-        "credentials": [],
-        "params": [],
-        "notes": "Needs an OAuth sign-in flow, not built yet. CSV import meanwhile."
-    },
-    {
         "slug": "aftersell",
         "name": "AfterSell",
         "category": "upsell-cro",

@@ -9,7 +9,7 @@ const service = () => {
   const ws = workspaceName()
   return ws ? `lifecycle-cli:${ws}` : 'lifecycle-cli'
 }
-export type SecretName = 'hubspot-token' | 'klaviyo-read-key' | 'shopify-client-secret' | 'shopify-customer-key' | 'database-url' | 'klaviyo-write-key' | 'ga4-client-secret' | 'ga4-refresh-token' | 'stripe-read-key' | 'meta-ads-token' | 'google-ads-client-secret' | 'google-ads-refresh-token' | 'kie-api-key' | 'fal-key' | 'apify-token' | 'scrapecreators-key' | 'cloud-token'
+export type SecretName = 'hubspot-token' | 'klaviyo-read-key' | 'shopify-client-secret' | 'shopify-customer-key' | 'database-url' | 'klaviyo-write-key' | 'ga4-client-secret' | 'ga4-refresh-token' | 'stripe-read-key' | 'meta-ads-token' | 'google-ads-client-secret' | 'google-ads-refresh-token' | 'google-merchant-center-client-secret' | 'google-merchant-center-refresh-token' | 'kie-api-key' | 'fal-key' | 'apify-token' | 'scrapecreators-key' | 'cloud-token'
 
 const ENV: Record<SecretName, string> = {
   'klaviyo-read-key': 'LIFECYCLE_KLAVIYO_READ_KEY',
@@ -25,6 +25,8 @@ const ENV: Record<SecretName, string> = {
   'hubspot-token': 'LIFECYCLE_HUBSPOT_TOKEN',
   'google-ads-client-secret': 'LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET',
   'google-ads-refresh-token': 'LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN',
+  'google-merchant-center-client-secret': 'LIFECYCLE_GOOGLE_MERCHANT_CENTER_CLIENT_SECRET',
+  'google-merchant-center-refresh-token': 'LIFECYCLE_GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN',
   'kie-api-key': 'LIFECYCLE_KIE_API_KEY',
   'fal-key': 'LIFECYCLE_FAL_KEY',
   'apify-token': 'LIFECYCLE_APIFY_TOKEN',

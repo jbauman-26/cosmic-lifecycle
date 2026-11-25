@@ -281,6 +281,7 @@ This is an early release. Here is what has and has not been tested.
 - A bundled uv set with `LIFECYCLE_UV_PATH` inside the packaged Mac app. Here it was run with a stand-in binary and with Homebrew's uv.
 - `connect --key-env` without a keychain against a live account. It was tested against recorded answers.
 - Google Ads on any account, live or test. The connector was written from the Google Ads API docs (v26) and is covered by unit tests against recorded answers only. Getting a refresh token needs Google sign-in with a passkey, done by the account owner.
+- Google Merchant Center on any account. The connector was written from the Merchant API Reports v1 docs and is covered by unit tests against recorded answers only. The exact JSON shape of a report date was not shown in Google's examples; the code reads both a { year, month, day } object and a YYYY-MM-DD string. Getting a refresh token and registering the Cloud project with the account are done by the account owner.
 - Google Search Console. It is a catalog entry only, waiting on Google sign-in. There is no connector code.
 - Anything against the real Cosmic Cloud. `login`, `cloud status`, every `--cloud` command, `skills push` and `delete`, and the tool run records were run against a local stand-in for the Cloud API only. Cloud does not have `/schema`, `/query`, `GET /metrics`, `/runs`, `/skills` or `/tools/runs` yet, so the shapes come from the plan, not from a live answer.
 - `tools abort` on a real Apify or fal job. It was written from their API docs and tested against recorded answers.

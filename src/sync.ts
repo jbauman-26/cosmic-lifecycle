@@ -8,6 +8,7 @@ import type { Ga4Day } from './sources/ga4.js'
 import { applyChanges, changedSince, clearState, readSyncState, replaceState, StateBuffer, stateRow, writeSyncState, type Keyer } from './shopify-state.js'
 import { toDaily, type RawInsight } from './sources/meta.js'
 import { toAdGroupDaily, toCampaignDaily, type RawAdGroupRow, type RawCampaignRow } from './sources/google-ads.js'
+import { countStatuses, toPerformanceDaily, type RawPerformanceRow, type RawProductRow } from './sources/google-merchant-center.js'
 import { aggregateCharges, aggregateSubscriptions, type RawCharge, type RawSubscription } from './sources/stripe.js'
 import { aggregateContacts, aggregateDeals, uniqueCount, type RawContact, type RawDeal } from './sources/hubspot.js'
 import { Klaviyo, isNoReportData, reportsVerified, type FlowDailyRow } from './sources/klaviyo.js'
@@ -527,5 +528,49 @@ export async function syncGoogleAds(
     await setTotal(db, 'google-ads', 'rows_pulled', campaigns.length + adGroups.length)
     const rows = campaignRows + adGroupRows
     return campaignRows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Google Ads returned no campaign activity from ${since} to ${until}.` }
+  })
+}
+
+// Merchant Center restates recent days too, so every sync replaces the whole performance window in one
+// transaction, like Google Ads. The product counts are a snapshot: one row for the day of the sync, replaced if
+// the same day syncs again, and earlier days kept. Rows from any other account are removed from both tables.
+export async function writeMerchantCenter(db: Db, data: { performance: RawPerformanceRow[]; products: RawProductRow[] }, since: string, today: string, account: string) {
+  const daily = toPerformanceDaily(data.performance)
+  const counts = countStatuses(data.products)
+  const at = now()
+  await db.transaction(async (tx: Tx) => {
+    await tx.query(`DELETE FROM fact_merchant_performance_daily WHERE date >= $1 OR account_id <> $2`, [since, account])
+    await tx.query(`DELETE FROM fact_merchant_products_daily WHERE date = $1 OR account_id <> $2`, [today, account])
+    for (const d of daily) {
+      await tx.query(
+        `INSERT INTO fact_merchant_performance_daily VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (date, account_id, marketing_method) DO NOTHING`,
+        [d.date, account, d.marketingMethod, d.clicks, d.impressions, d.conversions, d.conversionValue, d.currency, at],
+      )
+    }
+    await tx.query(
+      `INSERT INTO fact_merchant_products_daily VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [today, account, counts.products, counts.eligible, counts.eligibleLimited, counts.pending, counts.disapproved, at],
+    )
+  })
+  return { performanceRows: daily.length, counts }
+}
+
+export async function syncMerchantCenter(
+  db: Db,
+  load: { performance: (since: string, until: string) => Promise<RawPerformanceRow[]>; products: () => Promise<RawProductRow[]> },
+  opts: { account: string; days?: number; today?: string },
+) {
+  return recordRun(db, 'google-merchant-center', async () => {
+    const until = opts.today ?? now().slice(0, 10)
+    const since = new Date(Date.parse(`${until}T00:00:00Z`) - (opts.days ?? settingValue('metrics.default_days')) * 86400000).toISOString().slice(0, 10)
+    const performance = await load.performance(since, until)
+    const products = await load.products()
+    const { performanceRows, counts } = await writeMerchantCenter(db, { performance, products }, since, until, opts.account)
+    await setTotal(db, 'google-merchant-center', 'rows_pulled', performance.length)
+    await setTotal(db, 'google-merchant-center', 'products', counts.products)
+    const rows = performanceRows + 1
+    if (!counts.products) return { status: 'warning' as const, rows, detail: 'Merchant Center lists no products for this account.' }
+    if (!performanceRows) return { status: 'warning' as const, rows, detail: `Merchant Center reported no clicks or impressions from ${since} to ${until}.` }
+    return { status: 'ok' as const, rows }
   })
 }

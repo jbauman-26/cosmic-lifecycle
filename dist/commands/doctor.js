@@ -10,6 +10,7 @@ import { MetaAds } from '../sources/meta.js';
 import { HubSpot } from '../sources/hubspot.js';
 import { readWorkspace, REFERENCE_NAME } from '../workspace.js';
 import { GoogleAds, googleAdsAccessToken } from '../sources/google-ads.js';
+import { MerchantCenter, merchantAccessToken } from '../sources/google-merchant-center.js';
 import { CliError } from '../errors.js';
 export async function doctor() {
     const checks = [];
@@ -99,6 +100,20 @@ export async function doctor() {
         }
         catch {
             checks.push({ name: 'stripe', ok: false, detail: 'Key was refused.', next: 'Create a restricted key with Read on Charges and Subscriptions, then lifecycle connect stripe --key-env NAME' });
+        }
+    }
+    const gmc = config['google-merchant-center'];
+    const gmcSecret = getSecret('google-merchant-center-client-secret');
+    const gmcRefresh = getSecret('google-merchant-center-refresh-token');
+    if (gmc && (!gmcSecret || !gmcRefresh))
+        checks.push({ name: 'google-merchant-center', ok: false, detail: 'Connected, but the client secret or refresh token is missing.', next: 'lifecycle connect google-merchant-center --account ID --client-id ID --secret-env NAME --refresh-token-env NAME' });
+    else if (gmc && gmcSecret && gmcRefresh) {
+        try {
+            const a = await new MerchantCenter(await merchantAccessToken(gmc.clientId, gmcSecret, gmcRefresh), gmc.account).check();
+            checks.push({ name: 'google-merchant-center', ok: true, detail: `Sign-in reads reports for ${a.name || a.account}` });
+        }
+        catch (e) {
+            checks.push({ name: 'google-merchant-center', ok: false, detail: e instanceof Error ? e.message : 'Sign-in was refused.', next: e instanceof CliError ? e.next : 'lifecycle connect google-merchant-center' });
         }
     }
     const hubspotToken = getSecret('hubspot-token');

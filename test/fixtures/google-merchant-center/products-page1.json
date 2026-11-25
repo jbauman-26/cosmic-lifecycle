@@ -1,0 +1,8 @@
+{
+  "results": [
+    { "productView": { "id": "online~en~US~sku-1", "aggregatedReportingContextStatus": "ELIGIBLE" } },
+    { "productView": { "id": "online~en~US~sku-2", "aggregatedReportingContextStatus": "ELIGIBLE_LIMITED" } },
+    { "productView": { "id": "online~en~US~sku-3", "aggregatedReportingContextStatus": "NOT_ELIGIBLE_OR_DISAPPROVED" } }
+  ],
+  "nextPageToken": "products-2"
+}

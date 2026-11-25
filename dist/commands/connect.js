@@ -8,6 +8,8 @@ import { Stripe, isRestrictedKey, stripeMode } from '../sources/stripe.js';
 import { MetaAds, normalizeAccountId } from '../sources/meta.js';
 import { HubSpot } from '../sources/hubspot.js';
 import { GoogleAds, googleAdsAccessToken, normalizeCustomerId } from '../sources/google-ads.js';
+import { fetchJson } from '../http.js';
+import { MerchantCenter, merchantAccessToken, normalizeMerchantId } from '../sources/google-merchant-center.js';
 const fromEnv = (name) => {
     const value = name ? process.env[name] : undefined;
     if (!value)
@@ -137,4 +139,26 @@ export async function connectGoogleAds(opts) {
     const kept = keys.length ? keepKeys(keys) : NO_KEYS;
     writeConfig({ ...readConfig(), 'google-ads': { customer, ...(loginCustomer ? { loginCustomer } : {}), clientId: opts.clientId, name: a.name, currency: a.currency, timezone: a.timezone, testAccount: a.testAccount } });
     return { connected: true, customer, loginCustomer: loginCustomer ?? null, name: a.name, currency: a.currency, timezone: a.timezone, testAccount: a.testAccount, ...kept };
+}
+const MERCHANT_NEXT = 'lifecycle connect google-merchant-center --account 123456789 --client-id ID --secret-env NAME --refresh-token-env NAME';
+// Read only: Google has no read-only Merchant scope, so the refresh token is for the content scope, but this CLI
+// only ever calls accounts.reports.search and accounts.get.
+export async function connectMerchantCenter(opts, fetcher = fetchJson) {
+    if (!opts.account || !opts.clientId)
+        throw new CliError('The Merchant Center account id and OAuth client id are required.', MERCHANT_NEXT);
+    const account = normalizeMerchantId(opts.account);
+    const secret = opts.secretEnv ? fromEnv(opts.secretEnv) : getSecret('google-merchant-center-client-secret');
+    const refresh = opts.refreshTokenEnv ? fromEnv(opts.refreshTokenEnv) : getSecret('google-merchant-center-refresh-token');
+    if (!secret || !refresh)
+        throw new CliError('Merchant Center credentials are missing.', MERCHANT_NEXT, 'missing_secret');
+    const token = await merchantAccessToken(opts.clientId, secret, refresh, fetcher);
+    const a = await new MerchantCenter(token, account, fetcher).check();
+    const keys = [];
+    if (opts.secretEnv)
+        keys.push(['google-merchant-center-client-secret', secret]);
+    if (opts.refreshTokenEnv)
+        keys.push(['google-merchant-center-refresh-token', refresh]);
+    const kept = keys.length ? keepKeys(keys) : NO_KEYS;
+    writeConfig({ ...readConfig(), 'google-merchant-center': { account, clientId: opts.clientId, name: a.name } });
+    return { connected: true, account, name: a.name, ...kept };
 }

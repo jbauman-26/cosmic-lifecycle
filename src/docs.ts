@@ -58,6 +58,17 @@ Google Ads, about 10 minutes (optional, for ad spend next to revenue):
 5. lifecycle connect google-ads --customer 123-456-7890 --client-id ID --secret-env GOOGLE_ADS_CLIENT_SECRET --refresh-token-env GOOGLE_ADS_REFRESH_TOKEN [--login-customer MANAGER_ID]
 Only read calls are made, even though Google's scope is named for full access.
 
+Google Merchant Center, about 10 minutes (optional, for free listings and Shopping clicks next to revenue):
+1. You need an OAuth client id and secret from a Google Cloud project with the Merchant API on.
+   The Cosmic AI app does this sign-in for you. These steps are for doing it by hand.
+2. Register the Cloud project with the Merchant Center account once (Merchant API developer
+   registration). The Cosmic AI app does this; the CLI never does, because it only reads.
+3. Sign in with Google for a refresh token with the content scope. Google asks for a passkey.
+4. Copy the account id from the top of Merchant Center, such as 123456789.
+5. export GOOGLE_MERCHANT_CENTER_CLIENT_SECRET=... GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN=...
+6. lifecycle connect google-merchant-center --account 123456789 --client-id ID --secret-env GOOGLE_MERCHANT_CENTER_CLIENT_SECRET --refresh-token-env GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN
+Google has no read-only Merchant scope. Only read calls are made: reports and the account name.
+
 Then:
   lifecycle sync
   lifecycle reconcile
@@ -164,7 +175,9 @@ Rules:
 - fact_crm_* tables hold HubSpot counts and amounts by day, pipeline, stage and original source. There are no contact, company or deal records.
 - Purchases and purchase value in fact_meta_ads_daily are what Meta attributes to its own ads. They are a claim, not orders. Never add them to Shopify revenue or to email revenue. For a number with no attribution in it, use the marketing_efficiency_ratio metric.
 - Conversions and conversions_value in fact_google_ads_campaign_daily and fact_google_ads_ad_group_daily are what Google attributes to its own ads. They are a claim, not orders, and they overlap with Meta's claims. Never add them to Shopify revenue, to email revenue or to Meta's purchases. cost is in the account currency.
-- Nothing in this tool sends a message, and nothing changes an ad account. Meta Ads and Google Ads are read only.
+- fact_merchant_performance_daily holds Merchant Center clicks and impressions by day and marketing_method (ORGANIC is free listings, ADS is Shopping ads). conversions and conversion_value are reported by Google for free listings only, so ADS rows have none; they are a claim, not orders. Never add them to Shopify revenue or to Google Ads conversions. currency is empty on rows with no value.
+- fact_merchant_products_daily is one snapshot per sync day of how many products Merchant Center holds and how many are eligible, eligible_limited, pending or disapproved. A day with no sync has no row. There are no product ids or titles.
+- Nothing in this tool sends a message, and nothing changes an ad account or a product feed. Meta Ads, Google Ads and Google Merchant Center are read only.
 - If a command fails with code \`busy\`, another lifecycle command is writing to the store. Wait and run it again. Do not delete files to get past it.
 - \`--cloud\` on a read command asks Cosmic Cloud instead of this machine. Use it only when the user is logged in (\`lifecycle cloud status --format json\`). Code \`not_built\` means Cloud does not have that route yet: run the command without \`--cloud\`, and do not retry. See \`lifecycle docs cloud\`.
 `,
@@ -261,7 +274,7 @@ Without either, the workspace is ~/.lifecycle, as before 0.14.0.
 ## Sources for each type
 
 Built in, with reconcile checks: shopify, klaviyo, ga4, stripe, meta, hubspot.
-Built in, read only, not yet run on a live account: google-ads.
+Built in, read only, not yet run on a live account: google-ads, google-merchant-center.
 Warehouse connectors written from the vendor docs and not yet run on a real
 account: hubspot-records, pipedrive, woocommerce, bigcommerce, customer-io.
 Planned: salesforce, linkedin-ads, google-search-console, posthog, mixpanel.
@@ -324,6 +337,7 @@ lifecycle connect stripe --key-env NAME
 lifecycle connect meta --account ID --token-env NAME
 lifecycle connect hubspot --token-env NAME
 lifecycle connect google-ads --customer ID --client-id ID --secret-env NAME --refresh-token-env NAME [--login-customer ID]
+lifecycle connect google-merchant-center --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
 lifecycle sync [--since DATE] [--only SOURCE[,SOURCE]] [--cloud]
 lifecycle disconnect SOURCE [--delete-data]
 lifecycle schema [TABLE] [--cloud]
@@ -529,7 +543,7 @@ Find and connect a source:
   lifecycle warehouse list | disconnect SLUG
 
 Readiness, said plainly:
-  native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads, Google Ads). Shopify, Klaviyo and GA4 have reconcile checks
+  native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads, Google Ads, Google Merchant Center). Shopify, Klaviyo and GA4 have reconcile checks
   tested   a warehouse connector that has synced a real account
   built    written from the vendor's API docs, not yet run on a real account.
            Expect the first sync to need a fix. Report it: lifecycle feedback
@@ -668,6 +682,16 @@ Google Ads says the account cannot be read, or that it is a manager account:
   Connect a client account, not a manager. If access comes through a manager account, add
   --login-customer MANAGER_ID. A refresh token from an app in Testing mode stops working after
   seven days; sign in again for a new one.
+
+Merchant Center says the project is not registered, or the Merchant API is off:
+  The Merchant API needs the Cloud project turned on for it and registered with the Merchant Center
+  account once. Both happen in the Google Cloud console and the Cosmic AI app. The CLI does neither,
+  because it only reads. Then lifecycle connect google-merchant-center again.
+
+Merchant Center says the account cannot be read:
+  The Google user needs Performance and insights or Admin access on that Merchant Center account.
+  Check the account id at the top of Merchant Center. A refresh token from an app in Testing mode
+  stops working after seven days; sign in again for a new one.
 
 Meta spend looks low for the last few days:
   Meta restates recent days as late conversions arrive. Each sync pulls the last 90 days
