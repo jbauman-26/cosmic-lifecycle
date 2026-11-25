@@ -1,0 +1,11 @@
+{
+  "source": "https://developers.pipedrive.com/docs/api/v1/Deals#getDeals",
+  "resources": {
+    "deals": { "response": { "success": true, "data": [ { "id": 101, "title": "Marta Oyelaran website rebuild", "value": 12000, "currency": "USD", "status": "won", "stage_id": 4, "pipeline_id": 1, "add_time": "2026-10-02 10:11:00", "won_time": "2026-11-01 09:00:00", "origin": "ManuallyCreated", "channel": 3, "person_name": "Marta Oyelaran", "org_name": "Oyelaran Studio", "owner_name": "Theo Brandt", "cc_email": "acme+deal101@pipedrivemail.com", "first_char": "m", "person_id": { "name": "Marta Oyelaran", "email": [ { "value": "marta@oyelaran.example", "primary": true } ], "phone": [ { "value": "+44 20 7946 0958", "primary": true } ], "value": 77 }, "org_id": { "name": "Oyelaran Studio", "address": "4 Mill Lane", "value": 12 }, "user_id": { "id": 9, "name": "Theo Brandt", "email": "theo@acme.example" } } ], "additional_data": { "pagination": { "start": 0, "limit": 500, "more_items_in_collection": false } } } },
+    "leads": { "response": { "success": true, "data": [ { "id": "adf21080-0e10-11eb-879b-05d71fb426ec", "title": "Jun Park inbound demo", "owner_id": 9, "person_id": 78, "organization_id": 13, "source_name": "Web forms", "origin": "WebForms", "channel": 2, "is_archived": false, "value": { "amount": 3000, "currency": "USD" }, "add_time": "2026-11-03T10:00:00.000Z" } ], "additional_data": { "pagination": { "start": 0, "limit": 500, "more_items_in_collection": false } } } },
+    "pipelines": { "response": { "success": true, "data": [ { "id": 1, "name": "Sales pipeline", "active": true } ] } },
+    "stages": { "response": { "success": true, "data": [ { "id": 4, "name": "Proposal made", "pipeline_id": 1, "deal_probability": 80 } ] } }
+  },
+  "personal": ["Marta Oyelaran", "Oyelaran Studio", "Theo Brandt", "marta@oyelaran.example", "+44 20 7946 0958", "4 Mill Lane", "theo@acme.example", "Jun Park", "acme+deal101@pipedrivemail.com"],
+  "kept": ["\"value\": 12000", "won_time", "ManuallyCreated", "Web forms", "Sales pipeline", "Proposal made", "\"value\": 77"]
+}

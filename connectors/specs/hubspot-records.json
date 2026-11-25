@@ -1,0 +1,65 @@
+{
+  "slug": "hubspot-records",
+  "name": "HubSpot records (deals and contacts)",
+  "docs": "https://developers.hubspot.com/docs/api/crm/deals",
+  "credentials": [
+    {
+      "name": "access_token",
+      "label": "Private app access token",
+      "help": "In HubSpot open Settings, Integrations, Private Apps, then Create a private app. Under Scopes tick crm.objects.deals.read and crm.objects.contacts.read only, create it and copy the access token. This connector only sends GET requests and asks HubSpot for named properties only, none of them a name, email, phone or company."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://api.hubapi.com/",
+      "auth": {
+        "type": "bearer",
+        "token": "{secret:access_token}"
+      },
+      "paginator": {
+        "type": "cursor",
+        "cursor_path": "paging.next.after",
+        "cursor_param": "after"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge",
+      "endpoint": {
+        "data_selector": "results"
+      }
+    },
+    "resources": [
+      {
+        "name": "deals",
+        "endpoint": {
+          "path": "crm/v3/objects/deals",
+          "params": {
+            "limit": 100,
+            "archived": "false",
+            "properties": "createdate,closedate,amount,deal_currency_code,dealstage,pipeline,hs_is_closed,hs_is_closed_won,hs_analytics_source,hs_analytics_source_data_1"
+          }
+        }
+      },
+      {
+        "name": "contacts",
+        "endpoint": {
+          "path": "crm/v3/objects/contacts",
+          "params": {
+            "limit": 100,
+            "archived": "false",
+            "properties": "createdate,lifecyclestage,hs_lead_status,hs_analytics_source,hs_analytics_source_data_1"
+          }
+        }
+      }
+    ]
+  },
+  "notes": "One row per deal and per contact with its HubSpot id, stage, original source, dates and amount. HubSpot returns only the properties named in the request, so no name, email, phone or company is ever asked for. hs_analytics_source_data_1 is HubSpot's source detail, such as a campaign or referring site; on some portals it holds a page URL. Full refresh merged on id every run. The built-in hubspot source (lifecycle connect hubspot) keeps daily counts with reconcile checks; use this one when you want row-level pipeline analysis in SQL.",
+  "strip_fields": [
+    "dealname",
+    "company",
+    "jobtitle",
+    "website"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "source": "https://developers.hubspot.com/docs/api/crm/deals",
+  "resources": {
+    "deals": { "response": { "results": [ { "id": "9001", "properties": { "amount": "12500", "closedate": "2026-11-10T00:00:00Z", "createdate": "2026-10-01T12:00:00Z", "dealstage": "closedwon", "pipeline": "default", "hs_analytics_source": "PAID_SEARCH", "hs_object_id": "9001", "dealname": "Okafor Logistics renewal", "hubspot_owner_id": "77" }, "createdAt": "2026-10-01T12:00:00Z", "archived": false } ] } },
+    "contacts": { "response": { "results": [ { "id": "51", "properties": { "createdate": "2026-11-01T09:00:00Z", "lifecyclestage": "lead", "hs_analytics_source": "ORGANIC_SEARCH", "hs_object_id": "51", "email": "chidi.okafor@example.com", "firstname": "Chidi", "lastname": "Okafor", "phone": "+2348031234567" }, "createdAt": "2026-11-01T09:00:00Z", "archived": false } ] } }
+  },
+  "personal": ["chidi.okafor@example.com", "Chidi", "Okafor", "+2348031234567"],
+  "kept": ["PAID_SEARCH", "ORGANIC_SEARCH", "12500", "closedwon", "\"id\": \"51\""]
+}
