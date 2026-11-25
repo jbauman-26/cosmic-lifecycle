@@ -4,9 +4,9 @@ import { readRawConfig, removeConfigSection } from './config.js'
 import { CliError } from './errors.js'
 import { deleteSecret, envName, type SecretName } from './secrets.js'
 
-// The five sources built into the CLI. Each one has a config section written by
+// The sources built into the CLI. Each one has a config section written by
 // connect, the keys it saved, and the tables only it fills.
-export const NATIVE = ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta'] as const
+export const NATIVE = ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'hubspot'] as const
 export type NativeSource = (typeof NATIVE)[number]
 
 export const NATIVE_SECRETS: Record<NativeSource, SecretName[]> = {
@@ -15,6 +15,7 @@ export const NATIVE_SECRETS: Record<NativeSource, SecretName[]> = {
   ga4: ['ga4-client-secret', 'ga4-refresh-token'],
   stripe: ['stripe-read-key'],
   meta: ['meta-ads-token'],
+  hubspot: ['hubspot-token'],
 }
 
 // Tables only this source writes. meta_sync_run is kept on purpose: it is the
@@ -25,6 +26,7 @@ export const NATIVE_TABLES: Record<NativeSource, string[]> = {
   ga4: ['fact_ga4_daily'],
   stripe: ['fact_stripe_daily', 'fact_stripe_subscriptions_daily', 'fact_stripe_mrr'],
   meta: ['fact_meta_ads_daily'],
+  hubspot: ['fact_crm_deals_daily', 'fact_crm_pipeline_open', 'fact_crm_contacts_daily'],
 }
 
 export const isNative = (s: string): s is NativeSource => (NATIVE as readonly string[]).includes(s)

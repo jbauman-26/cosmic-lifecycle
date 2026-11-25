@@ -12,6 +12,9 @@ const Config = z
     ga4: z.object({ property: z.string(), clientId: z.string() }).optional(),
     stripe: z.object({ mode: z.enum(['test', 'live']), subscriptions: z.boolean() }).optional(),
     meta: z.object({ account: z.string(), name: z.string(), currency: z.string(), timezone: z.string() }).optional(),
+    hubspot: z.object({ portal: z.string(), currency: z.string() }).optional(),
+    // What kind of business this is, and which source the trust gate checks against. Missing means shopify.
+    workspace: z.object({ type: z.string(), reference: z.string() }).partial().optional(),
     registry: z.object({ uri: z.string() }).partial().optional(),
     deploy: z.object({ repo: z.string() }).partial().optional(),
     update: z.object({ check: z.boolean() }).partial().optional(),
@@ -108,10 +111,33 @@ export const SETTINGS = {
   'query.row_cap': { description: 'Most rows lifecycle query returns', default: 1000, parse: numberIn('query.row_cap', 1, 100000, { whole: true, example: '1000' }) },
   'metrics.default_days': { description: 'Window in days for metrics, reports and sync pulls when none is given', default: 90, parse: numberIn('metrics.default_days', 1, 730, { whole: true, example: '90' }) },
 } satisfies Record<string, Setting>
-export type SettingKey = keyof typeof SETTINGS
+
+// Settings added in 0.14.0 for workspaces that are not Shopify stores. They can be set in any
+// workspace, and `config list` shows them in every workspace but a store, whose list reads as in 0.13.
+export const WORKSPACE_SETTINGS = {
+  'workspace.currency': { description: 'This store\'s currency for a roll-up across stores, such as EUR. Read from Shopify by lifecycle costs sync when not set', parse: (v: string) => {
+    const c = v.trim().toUpperCase()
+    if (!/^[A-Z]{3}$/.test(c)) throw new CliError('Use a three letter currency code, such as EUR.', 'lifecycle config set workspace.currency EUR', 'bad_value')
+    return c
+  } },
+  'rollup.currency': { description: 'Reporting currency for metrics run --all-stores, such as USD', parse: (v: string) => {
+    const c = v.trim().toUpperCase()
+    if (!/^[A-Z]{3}$/.test(c)) throw new CliError('Use a three letter currency code, such as USD.', 'lifecycle config set rollup.currency USD', 'bad_value')
+    return c
+  } },
+  'workspace.reference': { description: 'Source of truth the trust gate checks against: shopify, stripe, hubspot, ga4 or none. Default: the one for the workspace type', parse: (v: string) => {
+    const r = v.trim().toLowerCase()
+    if (!['shopify', 'stripe', 'hubspot', 'ga4', 'none'].includes(r)) throw new CliError('Use shopify, stripe, hubspot, ga4 or none.', 'lifecycle config set workspace.reference stripe', 'bad_value')
+    return r
+  } },
+  'reconcile.ad_claim_flag': { description: 'Warn when an ad platform claims more purchases than this percent of what the reference source recorded. Not used by Shopify workspaces', default: 100, parse: numberIn('reconcile.ad_claim_flag', 1, 1000, { example: '100' }) },
+} satisfies Record<string, Setting>
+
+const ALL_SETTINGS = { ...SETTINGS, ...WORKSPACE_SETTINGS }
+export type SettingKey = keyof typeof ALL_SETTINGS
 
 function assertKey(key: string): asserts key is SettingKey {
-  if (!(key in SETTINGS)) throw new CliError(`Unknown setting ${key}.`, `Settings: ${Object.keys(SETTINGS).join(', ')}`, 'unknown_setting')
+  if (!(key in ALL_SETTINGS)) throw new CliError(`Unknown setting ${key}.`, `Settings: ${Object.keys(ALL_SETTINGS).join(', ')}`, 'unknown_setting')
 }
 
 const pathOf = (key: string) => key.split('.')
@@ -124,7 +150,7 @@ export function getSetting(key: string): unknown {
   return node
 }
 
-export const defaultOf = (key: SettingKey): number | string | undefined => (SETTINGS[key] as Setting).default
+export const defaultOf = (key: SettingKey): number | string | undefined => (ALL_SETTINGS[key] as Setting).default
 
 // What the CLI uses: the set value, else the default. A value someone typed into
 // the file by hand that is out of range falls back to the default too.
@@ -139,7 +165,7 @@ export function settingValue(key: SettingKey): number {
   }
   if (raw === undefined || raw === null) return d
   try {
-    return SETTINGS[key].parse(String(raw)) as number
+    return ALL_SETTINGS[key].parse(String(raw)) as number
   } catch {
     return d
   }
@@ -147,7 +173,7 @@ export function settingValue(key: SettingKey): number {
 
 export function setSetting(key: string, value: string) {
   assertKey(key)
-  const parsed = SETTINGS[key].parse(value)
+  const parsed = ALL_SETTINGS[key].parse(value)
   const raw = readRawConfig()
   const parts = pathOf(key)
   let node: any = raw
@@ -180,7 +206,17 @@ export function unsetSetting(key: string) {
 }
 
 export function listSettings() {
-  return (Object.keys(SETTINGS) as SettingKey[]).map((key) => ({ key, value: getSetting(key) ?? null, default: defaultOf(key) ?? null, description: SETTINGS[key].description }))
+  const store = String(readRawConfigSafe()?.workspace?.type ?? 'shopify') === 'shopify'
+  const keys = Object.keys(store ? SETTINGS : ALL_SETTINGS) as SettingKey[]
+  return keys.map((key) => ({ key, value: getSetting(key) ?? null, default: defaultOf(key) ?? null, description: ALL_SETTINGS[key].description }))
+}
+
+const readRawConfigSafe = () => {
+  try {
+    return readRawConfig()
+  } catch {
+    return {}
+  }
 }
 
 // Removes a whole top-level section, such as a native source a person disconnected.

@@ -1,0 +1,8 @@
+{
+  "source": "https://developer.bigcommerce.com/docs/rest-management/orders#get-all-orders",
+  "resources": {
+    "orders": { "response": [ { "id": 118, "customer_id": 11, "date_created": "Tue, 03 Nov 2026 19:22:10 +0000", "status_id": 11, "status": "Awaiting Fulfillment", "subtotal_inc_tax": "225.0000", "total_inc_tax": "225.0000", "items_total": 3, "refunded_amount": "0.0000", "currency_code": "USD", "payment_method": "Credit Card", "order_source": "www", "customer_message": "Call Priya Natarajan before delivery", "staff_notes": "VIP, knows the owner", "ip_address": "198.51.100.23", "geoip_country": "United States", "billing_address": { "first_name": "Priya", "last_name": "Natarajan", "company": "Natarajan Labs", "street_1": "77 Orchard Road", "city": "Austin", "zip": "78701", "country": "United States", "phone": "512-555-0142", "email": "priya@natarajan.example" }, "products": { "url": "https://api.bigcommerce.com/stores/abc/v2/orders/118/products", "resource": "/orders/118/products" } } ] }
+  },
+  "personal": ["Priya", "Natarajan", "77 Orchard Road", "78701", "512-555-0142", "priya@natarajan.example", "198.51.100.23", "VIP, knows the owner"],
+  "kept": ["\"total_inc_tax\": \"225.0000\"", "Awaiting Fulfillment", "\"customer_id\": 11", "Credit Card"]
+}

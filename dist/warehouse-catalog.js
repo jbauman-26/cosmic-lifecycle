@@ -3293,5 +3293,424 @@ export const WAREHOUSE_CATALOG = [
         "credentials": [],
         "params": [],
         "notes": "Planned as a built-in source, not a warehouse connector. Needs Google sign-in: the owner signs in with Google in the Cosmic AI app and picks a site. The CLI has no connector code for it yet. CSV import of daily clicks and impressions meanwhile."
+    },
+    {
+        "slug": "hubspot-records",
+        "name": "HubSpot records (deals and contacts)",
+        "category": "crm",
+        "readiness": "built",
+        "why": "Added in 0.14.0 for B2B workspaces: the CRM is where lead source and pipeline live, and B2B marketers say lead source reporting breaks there first. Source: https://www.reddit.com/r/b2bmarketing/comments/1xxn4g9/our_crm_says_most_of_our_leads_come_from_other/",
+        "docs": "https://developers.hubspot.com/docs/api/crm/deals",
+        "credentials": [
+            {
+                "name": "access_token",
+                "label": "Private app access token",
+                "help": "In HubSpot open Settings, Integrations, Private Apps, then Create a private app. Under Scopes tick crm.objects.deals.read and crm.objects.contacts.read only, create it and copy the access token. This connector only sends GET requests and asks HubSpot for named properties only, none of them a name, email, phone or company."
+            }
+        ],
+        "params": [],
+        "config": {
+            "client": {
+                "base_url": "https://api.hubapi.com/",
+                "auth": {
+                    "type": "bearer",
+                    "token": "{secret:access_token}"
+                },
+                "paginator": {
+                    "type": "cursor",
+                    "cursor_path": "paging.next.after",
+                    "cursor_param": "after"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge",
+                "endpoint": {
+                    "data_selector": "results"
+                }
+            },
+            "resources": [
+                {
+                    "name": "deals",
+                    "endpoint": {
+                        "path": "crm/v3/objects/deals",
+                        "params": {
+                            "limit": 100,
+                            "archived": "false",
+                            "properties": "createdate,closedate,amount,deal_currency_code,dealstage,pipeline,hs_is_closed,hs_is_closed_won,hs_analytics_source,hs_analytics_source_data_1"
+                        }
+                    }
+                },
+                {
+                    "name": "contacts",
+                    "endpoint": {
+                        "path": "crm/v3/objects/contacts",
+                        "params": {
+                            "limit": 100,
+                            "archived": "false",
+                            "properties": "createdate,lifecyclestage,hs_lead_status,hs_analytics_source,hs_analytics_source_data_1"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "One row per deal and per contact with its HubSpot id, stage, original source, dates and amount. HubSpot returns only the properties named in the request, so no name, email, phone or company is ever asked for. hs_analytics_source_data_1 is HubSpot's source detail, such as a campaign or referring site; on some portals it holds a page URL. Full refresh merged on id every run. The built-in hubspot source (lifecycle connect hubspot) keeps daily counts with reconcile checks; use this one when you want row-level pipeline analysis in SQL.",
+        "stripFields": [
+            "dealname",
+            "company",
+            "jobtitle",
+            "website"
+        ]
+    },
+    {
+        "slug": "pipedrive",
+        "name": "Pipedrive",
+        "category": "crm",
+        "readiness": "built",
+        "why": "Added in 0.14.0 for B2B workspaces: a CRM dlt lists as a verified source (https://dlthub.com/docs/dlt-ecosystem/verified-sources/pipedrive). Agencies treat the CRM's lead source as the record. Source: https://www.reddit.com/r/PPC/comments/1oc0fu7/agencies_how_do_you_track_conversions/",
+        "docs": "https://developers.pipedrive.com/docs/api/v1",
+        "credentials": [
+            {
+                "name": "api_token",
+                "label": "Personal API token",
+                "help": "In Pipedrive open your profile menu, Personal preferences, API, and copy your personal API token. Pipedrive tokens cannot be made read-only and see what your user sees, so use a user with only the access you want loaded. This connector only sends GET requests."
+            }
+        ],
+        "params": [
+            {
+                "name": "company_domain",
+                "label": "Company domain (the part before .pipedrive.com)",
+                "example": "acme"
+            }
+        ],
+        "config": {
+            "client": {
+                "base_url": "https://{param:company_domain}.pipedrive.com/api/v1/",
+                "auth": {
+                    "type": "api_key",
+                    "name": "x-api-token",
+                    "api_key": "{secret:api_token}",
+                    "location": "header"
+                },
+                "paginator": {
+                    "type": "offset",
+                    "limit": 500,
+                    "offset": 0,
+                    "offset_param": "start",
+                    "limit_param": "limit",
+                    "total_path": null,
+                    "has_more_path": "additional_data.pagination.more_items_in_collection"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge",
+                "endpoint": {
+                    "data_selector": "data"
+                }
+            },
+            "resources": [
+                {
+                    "name": "deals",
+                    "endpoint": {
+                        "path": "deals",
+                        "params": {
+                            "status": "all_not_deleted"
+                        }
+                    }
+                },
+                {
+                    "name": "leads",
+                    "endpoint": {
+                        "path": "leads"
+                    }
+                },
+                {
+                    "name": "pipelines",
+                    "endpoint": {
+                        "path": "pipelines",
+                        "paginator": {
+                            "type": "single_page"
+                        }
+                    }
+                },
+                {
+                    "name": "stages",
+                    "endpoint": {
+                        "path": "stages",
+                        "paginator": {
+                            "type": "single_page"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Deals and leads keep their ids, stage, pipeline, value, currency, status, dates, origin and source channel. Person and organization names, deal and lead titles (which often hold a name) and the CC address are removed before loading; person_id keeps only its numeric value. Persons, organizations, notes and activities are not loaded. Pages of up to 500 by start and limit, stopping when Pipedrive says there are no more items. Full refresh merged on id.",
+        "stripFields": [
+            "person_name",
+            "org_name",
+            "owner_name",
+            "cc_email",
+            "title",
+            "first_char",
+            "org_id",
+            "organization_id",
+            "label_ids",
+            "visible_to"
+        ]
+    },
+    {
+        "slug": "woocommerce",
+        "name": "WooCommerce",
+        "category": "store",
+        "readiness": "built",
+        "why": "Added in 0.14.0 for stores not on Shopify. Store owners on WooCommerce report GA4 purchases that do not match their orders. Source: https://www.reddit.com/r/GoogleAnalytics/comments/1voaecy/need_help_with_ga4_tracking_and_woocommerce/",
+        "docs": "https://woocommerce.github.io/woocommerce-rest-api-docs/",
+        "credentials": [
+            {
+                "name": "consumer_key",
+                "label": "Consumer key",
+                "help": "In WordPress open WooCommerce, Settings, Advanced, REST API, then Add key. Pick a user, set Permissions to Read, generate, and copy the consumer key (ck_...). This connector only sends GET requests over https."
+            },
+            {
+                "name": "consumer_secret",
+                "label": "Consumer secret",
+                "help": "Shown once next to the consumer key (cs_...). Copy it before leaving the page."
+            }
+        ],
+        "params": [
+            {
+                "name": "store_url",
+                "label": "Store address without https://",
+                "example": "shop.example.com"
+            }
+        ],
+        "config": {
+            "client": {
+                "base_url": "https://{param:store_url}/wp-json/wc/v3/",
+                "auth": {
+                    "type": "http_basic",
+                    "username": "{secret:consumer_key}",
+                    "password": "{secret:consumer_secret}"
+                },
+                "paginator": {
+                    "type": "header_link"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "orders",
+                    "endpoint": {
+                        "path": "orders",
+                        "params": {
+                            "per_page": 100,
+                            "status": "any"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Orders keep id, number, status, currency, totals, tax, discounts, dates, payment method, line items (product, quantity, price) and customer_id. Billing and shipping blocks, the customer note, IP address and user agent are removed. meta_data is removed whole, because WooCommerce and its plugins store copies of billing fields there as key and value pairs that no field-name rule can see. Each order's refunds list keeps id and total; the refund reason is free text and removed. Pages by the Link header WooCommerce sends. Full refresh merged on id.",
+        "stripFields": [
+            "meta_data",
+            "customer_note",
+            "customer_user_agent",
+            "customer_ip_address",
+            "company",
+            "billing",
+            "shipping",
+            "shipping_lines",
+            "fee_lines",
+            "reason",
+            "refunded_by"
+        ]
+    },
+    {
+        "slug": "bigcommerce",
+        "name": "BigCommerce",
+        "category": "store",
+        "readiness": "built",
+        "why": "Added in 0.14.0 for stores not on Shopify. No usage count on file.",
+        "docs": "https://developer.bigcommerce.com/docs/rest-management/orders",
+        "credentials": [
+            {
+                "name": "access_token",
+                "label": "Store API account access token",
+                "help": "In the BigCommerce control panel open Settings, Store-level API accounts, Create API account. Set Orders to read-only and every other scope to None, save, and copy the access token. The store hash is the part after /stores/ in the API path shown on the same page. This connector only sends GET requests."
+            }
+        ],
+        "params": [
+            {
+                "name": "store_hash",
+                "label": "Store hash (from the API path, stores/HASH/)",
+                "example": "abc123xyz"
+            }
+        ],
+        "config": {
+            "client": {
+                "base_url": "https://api.bigcommerce.com/stores/{param:store_hash}/",
+                "auth": {
+                    "type": "api_key",
+                    "name": "X-Auth-Token",
+                    "api_key": "{secret:access_token}",
+                    "location": "header"
+                },
+                "headers": {
+                    "Accept": "application/json"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "orders",
+                    "endpoint": {
+                        "path": "v2/orders",
+                        "params": {
+                            "limit": 250,
+                            "sort": "id:asc"
+                        },
+                        "paginator": {
+                            "type": "page_number",
+                            "base_page": 1,
+                            "page_param": "page",
+                            "total_path": null,
+                            "stop_after_empty_page": true
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Orders keep id, status, currency, subtotal, tax, shipping, discount and total amounts, item counts, refunded amount, payment method, channel, dates and customer_id. Billing address, customer and staff messages and IP data are removed. The order's sub-resources (products, shipping addresses, coupons) are links on v2 and are not followed. BigCommerce v2 answers an empty page with 204 No Content; the runner treats that as the last page, which has not been seen on a real store. Full refresh merged on id.",
+        "stripFields": [
+            "billing_address",
+            "customer_message",
+            "staff_notes",
+            "ip_address",
+            "ip_address_v6",
+            "geoip_country",
+            "geoip_country_iso2",
+            "shipping_addresses",
+            "products",
+            "coupons",
+            "consignments"
+        ]
+    },
+    {
+        "slug": "customer-io",
+        "name": "Customer.io",
+        "category": "email-sms",
+        "readiness": "built",
+        "why": "Added in 0.14.0 for SaaS workspaces, as the lifecycle email tool many of them use instead of Klaviyo. No usage count on file.",
+        "docs": "https://docs.customer.io/api/app/",
+        "credentials": [
+            {
+                "name": "app_api_key",
+                "label": "App API key",
+                "help": "In Customer.io open Account settings, API credentials, App API keys, and create a key. Customer.io App API keys are not scoped, so treat it as full access. This connector only sends GET requests to the campaign and newsletter lists, never to people."
+            }
+        ],
+        "params": [
+            {
+                "name": "region",
+                "label": "API host: api for US accounts, api-eu for EU accounts",
+                "example": "api"
+            }
+        ],
+        "config": {
+            "client": {
+                "base_url": "https://{param:region}.customer.io/v1/",
+                "auth": {
+                    "type": "bearer",
+                    "token": "{secret:app_api_key}"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "campaigns",
+                    "endpoint": {
+                        "path": "campaigns",
+                        "data_selector": "campaigns",
+                        "paginator": {
+                            "type": "single_page"
+                        }
+                    }
+                },
+                {
+                    "name": "newsletters",
+                    "endpoint": {
+                        "path": "newsletters",
+                        "params": {
+                            "limit": 100
+                        },
+                        "data_selector": "newsletters",
+                        "paginator": {
+                            "type": "cursor",
+                            "cursor_path": "next",
+                            "cursor_param": "start"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Campaign and newsletter settings: id, name, state, type, tags, dates. No people, segments or delivery logs are loaded. Customer.io's per-campaign metrics are a separate call per campaign and are not loaded yet. created_by and updated_by name a teammate and are removed.",
+        "stripFields": [
+            "created_by",
+            "updated_by"
+        ]
+    },
+    {
+        "slug": "salesforce",
+        "name": "Salesforce",
+        "category": "crm",
+        "readiness": "planned",
+        "why": "Added in 0.14.0 for B2B workspaces. dlt lists it as a verified source (https://dlthub.com/docs/dlt-ecosystem/verified-sources/salesforce).",
+        "docs": "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/",
+        "credentials": [],
+        "params": [],
+        "notes": "Planned. Salesforce needs an OAuth connected app and SOQL queries, not a REST list spec, so it waits for the sign-in flow in the Cosmic AI app. CSV import of daily pipeline totals meanwhile."
+    },
+    {
+        "slug": "linkedin-ads",
+        "name": "LinkedIn Ads",
+        "category": "ads",
+        "readiness": "planned",
+        "why": "Added in 0.14.0 for B2B workspaces, where LinkedIn is a common paid channel. No usage count on file.",
+        "docs": "https://learn.microsoft.com/en-us/linkedin/marketing/",
+        "credentials": [],
+        "params": [],
+        "notes": "Planned. The Marketing API needs an OAuth app that LinkedIn approves for advertising access, and Cosmic has not applied. CSV import of daily spend and clicks meanwhile."
+    },
+    {
+        "slug": "posthog",
+        "name": "PostHog",
+        "category": "product-analytics",
+        "readiness": "planned",
+        "why": "Added in 0.14.0 for SaaS workspaces that track signups in product analytics. No usage count on file.",
+        "docs": "https://posthog.com/docs/api",
+        "credentials": [],
+        "params": [],
+        "notes": "Planned. Daily event counts come from PostHog's query endpoint as rows of arrays, which needs a small runner change; the events and persons lists carry person properties. CSV import of daily signups meanwhile."
+    },
+    {
+        "slug": "mixpanel",
+        "name": "Mixpanel",
+        "category": "product-analytics",
+        "readiness": "planned",
+        "why": "Added in 0.14.0 for SaaS workspaces that track signups in product analytics. No usage count on file.",
+        "docs": "https://developer.mixpanel.com/reference/overview",
+        "credentials": [],
+        "params": [],
+        "notes": "Planned. Mixpanel's raw export streams one event per line, not a JSON list, and carries person properties. Its segmentation query fits better and needs a runner change. CSV import of daily signups meanwhile."
     }
 ];

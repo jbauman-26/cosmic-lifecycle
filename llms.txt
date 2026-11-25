@@ -9,9 +9,10 @@ Follow this playbook in order, then stop and report what is live. Do not invent 
 
 ## What it is
 
-A free CLI that gives an agent a clean view of a Shopify brand's
-Klaviyo results. It syncs totals into a database the user owns, checks that the
-sources agree, and finds what to fix. It never sends a message, stores no
+A free CLI that gives an agent marketing numbers it can trust, for a Shopify
+store, another kind of store, a SaaS product, a B2B pipeline, an agency client or
+a creator business. It syncs totals into a database the user owns, checks them
+against the business's source of truth, and finds what to fix. It never sends a message, stores no
 customer records, and has no account or server of ours in the path.
 
 ## Before you start
@@ -30,9 +31,11 @@ customer records, and has no account or server of ours in the path.
      npm install -g ./cosmic-lifecycle.tgz
 2. Show it working with no keys, on labeled sample data:
      lifecycle demo
-3. Set up the local database:
-     lifecycle init
-4. Connect ONE source first. Klaviyo takes about 2 minutes:
+3. Set up the local database, saying what kind of business this is:
+     lifecycle init --type shopify    (or ecommerce, saas, b2b, agency, creator)
+   Not a Shopify store? Run lifecycle docs workspaces, connect the source of truth
+   it names (Stripe or HubSpot), and skip the Klaviyo and Shopify steps below.
+4. Connect ONE source first. For a store, Klaviyo takes about 2 minutes:
      lifecycle sources catalog
      lifecycle docs setup
      lifecycle connect klaviyo --key-env KLAVIYO_READ_KEY

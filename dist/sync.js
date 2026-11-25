@@ -4,6 +4,7 @@ import { settingValue } from './config.js';
 import { aggregateOrders } from './sources/shopify.js';
 import { toDaily } from './sources/meta.js';
 import { aggregateCharges, aggregateSubscriptions } from './sources/stripe.js';
+import { aggregateContacts, aggregateDeals, uniqueCount } from './sources/hubspot.js';
 import { isNoReportData, reportsVerified } from './sources/klaviyo.js';
 const now = () => new Date().toISOString();
 async function recordRun(db, source, fn) {
@@ -168,8 +169,13 @@ export async function syncStripe(db, load) {
         const subs = await load.subscriptions();
         const { rows, unpriced } = await writeStripe(db, charges, subs);
         await setTotal(db, 'stripe', 'charges_pulled', charges.length);
+        // 0.14.0: what the daily rows must add up to, and how many subscriptions are open right now,
+        // so the trust gate can check Stripe's daily tables against the pull itself.
+        await setTotal(db, 'stripe', 'charges_counted', charges.filter((c) => c.status === 'succeeded' || c.status === 'failed').length);
         if (subs)
             await setTotal(db, 'stripe', 'subscriptions_pulled', subs.length);
+        if (subs)
+            await setTotal(db, 'stripe', 'subscriptions_open', subs.filter((x) => x.status !== 'incomplete_expired' && !x.ended_at).length);
         const notes = [
             subs ? null : 'This key cannot read subscriptions, so MRR and churn were skipped.',
             unpriced ? `${unpriced} subscription items use tiered or metered prices and are left out of MRR.` : null,
@@ -200,5 +206,46 @@ export async function syncMeta(db, load, opts = {}) {
         const { rows } = await writeMeta(db, raw, since, opts.currency ?? '', opts.account ?? '');
         await setTotal(db, 'meta', 'rows_pulled', raw.length);
         return rows ? { status: 'ok', rows } : { status: 'warning', rows, detail: `Meta returned no campaign activity from ${since} to ${until}.` };
+    });
+}
+// HubSpot, recomputed from the full pull in one transaction like Shopify and Stripe, so a re-run
+// never double counts. The open pipeline is a snapshot kept per day, like MRR.
+export async function writeHubspot(db, deals, contacts, currency, today = now().slice(0, 10)) {
+    const { daily, open } = aggregateDeals(deals, currency);
+    const people = aggregateContacts(contacts);
+    const at = now();
+    await db.transaction(async (tx) => {
+        await tx.query('DELETE FROM fact_crm_deals_daily');
+        for (const d of daily) {
+            await tx.query(`INSERT INTO fact_crm_deals_daily VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [d.date, d.currency, d.pipeline, d.source, d.created, d.amountCreated, d.won, d.lost, d.wonAmount, at]);
+        }
+        await tx.query('DELETE FROM fact_crm_pipeline_open WHERE date = $1', [today]);
+        for (const o of open) {
+            await tx.query(`INSERT INTO fact_crm_pipeline_open VALUES ($1,$2,$3,$4,$5,$6,$7)`, [today, o.currency, o.pipeline, o.stage, o.deals, o.amount, at]);
+        }
+        await tx.query('DELETE FROM fact_crm_contacts_daily');
+        for (const c of people) {
+            await tx.query(`INSERT INTO fact_crm_contacts_daily VALUES ($1,$2,$3,$4,$5)`, [c.date, c.source, c.stage, c.contacts, at]);
+        }
+    });
+    return daily.length + open.length + people.length;
+}
+export async function syncHubspot(db, load, opts = {}) {
+    return recordRun(db, 'hubspot', async () => {
+        const deals = await load.deals();
+        const contacts = await load.contacts();
+        const rows = await writeHubspot(db, deals, contacts, opts.currency ?? 'usd');
+        await setTotal(db, 'hubspot', 'deals_pulled', uniqueCount(deals));
+        await setTotal(db, 'hubspot', 'contacts_pulled', uniqueCount(contacts));
+        for (const object of ['deals', 'contacts']) {
+            const reported = load.total ? await load.total(object) : null;
+            if (reported === null)
+                await db.query(`DELETE FROM meta_source_total WHERE source = 'hubspot' AND metric = $1`, [`${object}_reported`]);
+            else
+                await setTotal(db, 'hubspot', `${object}_reported`, reported);
+        }
+        if (!deals.length && !contacts.length)
+            return { status: 'warning', rows, detail: 'HubSpot returned no deals and no contacts.' };
+        return { status: 'ok', rows };
     });
 }
