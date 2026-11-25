@@ -2,6 +2,22 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.15.1 (2026-11-25)
+
+Reconcile checks only what it can honestly check. Found on a test store whose warehouse began as a copy of another store: GA4 failed with GA4 not connected (465,913 copied purchases against 546 real Shopify orders), and Klaviyo failed against 493,470 copied Placed Order events.
+
+### Fixed
+
+- **A two-source check runs only when both sources are connected now** (read from config.json), have finished a sync since they were connected, and are not syncing right now. Otherwise the check is skipped with a detail that starts `Not checked yet:` and names the reason, so a reader can tell it apart from a failure.
+- **Rows from before a disconnect never count.** Klaviyo, GA4 and flow rows synced before the source's latest disconnect belong to an account that is gone.
+- **A Klaviyo sync replaces the stored Placed Order days it pulls**, and clears them when the account has no Placed Order metric, so rows from another account cannot mix with this one's.
+- **Complete days only.** Order counts compare the window up to yesterday, so today's partial day and late events never fail a check. Shopify and Klaviyo both count by UTC day; GA4 counts by its property's day, which the tolerance covers over complete days.
+
+### Added
+
+- Setting `reconcile.min_difference` (3): two order counts that differ by this many orders or fewer pass whatever the percent, so a small store does not fail on one late order. A Klaviyo account with no orders against a store with this many orders or fewer is not checked yet.
+- `compareCounts` and `connectedNow` in `reconcile.ts`. `tolerances()` carries `minDifference` and `connected`.
+
 ## 0.15.0 (2026-11-25)
 
 Incremental Shopify sync. After the first full pull, a daily sync asks Shopify only for orders changed since the last one and rebuilds only the days and cohorts they touch. To do that and still count new versus returning customers right, the database now keeps one scrambled id per Shopify customer, made with a key that belongs to that store and is held outside the database. Built from Shopify's documentation and tested against hand-made and synthetic orders; no real store was connected.

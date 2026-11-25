@@ -323,6 +323,9 @@ export async function syncKlaviyo(db: Db, k: Klaviyo, opts: { since?: string; un
     if (metricId) {
       const placed = await k.placedOrdersDaily(metricId, start, end)
       await db.transaction(async (tx) => {
+        // The account's answer for these days replaces whatever was stored for them, so rows from
+        // another account (a copied warehouse, a reconnect) never mix with this one's.
+        await tx.query(`DELETE FROM fact_klaviyo_orders_daily WHERE date >= $1 AND date <= $2`, [start.slice(0, 10), end.slice(0, 10)])
         for (const p of placed) {
           await tx.query(
             `INSERT INTO fact_klaviyo_orders_daily VALUES ($1,$2,$3,$4) ON CONFLICT (date) DO UPDATE SET placed_orders = EXCLUDED.placed_orders, placed_value = EXCLUDED.placed_value, source_synced_at = EXCLUDED.source_synced_at`,
@@ -343,7 +346,14 @@ export async function syncKlaviyo(db: Db, k: Klaviyo, opts: { since?: string; un
       })
       base += placed.length
     }
-    if (!metricId) return { status: 'warning' as const, rows: base, detail: 'No Placed Order metric in Klaviyo, so flow revenue was skipped.' }
+    if (!metricId) {
+      // This account has no orders at all, so any stored ones came from somewhere else.
+      await db.transaction(async (tx) => {
+        await tx.query(`DELETE FROM fact_klaviyo_orders_daily`)
+        await tx.query(`DELETE FROM meta_source_window WHERE source = 'klaviyo' AND metric = 'placed_orders'`)
+      })
+      return { status: 'warning' as const, rows: base, detail: 'No Placed Order metric in Klaviyo, so flow revenue was skipped.' }
+    }
     if (flows.length === 0) return { status: 'warning' as const, rows: base, detail: 'This Klaviyo account has no flows, so there is no flow report yet.' }
 
     try {

@@ -104,6 +104,7 @@ export const SETTINGS = {
   'reconcile.tolerance.klaviyo_orders': { description: 'Percent Klaviyo Placed Order may differ from Shopify orders before the check fails', default: 3, parse: numberIn('reconcile.tolerance.klaviyo_orders', 0, 100, { example: '3' }) },
   'reconcile.tolerance.ga4_purchases': { description: 'Percent GA4 purchases may differ from Shopify orders before the check fails', default: 15, parse: numberIn('reconcile.tolerance.ga4_purchases', 0, 100, { example: '15' }) },
   'reconcile.attributed_share_flag': { description: 'Warn when Klaviyo credits flows with more than this percent of Shopify net revenue', default: 60, parse: numberIn('reconcile.attributed_share_flag', 0, 100, { example: '60' }) },
+  'reconcile.min_difference': { description: 'Orders two sources may differ by before a count check fails, whatever the percent, so a small store does not fail on one late order', default: 3, parse: numberIn('reconcile.min_difference', 0, 1000, { whole: true, example: '3' }) },
   'reconcile.freshness_days': { description: 'Days since a source last synced before the freshness check fails', default: 2, parse: numberIn('reconcile.freshness_days', 0.5, 365, { example: '2' }) },
   'warehouse.free_text': { description: 'Free text from warehouse sources, such as ticket subjects and review text: keep (with emails and phone numbers replaced) or drop', default: 'keep', parse: (v: string) => {
     if (v !== 'keep' && v !== 'drop') throw new CliError('Use keep or drop.', 'lifecycle config set warehouse.free_text drop', 'bad_value')
