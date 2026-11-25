@@ -146,7 +146,14 @@ export function showKit(reg, name) {
     const { dir } = findKit(reg, name);
     const manifest = readManifest(dir);
     const readme = readFileSync(join(dir, 'README.md'), 'utf8');
-    return { manifest, readme, runbook: join(dir, 'AGENT.md') };
+    return { manifest, readme, runbook: join(dir, 'AGENT.md'), files: kitFiles(dir) };
+}
+// Every file in the kit folder, so a person can see what `kits add` will copy before it does.
+export function kitFiles(dir, rel = '') {
+    return readdirSync(join(dir, rel), { withFileTypes: true })
+        .filter((e) => e.name !== '.git' && e.name !== '.DS_Store')
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .flatMap((e) => (e.isDirectory() ? kitFiles(dir, rel ? `${rel}/${e.name}` : e.name) : [rel ? `${rel}/${e.name}` : e.name]));
 }
 export function compareVersions(a, b) {
     const pa = a.split('.').map(Number);

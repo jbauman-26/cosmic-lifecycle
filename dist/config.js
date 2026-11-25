@@ -14,6 +14,8 @@ const Config = z
     registry: z.object({ uri: z.string() }).partial().optional(),
     deploy: z.object({ repo: z.string() }).partial().optional(),
     update: z.object({ check: z.boolean() }).partial().optional(),
+    // Where Cosmic Cloud lives. The store token is in the keychain, never here.
+    cloud: z.object({ url: z.string() }).partial().optional(),
     // Warehouse sources: settings only. Their keys live in the keychain or the environment.
     warehouse: z
         .object({
@@ -73,6 +75,19 @@ export const SETTINGS = {
             if (v !== 'true' && v !== 'false')
                 throw new CliError('Use true or false.', 'lifecycle config set update.check false', 'bad_value');
             return v === 'true';
+        } },
+    'cloud.url': { description: 'Cosmic Cloud address. lifecycle login sets it', parse: (v) => {
+            let u = null;
+            try {
+                u = new URL(v);
+            }
+            catch {
+                u = null;
+            }
+            const local = u !== null && u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
+            if (!u || (u.protocol !== 'https:' && !local))
+                throw new CliError('Use an https address.', 'lifecycle config set cloud.url https://cosmic-cloud.vercel.app', 'bad_value');
+            return v.replace(/\/+$/, '');
         } },
     'reconcile.tolerance.klaviyo_orders': { description: 'Percent Klaviyo Placed Order may differ from Shopify orders before the check fails', default: 3, parse: numberIn('reconcile.tolerance.klaviyo_orders', 0, 100, { example: '3' }) },
     'reconcile.tolerance.ga4_purchases': { description: 'Percent GA4 purchases may differ from Shopify orders before the check fails', default: 15, parse: numberIn('reconcile.tolerance.ga4_purchases', 0, 100, { example: '15' }) },

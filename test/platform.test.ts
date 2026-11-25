@@ -42,7 +42,7 @@ describe('config', () => {
     unsetSetting('deploy.repo')
     expect(getSetting('deploy.repo')).toBeUndefined()
     expect(listSettings().map((s) => s.key)).toEqual([
-      'registry.uri', 'deploy.repo', 'update.check',
+      'registry.uri', 'deploy.repo', 'update.check', 'cloud.url',
       'reconcile.tolerance.klaviyo_orders', 'reconcile.tolerance.ga4_purchases', 'reconcile.attributed_share_flag', 'reconcile.freshness_days',
       'query.row_cap', 'metrics.default_days',
     ])

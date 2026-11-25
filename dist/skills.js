@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { readIndex } from './registry.js';
 import { VERSION } from './version.js';
-// Installs one router skill plus one setup skill per kit, the same layout Graphed uses:
+import { CliError } from './errors.js';
+// Installs one router skill plus one setup skill per kit:
 // /lifecycle is the router, /lifecycle:kits:<kit> sets up a kit.
+// The store's own skills, pushed to Cosmic Cloud with `skills push`, install beside them under skills/store-<slug>/.
 // Every file we write is recorded with its hash, so a file the user edited is never overwritten.
 export const PLUGIN = 'lifecycle';
 const MANAGED = '.lifecycle-managed.json';
@@ -97,12 +99,117 @@ function readManaged(dir) {
         return { managedBy: 'lifecycle-cli', version: VERSION, files: {} };
     return JSON.parse(readFileSync(p, 'utf8'));
 }
+// The store's own skills. Limits match Cosmic Cloud's: 200 KB a skill, plain text files.
+export const SKILL_MAX_BYTES = 200 * 1024;
+export const STORE_PREFIX = 'skills/store-';
+const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
+const SKIP = new Set(['.git', 'node_modules', '.DS_Store']);
+export function assertSlug(slug) {
+    if (!SLUG.test(slug))
+        throw new CliError(`${JSON.stringify(slug).slice(0, 80)} is not a usable skill name.`, 'Use lowercase letters, numbers and dashes, such as winback-brief. Pass --slug NAME to set it.', 'bad_skill');
+    return slug;
+}
+// A path inside a skill: forward slashes, no parent steps, nothing absolute.
+const safePath = (p) => typeof p === 'string' && p.length > 0 && p.length <= 200 && !p.includes('\\') && !p.includes('\0') && !p.startsWith('/') && !/^[A-Za-z]:/.test(p) && p.split('/').every((part) => part !== '' && part !== '.' && part !== '..');
+// File names that hold keys by convention, and the shapes real keys take. A match names the file and
+// the line, never the value.
+const SECRET_FILE = /(^|\/)(\.env(\..*)?|\.npmrc|\.netrc|id_(rsa|dsa|ecdsa|ed25519)|credentials(\.json)?|secrets?\.(json|ya?ml|toml|txt)|.*\.(pem|key|p12|pfx|keystore))$/i;
+const SECRET_SHAPES = [
+    ['a private key', /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
+    ['a Cosmic Cloud token', /\bcck_[0-9a-f]{12}_[A-Za-z0-9_-]{20,}/],
+    ['a Stripe key', /\b[sr]k_(live|test)_[A-Za-z0-9]{16,}/],
+    ['a Klaviyo private key', /\bpk_[0-9a-f]{30,}\b/],
+    ['a Shopify token', /\bshp(at|ss|ca|pa)_[0-9a-fA-F]{24,}/],
+    ['an API key', /\bsk-[A-Za-z0-9_-]{20,}/],
+    ['an AWS access key', /\b(AKIA|ASIA)[0-9A-Z]{16}\b/],
+    ['a GitHub token', /\b(gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})/],
+    ['a Slack token', /\bxox[abprs]-[A-Za-z0-9-]{10,}/],
+    ['a Google API key', /\bAIza[0-9A-Za-z_-]{30,}/],
+    ['a signed token', /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
+    ['a bearer token', /\bBearer\s+(?!\$|<|\{|your|xxx|\.\.\.|example)[A-Za-z0-9_\-+/=.]{24,}/],
+    ['a sign-in inside a web address', /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:[^\s:/@]{6,}@/i],
+    ['a key or password', /(api[_-]?key|secret|token|password|passwd|authorization)["']?\s*[:=]\s*["']?(?!\$|<|\{|your|xxx|\.\.\.|example|changeme)[A-Za-z0-9_\-+/=.]{24,}/i],
+];
+export function findSecrets(files) {
+    const found = [];
+    for (const f of files) {
+        if (SECRET_FILE.test(f.path)) {
+            found.push({ path: f.path, line: null, kind: 'a file that usually holds keys' });
+            continue;
+        }
+        f.content.split('\n').forEach((text, i) => {
+            const hit = SECRET_SHAPES.find(([, re]) => re.test(text));
+            if (hit)
+                found.push({ path: f.path, line: i + 1, kind: hit[0] });
+        });
+    }
+    return found;
+}
+// Reads a skill folder for `skills push`. Refuses anything Cloud would refuse, before a byte is sent.
+export function readSkillDir(dir, slugOpt) {
+    const root = resolve(dir);
+    if (!existsSync(root) || !lstatSync(root).isDirectory())
+        throw new CliError(`${dir} is not a folder.`, 'lifecycle skills push DIRECTORY', 'bad_skill');
+    const slug = assertSlug(slugOpt ?? basename(root).toLowerCase());
+    const files = [];
+    const walk = (rel) => {
+        for (const e of readdirSync(join(root, rel), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+            if (SKIP.has(e.name))
+                continue;
+            const path = rel ? `${rel}/${e.name}` : e.name;
+            // A link could point outside the folder, so links are never followed.
+            if (e.isSymbolicLink())
+                throw new CliError(`${path} is a link, and links are not pushed.`, 'Replace it with the file itself, then push again.', 'bad_skill');
+            if (e.isDirectory())
+                walk(path);
+            else if (e.isFile()) {
+                const buf = readFileSync(join(root, path));
+                if (buf.includes(0) || !Buffer.from(buf.toString('utf8'), 'utf8').equals(buf))
+                    throw new CliError(`${path} is not a text file. A skill holds text files only.`, 'Remove it from the folder, then push again.', 'bad_skill');
+                files.push({ path, content: buf.toString('utf8') });
+            }
+        }
+    };
+    walk('');
+    if (!files.some((f) => f.path === 'SKILL.md'))
+        throw new CliError(`${dir} has no SKILL.md.`, 'A skill is a folder with a SKILL.md at the top. Add one, then push again.', 'bad_skill');
+    const bytes = files.reduce((n, f) => n + Buffer.byteLength(f.content), 0);
+    if (bytes > SKILL_MAX_BYTES)
+        throw new CliError(`This skill is ${Math.ceil(bytes / 1024)} KB. The most a skill can be is 200 KB.`, 'Remove large files from the folder, then push again.', 'too_large');
+    const secrets = findSecrets(files);
+    if (secrets.length) {
+        const where = secrets.slice(0, 5).map((x) => `${x.path}${x.line ? ` line ${x.line}` : ''} looks like ${x.kind}`).join('; ');
+        throw new CliError(`Nothing was pushed. ${where}${secrets.length > 5 ? `; and ${secrets.length - 5} more` : ''}.`, 'Take the key out and read it from an environment variable instead, then push again.', 'secret_found');
+    }
+    return { slug, files, bytes };
+}
+// Turns the store's skills from Cosmic Cloud into files to install. A skill with an unsafe
+// path, a bad name or too much in it is skipped whole and named in `skipped`.
+export function accountSkillFiles(skills) {
+    const files = {};
+    const installed = [];
+    const skipped = [];
+    for (const s of skills) {
+        const list = Array.isArray(s?.files) ? s.files : [];
+        const ok = typeof s?.slug === 'string' && SLUG.test(s.slug) && list.length > 0 && list.every((f) => safePath(f?.path) && typeof f.content === 'string') && list.reduce((n, f) => n + Buffer.byteLength(f.content), 0) <= SKILL_MAX_BYTES;
+        if (!ok) {
+            skipped.push(String(s?.slug ?? '').replace(/[^\w-]/g, '').slice(0, 63) || 'unnamed');
+            continue;
+        }
+        for (const f of list)
+            files[`${STORE_PREFIX}${s.slug}/${f.path}`] = f.content;
+        installed.push(s.slug);
+    }
+    return { files, installed, skipped };
+}
+// `account`: the store's own skills as files, from accountSkillFiles. Left out when not logged in or
+// Cloud could not be asked, and then store skills already installed are left exactly as they are.
 export function syncSkills(reg, opts = {}) {
     const kits = readIndex(reg);
     return (opts.targets ?? defaultTargets()).map((target) => {
         const dir = targetDir(target);
         const managed = readManaged(dir);
-        const files = buildFiles(kits, target);
+        const files = { ...(opts.account ?? {}), ...buildFiles(kits, target) };
         const res = { target, dir, written: [], unchanged: [], kept: [], removed: [] };
         const next = {};
         for (const [rel, body] of Object.entries(files)) {
@@ -134,6 +241,10 @@ export function syncSkills(reg, opts = {}) {
         for (const [rel, hash] of Object.entries(managed.files)) {
             if (rel in files)
                 continue;
+            if (!opts.account && rel.startsWith(STORE_PREFIX)) {
+                next[rel] = hash;
+                continue;
+            }
             const p = join(dir, rel);
             if (existsSync(p) && sha(readFileSync(p, 'utf8')) !== hash && !opts.force) {
                 res.kept.push(rel);
@@ -166,6 +277,7 @@ export function skillsStatus(reg, targets = ['claude', 'cursor']) {
             installedVersion: installed ? managed.version : null,
             kits: have,
             newKits: kits.map((k) => k.name).filter((n) => !have.includes(n)),
+            storeSkills: [...new Set(Object.keys(managed.files).filter((f) => f.startsWith(STORE_PREFIX)).map((f) => f.slice(STORE_PREFIX.length).split('/')[0]))],
         };
     });
 }

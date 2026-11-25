@@ -11,8 +11,8 @@ import { getSecret } from './secrets.js'
 import { readConfig } from './config.js'
 
 // Tools: named, read-only API calls an agent can run with the user's own keys.
-// Graphed resells provider calls for credits. Here every call goes straight from your
-// machine to Klaviyo or Shopify on your key, so there is no markup and no middleman.
+// Every call goes straight from your machine to Klaviyo or Shopify on your key,
+// so there is no markup and no middleman.
 // No built-in tool reads profiles or customers, so their output cannot contain personal data.
 // Open provider refs (kie:, fal:, apify:, scrapecreators:) live in open-tools.ts and make no such promise.
 
@@ -77,7 +77,23 @@ export function toolCatalog() {
 const runsDir = () => join(appHome(), 'runs')
 
 // `running`, `provider`, `remote` and `cost` are only set for open provider refs, which finish later and bill your own account.
-export type ToolRun = { id: string; tool: string; input: unknown; status: 'running' | 'succeeded' | 'failed'; startedAt: string; finishedAt: string; output?: unknown; error?: string; provider?: string; remote?: Record<string, string>; cost?: { amount: number; unit: string } }
+// `request` is the full request as it was sent: provider, model, input and, for ScrapeCreators, the method.
+// It never holds a key. A result can be tied back to it later.
+export type ToolRequest = { provider: string; model: string; input: unknown; method?: string }
+export type ToolRun = { id: string; tool: string; input: unknown; status: 'running' | 'succeeded' | 'failed' | 'aborted'; startedAt: string; finishedAt: string; request?: ToolRequest; output?: unknown; error?: string; provider?: string; remote?: Record<string, string>; cost?: { amount: number; unit: string } }
+
+// Keys belong in the keychain, not in tool input. If one is passed anyway, under a field named like
+// a key, it is sent to the provider as given but saved as [removed].
+// The test is the last word of the field name, so api_key, apiKey and client-secret match, and max_tokens or monkey do not.
+const SECRET_WORDS = new Set(['key', 'token', 'secret', 'password', 'passwd', 'authorization', 'auth', 'credential', 'credentials'])
+const secretField = (name: string) => SECRET_WORDS.has(name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).pop() ?? '')
+export function redactSecrets(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactSecrets)
+  if (value === null || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, secretField(k) && typeof v === 'string' ? '[removed]' : redactSecrets(v)]))
+}
+
+export const toolRequest = (provider: string, model: string, input: unknown, method?: string): ToolRequest => ({ provider, model, input: redactSecrets(input), ...(method ? { method } : {}) })
 
 export function saveRun(run: ToolRun) {
   mkdirSync(runsDir(), { recursive: true })
@@ -90,7 +106,7 @@ export async function runTool(id: string, rawInput: unknown, ctx: ToolContext, n
   if (!tool) throw new CliError(`No tool named ${id}.`, 'lifecycle tools catalog', 'unknown_tool')
   const parsed = (tool.input as z.ZodTypeAny).safeParse(rawInput ?? {})
   if (!parsed.success) throw new CliError(`Bad input for ${id}: ${parsed.error.issues.map((x) => `${x.path.join('.') || 'input'} ${x.message}`).join('; ')}`, `lifecycle tools catalog`, 'bad_input')
-  const run: ToolRun = { id: randomUUID().slice(0, 8), tool: id, input: parsed.data, status: 'succeeded', startedAt: now().toISOString(), finishedAt: '' }
+  const run: ToolRun = { id: randomUUID().slice(0, 8), tool: id, input: parsed.data, status: 'succeeded', startedAt: now().toISOString(), finishedAt: '', request: toolRequest(tool.provider, id, parsed.data) }
   try {
     run.output = await (tool.run as (i: unknown, c: ToolContext) => Promise<unknown>)(parsed.data, ctx)
   } catch (e) {
@@ -115,6 +131,30 @@ export function listRuns(limit = 20) {
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
     .slice(0, limit)
     .map(({ id, tool, status, startedAt }) => ({ id, tool, status, startedAt }))
+}
+
+// What Cosmic Cloud keeps about a run: when it ran, what was asked, how it ended and what it cost.
+// The output and the error text stay on this machine, because a scraper's output can hold personal data.
+// Anything in the input that looks like an email address is removed before it leaves.
+const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+/g
+function withoutEmails(value: unknown): unknown {
+  if (typeof value === 'string') return value.replace(EMAIL, '[email removed]')
+  if (Array.isArray(value)) return value.map(withoutEmails)
+  if (value === null || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, withoutEmails(v)]))
+}
+
+export function cloudRunRecord(run: ToolRun) {
+  const request = run.request ?? toolRequest(run.provider ?? run.tool.split(/[.:]/)[0] ?? '', run.tool, run.input)
+  return {
+    id: run.id,
+    tool: run.tool,
+    status: run.status,
+    started_at: run.startedAt,
+    finished_at: run.finishedAt || null,
+    request: withoutEmails(request) as ToolRequest,
+    cost: run.cost ?? null,
+  }
 }
 
 // Keys come from the keychain or LIFECYCLE_* variables, the same way sync reads them.

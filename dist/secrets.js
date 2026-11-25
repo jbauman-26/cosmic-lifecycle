@@ -14,6 +14,8 @@ const ENV = {
     'fal-key': 'LIFECYCLE_FAL_KEY',
     'apify-token': 'LIFECYCLE_APIFY_TOKEN',
     'scrapecreators-key': 'LIFECYCLE_SCRAPECREATORS_KEY',
+    // The store token `lifecycle login` saves for Cosmic Cloud.
+    'cloud-token': 'LIFECYCLE_CLOUD_TOKEN',
 };
 const useKeychain = () => process.platform === 'darwin' && !process.env.LIFECYCLE_NO_KEYCHAIN;
 // `security -i` reads the command from stdin, so the secret never appears in

@@ -128,7 +128,7 @@ Kits today: `flow-audit`, `revenue-per-flow`, `winback-segment`. `lifecycle kits
 lifecycle provision neon --key-env NEON_API_KEY --yes   # a managed Postgres in your own Neon account
 lifecycle deploy --repo YOU/lifecycle-sync
 lifecycle jobs list        # recent runs and the success streak
-lifecycle logs --cloud     # the last run's log
+lifecycle logs --actions   # the last run's log
 lifecycle logs --follow    # wait for a running sync to finish, then show its log
 ```
 
@@ -200,6 +200,33 @@ lifecycle files pull                             # the dashboard from the last d
 
 How each command lines up with the Graphed CLI: [docs/PARITY.md](docs/PARITY.md).
 
+## Cosmic Cloud
+
+Cosmic Cloud is the hosted copy of a store. Logging in is optional. With it, `--cloud` on a read command asks Cloud instead of the database on this machine.
+
+```sh
+export COSMIC_CLOUD_TOKEN=...                     # from Cosmic Cloud, Settings, Mac app access. Never paste it into a chat
+lifecycle login --token-env COSMIC_CLOUD_TOKEN    # checks the token, prints the store name, saves the token to the keychain
+lifecycle cloud status                            # the store, and each connection on Cloud
+lifecycle query "select * from fact_orders_daily limit 5" --cloud
+lifecycle schema --cloud
+lifecycle metrics list --cloud && lifecycle metrics run shopify_orders --cloud
+lifecycle sources list --cloud
+lifecycle sync --cloud                            # starts it on Cloud and returns at once
+lifecycle logs --cloud                            # recent runs on Cloud
+lifecycle skills push ./my-skill                  # a folder with a SKILL.md, text only, 200 KB at most
+lifecycle skills delete my-skill
+lifecycle logout
+```
+
+- The token is never printed, logged or written to a file. Without a keychain, set `LIFECYCLE_CLOUD_TOKEN`. `LIFECYCLE_CLOUD_URL` sets the address.
+- Cloud is being built route by route. A route it does not have yet fails with code `not_built` and a plain sentence. Run the command without `--cloud` meanwhile.
+- `skills push` sends nothing if a file looks like it holds a key. `skills sync` installs the store's own skills beside the kit skills.
+- `lifecycle tools abort RUN` stops an Apify or fal job that is still going. Every tool run keeps the request it sent, and `lifecycle tools get RUN` shows it.
+- `logs --cloud` used to mean the GitHub Actions log. That is now `logs --actions`. A machine that is not logged in still gets the Actions log from `--cloud`.
+
+More: `lifecycle docs cloud`. Every change: [CHANGELOG.md](CHANGELOG.md).
+
 ## Where this is today
 
 This is an early release. Here is what has and has not been tested.
@@ -213,6 +240,7 @@ This is an early release. Here is what has and has not been tested.
 - Stripe connect, sync, doctor and metrics on a Stripe test-mode account. Charges, failed payments, MRR and subscription starts all matched the Stripe API.
 - The write lock, with two real CLI processes on one Mac: the second fails with `busy` while a read still answers.
 - Saved numbers on a local database and on a local Postgres 16 server, through the CLI and the MCP `metric` tool.
+- `login`, `cloud status`, a `--cloud` query and `logout` on a Mac with the keychain, against a local stand-in for Cosmic Cloud: the token went into the keychain, was read back, and was gone after `logout`.
 - A store in its own Postgres schema, on a local Postgres 16 server: `query` and saved numbers read the store's schema, by the role's search path and by `LIFECYCLE_DB_SCHEMA`.
 
 **Not tested yet**
@@ -228,6 +256,8 @@ This is an early release. Here is what has and has not been tested.
 - A bundled uv set with `LIFECYCLE_UV_PATH` inside the packaged Mac app. Here it was run with a stand-in binary and with Homebrew's uv.
 - `connect --key-env` without a keychain against a live account. It was tested against recorded answers.
 - Google Ads and Google Search Console. They are catalog entries only, waiting on Google sign-in. There is no connector code.
+- Anything against the real Cosmic Cloud. `login`, `cloud status`, every `--cloud` command, `skills push` and `delete`, and the tool run records were run against a local stand-in for the Cloud API only. Cloud does not have `/schema`, `/query`, `GET /metrics`, `/runs`, `/skills` or `/tools/runs` yet, so the shapes come from the plan, not from a live answer.
+- `tools abort` on a real Apify or fal job. It was written from their API docs and tested against recorded answers.
 
 If something breaks, `lifecycle doctor` says what is wrong and what to run next. To report a bug, run `lifecycle feedback "what happened" --open`.
 
