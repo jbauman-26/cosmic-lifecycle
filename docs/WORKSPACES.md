@@ -83,7 +83,7 @@ Trust line statuses: `passed`, `failed`, `unchecked`, and new in 0.14.0 `unrefer
 | Customer.io | warehouse (campaigns, newsletters) | built | teammate names removed; no people loaded |
 | Stripe subscriptions | already native | native | unchanged |
 | Salesforce | catalog | planned: needs an OAuth connected app | |
-| Google Ads | catalog | planned: needs Google sign-in and a developer token | |
+| Google Ads | built in (`connect google-ads`), read only | built: from the Google Ads API docs (v26), tested against recorded answers; not run on a live or test account | daily cost and results by campaign and ad group; no audiences, keywords, people or creative |
 | LinkedIn Ads | catalog | planned: needs an approved Marketing API app | |
 | Google Search Console | catalog | planned: needs Google sign-in | |
 | PostHog, Mixpanel | catalog | planned: query results come as arrays or streams, which need a runner change | |

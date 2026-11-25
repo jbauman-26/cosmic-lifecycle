@@ -5,7 +5,7 @@ import { sourceStatus } from './sources-catalog.js';
 import { trustLine } from './reconcile.js';
 import { targetDir } from './skills.js';
 import { readWorkspace, REFERENCE_NAME } from './workspace.js';
-export const SECRET_FOR = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret', stripe: 'stripe-read-key', meta: 'meta-ads-token', hubspot: 'hubspot-token' };
+export const SECRET_FOR = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret', stripe: 'stripe-read-key', meta: 'meta-ads-token', hubspot: 'hubspot-token', 'google-ads': 'google-ads-refresh-token' };
 // The six steps from an empty machine to a daily sync an agent can use, in the order to do them.
 // Each unfinished step names the one command that finishes it.
 // A Shopify workspace keeps the 0.13 steps word for word. Any other type asks for its reference source.

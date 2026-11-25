@@ -9,6 +9,8 @@ import { Stripe } from '../sources/stripe.js';
 import { MetaAds } from '../sources/meta.js';
 import { HubSpot } from '../sources/hubspot.js';
 import { readWorkspace, REFERENCE_NAME } from '../workspace.js';
+import { GoogleAds, googleAdsAccessToken } from '../sources/google-ads.js';
+import { CliError } from '../errors.js';
 export async function doctor() {
     const checks = [];
     if (!existsSync(configPath())) {
@@ -71,6 +73,20 @@ export async function doctor() {
         }
         catch (e) {
             checks.push({ name: 'meta', ok: false, detail: e instanceof Error ? e.message : 'Token was refused.', next: 'Create a new system user token with ads_read, then lifecycle connect meta --account ID --token-env NAME' });
+        }
+    }
+    const gads = config['google-ads'];
+    const gadsSecret = getSecret('google-ads-client-secret');
+    const gadsRefresh = getSecret('google-ads-refresh-token');
+    if (gads && (!gadsSecret || !gadsRefresh))
+        checks.push({ name: 'google-ads', ok: false, detail: 'Connected, but the client secret or refresh token is missing.', next: 'lifecycle connect google-ads --customer ID --client-id ID --secret-env NAME --refresh-token-env NAME' });
+    else if (gads && gadsSecret && gadsRefresh) {
+        try {
+            const a = await new GoogleAds(await googleAdsAccessToken(gads.clientId, gadsSecret, gadsRefresh), gads.customer, gads.loginCustomer).check();
+            checks.push({ name: 'google-ads', ok: true, detail: `Sign-in reads ${a.name || a.customer} in ${a.currency}${a.testAccount ? ' (a test account)' : ''}` });
+        }
+        catch (e) {
+            checks.push({ name: 'google-ads', ok: false, detail: e instanceof Error ? e.message : 'Sign-in was refused.', next: e instanceof CliError ? e.next : 'lifecycle connect google-ads' });
         }
     }
     const stripeKey = getSecret('stripe-read-key');

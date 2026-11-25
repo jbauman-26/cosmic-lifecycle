@@ -2,7 +2,7 @@
 import { Command } from 'commander'
 import { emit, emitError, type Format } from './output.js'
 import { init } from './commands/init.js'
-import { connectGa4, connectHubspot, connectKlaviyo, connectMeta, connectShopify, connectStripe } from './commands/connect.js'
+import { connectGa4, connectGoogleAds, connectHubspot, connectKlaviyo, connectMeta, connectShopify, connectStripe } from './commands/connect.js'
 import { doctor } from './commands/doctor.js'
 import { openDb, migrate, type Db } from './db.js'
 import { readConfig, settingValue, writeConfig } from './config.js'
@@ -14,8 +14,9 @@ import { reconcile } from './reconcile.js'
 import { Klaviyo } from './sources/klaviyo.js'
 import { Stripe } from './sources/stripe.js'
 import { MetaAds } from './sources/meta.js'
+import { GoogleAds, googleAdsAccessToken } from './sources/google-ads.js'
 import { HubSpot } from './sources/hubspot.js'
-import { exportProgress, syncGa4, syncHubspot, syncKlaviyo, syncMeta, syncShopify, syncShopifyBulk, syncStripe, type SourceResult } from './sync.js'
+import { exportProgress, syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncMeta, syncShopify, syncShopifyBulk, syncStripe, type SourceResult } from './sync.js'
 import { shopifyGql } from './sources/shopify-bulk.js'
 import { runQuery } from './query.js'
 import { PUBLIC_TABLES } from './schema.js'
@@ -246,6 +247,16 @@ connect.command('hubspot').description('Read-only: daily deals, pipeline and new
   const r = await connectHubspot(opts)
   emit(format(), r, () => `Connected to HubSpot${r.portal ? ` portal ${r.portal}` : ''} (deals without a currency count as ${r.currency}).${keyNote(r)}\nNext: lifecycle sync`)
 }))
+connect.command('google-ads').description('Read-only: daily cost and results by campaign and ad group. No audiences, keywords, people or creative.')
+  .option('--customer <id>', 'Google Ads customer id, such as 123-456-7890')
+  .option('--login-customer <id>', 'manager account id, when access to the account comes through a manager')
+  .option('--client-id <id>', 'OAuth client id from the Google Cloud project')
+  .option('--secret-env <name>', 'environment variable holding the OAuth client secret')
+  .option('--refresh-token-env <name>', 'environment variable holding a refresh token with the adwords scope')
+  .action(write('connect google-ads', async (opts) => {
+    const r = await connectGoogleAds(opts)
+    emit(format(), r, () => `Connected to Google Ads account ${r.name || r.customer} (${r.currency}, ${r.timezone})${r.testAccount ? ', a test account' : ''}.${keyNote(r)}\nNext: lifecycle sync`)
+  }))
 
 const collectList = (v: string, prev: string[] = []) => [...prev, v]
 
@@ -287,6 +298,8 @@ program.command('sync').description('Pull fresh totals from connected sources, t
   const stripeKey = getSecret('stripe-read-key')
   const metaToken = getSecret('meta-ads-token')
   const hubspotToken = getSecret('hubspot-token')
+  const gadsSecret = getSecret('google-ads-client-secret')
+  const gadsRefresh = getSecret('google-ads-refresh-token')
   const chosen = chooseSources(only, {
     shopify: Boolean(config.shopify && shopifySecret),
     klaviyo: Boolean(key),
@@ -294,6 +307,7 @@ program.command('sync').description('Pull fresh totals from connected sources, t
     stripe: Boolean(config.stripe && stripeKey),
     meta: Boolean(config.meta && metaToken),
     hubspot: Boolean(config.hubspot && hubspotToken),
+    'google-ads': Boolean(config['google-ads'] && gadsSecret && gadsRefresh),
   })
   if (!chosen.length) throw new CliError('No sources connected.', readWorkspace().type === 'shopify' ? 'lifecycle connect klaviyo --key-env NAME' : `lifecycle connect ${TYPES[readWorkspace().type].sources[0]}`, 'not_connected')
   const db = await openDb()
@@ -346,9 +360,14 @@ program.command('sync').description('Pull fresh totals from connected sources, t
       } else if (source === 'hubspot') {
         const hs = new HubSpot(hubspotToken!)
         results.push(await syncHubspot(db, { deals: () => hs.deals(), contacts: () => hs.contacts(), total: (o) => hs.total(o) }, { currency: config.hubspot!.currency }))
-      } else {
+      } else if (source === 'meta') {
         const meta = new MetaAds(metaToken!, config.meta!.account)
         results.push(await syncMeta(db, (since, until) => meta.insights(since, until), { currency: config.meta!.currency, account: config.meta!.account }))
+      } else {
+        const g = config['google-ads']!
+        let ads: GoogleAds | undefined
+        const api = async () => (ads ??= new GoogleAds(await googleAdsAccessToken(g.clientId, gadsSecret!, gadsRefresh!), g.customer, g.loginCustomer))
+        results.push(await syncGoogleAds(db, { campaigns: async (s, u) => (await api()).campaigns(s, u), adGroups: async (s, u) => (await api()).adGroups(s, u) }, { customer: g.customer, currency: g.currency }))
       }
     }
     const check = await reconcile(db)
@@ -841,7 +860,7 @@ program.command('deploy').description('Run the daily sync from your own GitHub a
     emit(format(), plan, () => [`This would create:`, ...plan.creates.map((c) => `  ${c}`), `Secrets to set: ${plan.secrets.join(', ')}`, `Cost: ${plan.expectedCost}`, `Nothing was created. Add --yes to go ahead.`].join('\n'))
     return
   }
-  const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token', LIFECYCLE_HUBSPOT_TOKEN: 'hubspot-token' } as const
+  const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token', LIFECYCLE_HUBSPOT_TOKEN: 'hubspot-token', LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET: 'google-ads-client-secret', LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN: 'google-ads-refresh-token' } as const
   const secrets: Record<string, string> = {}
   const wh = new Map(warehouseSecrets(config).map((w) => [w.env, w]))
   for (const s of plan.secrets) {

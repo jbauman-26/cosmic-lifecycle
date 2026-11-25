@@ -4,6 +4,7 @@ import { settingValue } from './config.js';
 import { aggregateOrders } from './sources/shopify.js';
 import { CompactOrders, isDone, pollExport, readExport, startOrdersExport, waitForExport } from './sources/shopify-bulk.js';
 import { toDaily } from './sources/meta.js';
+import { toAdGroupDaily, toCampaignDaily } from './sources/google-ads.js';
 import { aggregateCharges, aggregateSubscriptions } from './sources/stripe.js';
 import { aggregateContacts, aggregateDeals, uniqueCount } from './sources/hubspot.js';
 import { isNoReportData, reportsVerified } from './sources/klaviyo.js';
@@ -323,5 +324,37 @@ export async function syncHubspot(db, load, opts = {}) {
         if (!deals.length && !contacts.length)
             return { status: 'warning', rows, detail: 'HubSpot returned no deals and no contacts.' };
         return { status: 'ok', rows };
+    });
+}
+// Google restates recent days as late conversions come in, the same as Meta, so every sync replaces the whole
+// window in one transaction and older days keep what the last sync that covered them saw. Rows from any other
+// customer id are removed, so switching accounts never mixes two accounts' history.
+export async function writeGoogleAds(db, data, since, currency, customer) {
+    const campaigns = toCampaignDaily(data.campaigns);
+    const adGroups = toAdGroupDaily(data.adGroups);
+    const at = now();
+    await db.transaction(async (tx) => {
+        for (const t of ['fact_google_ads_campaign_daily', 'fact_google_ads_ad_group_daily']) {
+            await tx.query(`DELETE FROM ${t} WHERE date >= $1 OR account_id <> $2`, [since, customer]);
+        }
+        for (const d of campaigns) {
+            await tx.query(`INSERT INTO fact_google_ads_campaign_daily VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (date, account_id, campaign_id) DO NOTHING`, [d.date, customer, d.campaignId, d.campaignName, d.cost, d.impressions, d.clicks, d.conversions, d.conversionsValue, currency, at]);
+        }
+        for (const d of adGroups) {
+            await tx.query(`INSERT INTO fact_google_ads_ad_group_daily VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT (date, account_id, ad_group_id) DO NOTHING`, [d.date, customer, d.campaignId, d.adGroupId, d.adGroupName, d.cost, d.impressions, d.clicks, d.conversions, d.conversionsValue, currency, at]);
+        }
+    });
+    return { campaignRows: campaigns.length, adGroupRows: adGroups.length };
+}
+export async function syncGoogleAds(db, load, opts) {
+    return recordRun(db, 'google-ads', async () => {
+        const until = opts.today ?? now().slice(0, 10);
+        const since = new Date(Date.parse(`${until}T00:00:00Z`) - (opts.days ?? settingValue('metrics.default_days')) * 86400000).toISOString().slice(0, 10);
+        const campaigns = await load.campaigns(since, until);
+        const adGroups = await load.adGroups(since, until);
+        const { campaignRows, adGroupRows } = await writeGoogleAds(db, { campaigns, adGroups }, since, opts.currency ?? '', opts.customer);
+        await setTotal(db, 'google-ads', 'rows_pulled', campaigns.length + adGroups.length);
+        const rows = campaignRows + adGroupRows;
+        return campaignRows ? { status: 'ok', rows } : { status: 'warning', rows, detail: `Google Ads returned no campaign activity from ${since} to ${until}.` };
     });
 }

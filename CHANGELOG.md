@@ -24,6 +24,18 @@ Shopify sync for large stores. Measured on synthetic data shaped like a Shopify 
 - Not run against a real Shopify store. The `created_at:<=` filter on `ordersCount` is unverified on a live store; if Shopify ignores it, `orders_complete` fails instead of passing silently.
 - Every sync after the first still exports the full history. A daily export of a 3 million order store is unmeasured on Shopify's side.
 
+Google Ads as a built-in read-only source. Written from the Google Ads API docs (v26) and tested against recorded answers; no live or test account was connected.
+
+### Added
+
+- **`lifecycle connect google-ads --customer 123-456-7890 --client-id ID --secret-env NAME --refresh-token-env NAME [--login-customer ID]`.** Daily cost, impressions, clicks, conversions and conversion value by campaign and by ad group, through `GoogleAdsService.Search`, in `fact_google_ads_campaign_daily` and `fact_google_ads_ad_group_daily`. No audiences, keywords, people or creative. The OAuth client secret and refresh token are kept in the workspace's keychain entry like GA4's (`google-ads-client-secret`, `google-ads-refresh-token`). A manager account is refused at connect; `--login-customer` covers access through a manager. Each sync replaces the 90-day window and drops rows from any other account.
+- `deploy` passes `LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET` and `LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN` when Google Ads is connected. `doctor` checks the account.
+- Google Ads leaves the warehouse catalog's planned list, because it is built in.
+
+### For the app and Cloud
+
+- New source `google-ads`. New error codes: `google_ads_access_level`, `google_ads_customer`, `google_ads_error`, `google_ads_manager`, `google_ads_permission`.
+
 ## 0.14.0 (2026-11-24)
 
 The CLI for any marketer. A workspace now says what kind of business it is, and the trust gate checks its numbers against that business's own source of truth. Shopify stays a first-class path and stops being a requirement. An install from before 0.14.0 is a Shopify store and behaves exactly as it did. The spec is `docs/WORKSPACES.md`.

@@ -1,17 +1,6 @@
 export const READINESS_LEGEND = 'Readiness: native = built in with reconcile checks. tested = warehouse connector run on a real account. built = connector written from the vendor API docs, not yet run on a real account. planned = no connector yet; use lifecycle sources import meanwhile.';
 export const WAREHOUSE_CATALOG = [
     {
-        "slug": "google-ads",
-        "name": "Google Ads",
-        "category": "ads",
-        "readiness": "planned",
-        "why": "#3 of 100 tools Shopify stores use. StoreLeads State of Shopify report: Google Ads Pixel detected on 1,124,947 Shopify stores. Source: https://storeleads.app/reports/shopify",
-        "docs": "https://developers.google.com/google-ads/api/docs/start",
-        "credentials": [],
-        "params": [],
-        "notes": "Planned as a built-in source, not a warehouse connector. Needs Google sign-in: the owner signs in with Google in the Cosmic AI app and picks an ad account. The CLI has no connector code for it yet, and Google Ads also needs a developer token that Cosmic holds. CSV import meanwhile."
-    },
-    {
         "slug": "tiktok-ads",
         "name": "TikTok Ads",
         "category": "ads",

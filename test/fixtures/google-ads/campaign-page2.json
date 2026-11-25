@@ -1,0 +1,11 @@
+{
+  "results": [
+    {
+      "campaign": { "resourceName": "customers/1234567890/campaigns/111", "id": "111", "name": "Brand Search" },
+      "metrics": { "clicks": "41", "conversions": 4, "conversionsValue": 500, "costMicros": "26000000", "impressions": "950" },
+      "segments": { "date": "2026-11-23" }
+    }
+  ],
+  "fieldMask": "segments.date,campaign.id,campaign.name,metrics.costMicros,metrics.impressions,metrics.clicks,metrics.conversions,metrics.conversionsValue",
+  "queryResourceConsumption": "120"
+}

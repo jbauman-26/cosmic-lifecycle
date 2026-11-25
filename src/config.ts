@@ -12,6 +12,7 @@ const Config = z
     ga4: z.object({ property: z.string(), clientId: z.string() }).optional(),
     stripe: z.object({ mode: z.enum(['test', 'live']), subscriptions: z.boolean() }).optional(),
     meta: z.object({ account: z.string(), name: z.string(), currency: z.string(), timezone: z.string() }).optional(),
+    'google-ads': z.object({ customer: z.string(), loginCustomer: z.string().optional(), clientId: z.string(), name: z.string(), currency: z.string(), timezone: z.string(), testAccount: z.boolean() }).optional(),
     hubspot: z.object({ portal: z.string(), currency: z.string() }).optional(),
     // What kind of business this is, and which source the trust gate checks against. Missing means shopify.
     workspace: z.object({ type: z.string(), reference: z.string() }).partial().optional(),

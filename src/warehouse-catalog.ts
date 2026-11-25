@@ -7,17 +7,6 @@ export const READINESS_LEGEND =
 
 export const WAREHOUSE_CATALOG: WarehouseSource[] = [
   {
-    "slug": "google-ads",
-    "name": "Google Ads",
-    "category": "ads",
-    "readiness": "planned",
-    "why": "#3 of 100 tools Shopify stores use. StoreLeads State of Shopify report: Google Ads Pixel detected on 1,124,947 Shopify stores. Source: https://storeleads.app/reports/shopify",
-    "docs": "https://developers.google.com/google-ads/api/docs/start",
-    "credentials": [],
-    "params": [],
-    "notes": "Planned as a built-in source, not a warehouse connector. Needs Google sign-in: the owner signs in with Google in the Cosmic AI app and picks an ad account. The CLI has no connector code for it yet, and Google Ads also needs a developer token that Cosmic holds. CSV import meanwhile."
-  },
-  {
     "slug": "tiktok-ads",
     "name": "TikTok Ads",
     "category": "ads",

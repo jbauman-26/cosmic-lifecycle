@@ -48,6 +48,16 @@ It keeps daily counts and amounts only. No name, email, phone or company is aske
 Row-level deals and contacts (ids, stages, sources, dates, amounts) load with
   lifecycle warehouse connect hubspot-records --secret access_token=HUBSPOT_TOKEN
 
+Google Ads, about 10 minutes (optional, for ad spend next to revenue):
+1. You need an OAuth client id and secret from a Google Cloud project with the Google Ads API on.
+   The Cosmic AI app does this sign-in for you. These steps are for doing it by hand.
+2. Sign in with Google for a refresh token with the adwords scope. Google asks for a passkey.
+3. Copy the customer id from the top of Google Ads, such as 123-456-7890. Pick a client account,
+   not a manager account. If access comes through a manager, note its id too.
+4. export GOOGLE_ADS_CLIENT_SECRET=... GOOGLE_ADS_REFRESH_TOKEN=...
+5. lifecycle connect google-ads --customer 123-456-7890 --client-id ID --secret-env GOOGLE_ADS_CLIENT_SECRET --refresh-token-env GOOGLE_ADS_REFRESH_TOKEN [--login-customer MANAGER_ID]
+Only read calls are made, even though Google's scope is named for full access.
+
 Then:
   lifecycle sync
   lifecycle reconcile
@@ -153,7 +163,8 @@ Rules:
 - Revenue in fact_flow_daily is Klaviyo attributed revenue. Say so, and never present it as proof of causation.
 - fact_crm_* tables hold HubSpot counts and amounts by day, pipeline, stage and original source. There are no contact, company or deal records.
 - Purchases and purchase value in fact_meta_ads_daily are what Meta attributes to its own ads. They are a claim, not orders. Never add them to Shopify revenue or to email revenue. For a number with no attribution in it, use the marketing_efficiency_ratio metric.
-- Nothing in this tool sends a message, and nothing changes an ad account. Meta Ads is read only.
+- Conversions and conversions_value in fact_google_ads_campaign_daily and fact_google_ads_ad_group_daily are what Google attributes to its own ads. They are a claim, not orders, and they overlap with Meta's claims. Never add them to Shopify revenue, to email revenue or to Meta's purchases. cost is in the account currency.
+- Nothing in this tool sends a message, and nothing changes an ad account. Meta Ads and Google Ads are read only.
 - If a command fails with code \`busy\`, another lifecycle command is writing to the store. Wait and run it again. Do not delete files to get past it.
 - \`--cloud\` on a read command asks Cosmic Cloud instead of this machine. Use it only when the user is logged in (\`lifecycle cloud status --format json\`). Code \`not_built\` means Cloud does not have that route yet: run the command without \`--cloud\`, and do not retry. See \`lifecycle docs cloud\`.
 `,
@@ -250,10 +261,11 @@ Without either, the workspace is ~/.lifecycle, as before 0.14.0.
 ## Sources for each type
 
 Built in, with reconcile checks: shopify, klaviyo, ga4, stripe, meta, hubspot.
+Built in, read only, not yet run on a live account: google-ads.
 Warehouse connectors written from the vendor docs and not yet run on a real
 account: hubspot-records, pipedrive, woocommerce, bigcommerce, customer-io.
-Planned: salesforce, google-ads, linkedin-ads, google-search-console, posthog,
-mixpanel. For anything planned, bring daily totals in with
+Planned: salesforce, linkedin-ads, google-search-console, posthog, mixpanel.
+For anything planned, bring daily totals in with
   lifecycle sources import NAME --csv FILE
 See them with: lifecycle sources catalog --type TYPE
 `,
@@ -311,6 +323,7 @@ lifecycle connect ga4 --property ID --client-id ID --secret-env NAME --refresh-t
 lifecycle connect stripe --key-env NAME
 lifecycle connect meta --account ID --token-env NAME
 lifecycle connect hubspot --token-env NAME
+lifecycle connect google-ads --customer ID --client-id ID --secret-env NAME --refresh-token-env NAME [--login-customer ID]
 lifecycle sync [--since DATE] [--only SOURCE[,SOURCE]] [--cloud]
 lifecycle disconnect SOURCE [--delete-data]
 lifecycle schema [TABLE] [--cloud]
@@ -516,14 +529,14 @@ Find and connect a source:
   lifecycle warehouse list | disconnect SLUG
 
 Readiness, said plainly:
-  native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads). Shopify, Klaviyo and GA4 have reconcile checks
+  native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads, Google Ads). Shopify, Klaviyo and GA4 have reconcile checks
   tested   a warehouse connector that has synced a real account
   built    written from the vendor's API docs, not yet run on a real account.
            Expect the first sync to need a fix. Report it: lifecycle feedback
   planned  no connector yet. Use lifecycle sources import NAME --csv FILE
-           Google Ads and Google Search Console are planned as built-in sources.
-           Both need Google sign-in, which happens in the Cosmic AI app. The CLI
-           has no connector code for either yet.
+           Google Search Console is planned as a built-in source. It needs
+           Google sign-in, which happens in the Cosmic AI app. The CLI has no
+           connector code for it yet.
 
 Personal data:
   Customer names, emails, phone numbers and street addresses never enter the
@@ -645,6 +658,16 @@ Meta refused the token, or says it cannot read the ad account:
   System user tokens can be set to never expire. A token made in the Graph API Explorer lasts hours.
   Make a system user token with ads_read, give the system user access to the ad account,
   then lifecycle connect meta --account ID --token-env NAME.
+
+Google Ads says the project only has Test access:
+  A Cloud project starts with Test access, which reads test accounts only. Apply for Explorer
+  access on the project's Google Ads API Overview page. Explorer allows 2,880 operations a day
+  on live accounts. Basic needs brand verification first.
+
+Google Ads says the account cannot be read, or that it is a manager account:
+  Connect a client account, not a manager. If access comes through a manager account, add
+  --login-customer MANAGER_ID. A refresh token from an app in Testing mode stops working after
+  seven days; sign in again for a new one.
 
 Meta spend looks low for the last few days:
   Meta restates recent days as late conversions arrive. Each sync pulls the last 90 days

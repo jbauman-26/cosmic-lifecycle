@@ -420,8 +420,10 @@ describe('catalog additions in 0.12.0', () => {
     }
   })
 
-  it('lists Google Ads and Google Search Console as planned built-in sources that need Google sign-in, with no connector', () => {
-    for (const slug of ['google-ads', 'google-search-console']) {
+  it('lists Google Search Console as a planned built-in source that needs Google sign-in, with no connector', () => {
+    // Google Ads became a built-in source (lifecycle connect google-ads), so it left the warehouse catalog.
+    expect(bySlug('google-ads')).toBeUndefined()
+    for (const slug of ['google-search-console']) {
       const s = bySlug(slug)
       expect(s, slug).toBeDefined()
       expect(s.readiness, slug).toBe('planned')

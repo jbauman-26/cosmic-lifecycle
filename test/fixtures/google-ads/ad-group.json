@@ -1,0 +1,12 @@
+{
+  "results": [
+    {
+      "campaign": { "resourceName": "customers/1234567890/campaigns/111", "id": "111", "name": "Brand Search" },
+      "adGroup": { "resourceName": "customers/1234567890/adGroups/9001", "id": "9001", "name": "Brand exact" },
+      "metrics": { "clicks": "40", "conversions": 3.5, "conversionsValue": 412.345, "costMicros": "25120000", "impressions": "900" },
+      "segments": { "date": "2026-11-22" }
+    }
+  ],
+  "fieldMask": "segments.date,campaign.id,campaign.name,adGroup.id,adGroup.name,metrics.costMicros,metrics.impressions,metrics.clicks,metrics.conversions,metrics.conversionsValue",
+  "queryResourceConsumption": "80"
+}

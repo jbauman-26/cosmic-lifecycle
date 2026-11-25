@@ -1,0 +1,17 @@
+{
+  "results": [
+    {
+      "customer": {
+        "resourceName": "customers/1234567890",
+        "id": "1234567890",
+        "descriptiveName": "Northwind Test Ads",
+        "currencyCode": "USD",
+        "timeZone": "America/Los_Angeles",
+        "testAccount": true,
+        "manager": false
+      }
+    }
+  ],
+  "fieldMask": "customer.id,customer.descriptiveName,customer.currencyCode,customer.timeZone,customer.testAccount,customer.manager",
+  "queryResourceConsumption": "1"
+}
