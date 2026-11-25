@@ -452,7 +452,6 @@ export async function syncGoogleAds(db, load, opts) {
         return campaignRows ? { status: 'ok', rows } : { status: 'warning', rows, detail: `Google Ads returned no campaign activity from ${since} to ${until}.` };
     });
 }
-// Merchant Center restates recent days too, so every sync replaces the whole performance window in one
 const windowStart = (until, days) => new Date(Date.parse(`${until}T00:00:00Z`) - (days ?? settingValue('metrics.default_days')) * 86400000).toISOString().slice(0, 10);
 async function writeAdDaily(db, table, rows, since, account, currency) {
     const at = now();
@@ -494,6 +493,7 @@ export async function syncLinkedinAds(db, load, opts) {
         return { status: 'warning', rows, detail: opts.test ? 'This is a LinkedIn test ad account. LinkedIn reports no numbers for test accounts.' : `LinkedIn returned no campaign activity from ${since} to ${until}.` };
     });
 }
+// Merchant Center restates recent days too, so every sync replaces the whole performance window in one
 // transaction, like Google Ads. The product counts are a snapshot: one row for the day of the sync, replaced if
 // the same day syncs again, and earlier days kept. Rows from any other account are removed from both tables.
 export async function writeMerchantCenter(db, data, since, today, account) {

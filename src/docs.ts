@@ -68,6 +68,7 @@ Google Merchant Center, about 10 minutes (optional, for free listings and Shoppi
 5. export GOOGLE_MERCHANT_CENTER_CLIENT_SECRET=... GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN=...
 6. lifecycle connect google-merchant-center --account 123456789 --client-id ID --secret-env GOOGLE_MERCHANT_CENTER_CLIENT_SECRET --refresh-token-env GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN
 Google has no read-only Merchant scope. Only read calls are made: reports and the account name.
+
 Microsoft Advertising, about 15 minutes (optional, for Bing ad spend next to revenue):
 1. You need a Microsoft Entra app registration (any Entra tenant plus personal Microsoft
    accounts) with a client secret, and a Microsoft Advertising developer token from
@@ -93,7 +94,6 @@ LinkedIn Ads, about 10 minutes (optional, for LinkedIn ad spend next to pipeline
 5. lifecycle connect linkedin-ads --account ID --client-id ID --secret-env LINKEDIN_ADS_CLIENT_SECRET --refresh-token-env LINKEDIN_ADS_REFRESH_TOKEN
 Only read calls are made. A LinkedIn refresh token lasts one year from the sign-in; sign in
 again before then.
-
 
 Reddit Ads, about 10 minutes (optional, for ad spend next to revenue):
 1. You need a developer application from Business > Developer Portal in Reddit Ads (a business
@@ -765,6 +765,7 @@ Merchant Center says the account cannot be read:
   The Google user needs Performance and insights or Admin access on that Merchant Center account.
   Check the account id at the top of Merchant Center. A refresh token from an app in Testing mode
   stops working after seven days; sign in again for a new one.
+
 Microsoft Advertising refused the sign-in or the developer token:
   Code 105 usually means a sandbox developer token used against production, or the other way
   round. Use the production token from Settings, Developer settings. Microsoft may replace the
@@ -779,7 +780,6 @@ LinkedIn says the ad account cannot be read:
   The signed-in member needs a role on the ad account (Viewer is enough), and the sign-in needs
   r_ads and r_ads_reporting. LinkedIn also answers "not found" when the app is not approved for
   the Advertising API. A test ad account syncs, but LinkedIn reports no numbers for it.
-
 
 Reddit Ads or Snapchat Ads says the account cannot be read:
   The signed-in member needs access to that ad account: on Reddit, a role in the business that

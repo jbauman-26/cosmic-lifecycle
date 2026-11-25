@@ -537,8 +537,6 @@ export async function syncGoogleAds(
   })
 }
 
-// Merchant Center restates recent days too, so every sync replaces the whole performance window in one
-
 const windowStart = (until: string, days?: number) =>
   new Date(Date.parse(`${until}T00:00:00Z`) - (days ?? settingValue('metrics.default_days')) * 86400000).toISOString().slice(0, 10)
 
@@ -596,6 +594,8 @@ export async function syncLinkedinAds(
     return { status: 'warning' as const, rows, detail: opts.test ? 'This is a LinkedIn test ad account. LinkedIn reports no numbers for test accounts.' : `LinkedIn returned no campaign activity from ${since} to ${until}.` }
   })
 }
+
+// Merchant Center restates recent days too, so every sync replaces the whole performance window in one
 // transaction, like Google Ads. The product counts are a snapshot: one row for the day of the sync, replaced if
 // the same day syncs again, and earlier days kept. Rows from any other account are removed from both tables.
 export async function writeMerchantCenter(db: Db, data: { performance: RawPerformanceRow[]; products: RawProductRow[] }, since: string, today: string, account: string) {
