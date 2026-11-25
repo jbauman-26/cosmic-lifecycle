@@ -38,7 +38,7 @@ Incremental Shopify sync. After the first full pull, a daily sync asks Shopify o
 ### What is proven and what is not
 
 - Typecheck and the full suite pass. On a hand-made fixture, editing an old order and syncing changes only that order's day (and rebuilds the day of its customer's first order, unchanged), and every daily and cohort row equals a full pull of the edited history. Cancelling a customer's first order moves them to a new cohort and makes their next order new. On 5,000 random orders with 300 random edits (amounts, cancels, customer changes, moved days), the incremental totals equal a full pull row for row. Two mutations of the rebuild rules each fail the tests.
-- Not run against a real Shopify store. The `updated_at:>=` search with `sortKey: UPDATED_AT` is from Shopify's search syntax docs and unverified on a live store. A deleted order is caught only by the weekly full pull.
+- Run on 2026-11-25 against a Shopify development store holding fake test orders (read-only app, about 850 orders over 483 days): the first sync was full, the second incremental through the `updated_at:>=` search, and reconcile passed at 851 orders against Shopify's count of 851. The first full sync read 850 against 851 because an order was added while it ran; the incremental sync picked it up. A query for `order_key` was refused with `personal_column`. Not yet run on a store with a long real history or with `read_all_orders`. A deleted order is caught only by the weekly full pull.
 - Timed on this Mac with PGlite: a 300,000-order full pull with state in 4.5 s, and 12,000 changed orders spread over three years in 1.1 s (992 days rebuilt). Not timed at 3 million orders or on Supabase.
 
 ## 0.14.1 (2026-11-25)
