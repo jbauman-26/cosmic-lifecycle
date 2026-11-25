@@ -1,4 +1,7 @@
 import { spawnSync } from 'node:child_process'
+import { chmodSync, existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { dirname, join, basename } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { CliError } from './errors.js'
 
 import { workspaceName } from './paths.js'
@@ -63,6 +66,54 @@ export function setSecret(name: SecretName, value: string) {
     encoding: 'utf8',
   })
   if (res.status !== 0) throw new CliError('Could not save to the macOS keychain.', 'Unlock your keychain and run the command again.')
+}
+
+// Some sources hand back a new sign-in on every refresh (Pinterest always, Microsoft sometimes), and the
+// one just used may stop working. With a keychain, the new value replaces the saved one there, unless the
+// old one came from the environment: whoever set that variable owns it. Without a keychain (Cosmic Cloud
+// runs the CLI with keys in the environment only), set LIFECYCLE_ROTATED_FILE to a path and every new value
+// is merged into that file as JSON, { "<secret-name>": "<new value>" }, so the host can store it before the
+// next run. The file is written with mode 0600 through a temporary file and a rename. A value is never
+// printed. Returns true when the new value was kept.
+export function keepRotated(name: SecretName, value: string | null | undefined, previous: string, save: (name: SecretName, value: string) => void = setSecret): boolean {
+  if (!value || value === previous) return false
+  const file = process.env.LIFECYCLE_ROTATED_FILE
+  if (file && !useKeychain()) return writeRotated(file, name, value)
+  if (process.env[ENV[name]]) return false
+  try {
+    save(name, value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function writeRotated(file: string, name: SecretName, value: string): boolean {
+  const tmp = join(dirname(file), `.${basename(file)}.${randomUUID()}.tmp`)
+  try {
+    let kept: Record<string, string> = {}
+    if (existsSync(file)) {
+      try {
+        const old = JSON.parse(readFileSync(file, 'utf8')) as unknown
+        if (old && typeof old === 'object' && !Array.isArray(old)) kept = old as Record<string, string>
+      } catch {
+        // An unreadable file is replaced. The new value matters more than what could not be read.
+      }
+    }
+    kept[name] = value
+    writeFileSync(tmp, JSON.stringify(kept, null, 2) + '\n', { mode: 0o600, flag: 'wx' })
+    chmodSync(tmp, 0o600)
+    renameSync(tmp, file)
+    return true
+  } catch {
+    try {
+      unlinkSync(tmp)
+    } catch {
+      // Nothing was left behind.
+    }
+    process.stderr.write(`Could not write the new ${name} to LIFECYCLE_ROTATED_FILE. Sign in again before the next sync.\n`)
+    return false
+  }
 }
 
 export const SECRET_NAMES = Object.keys(ENV) as SecretName[]

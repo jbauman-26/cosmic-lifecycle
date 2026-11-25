@@ -1,5 +1,5 @@
 import { readConfig, writeConfig } from '../config.js';
-import { setSecret, getSecret, envName } from '../secrets.js';
+import { setSecret, getSecret, envName, keepRotated, useKeychain } from '../secrets.js';
 import { CliError } from '../errors.js';
 import { Klaviyo } from '../sources/klaviyo.js';
 import { shopifyToken } from '../sources/shopify.js';
@@ -168,19 +168,6 @@ export async function connectMerchantCenter(opts, fetcher = fetchJson) {
     writeConfig({ ...readConfig(), 'google-merchant-center': { account, clientId: opts.clientId, name: a.name } });
     return { connected: true, account, name: a.name, ...kept };
 }
-// Keeps a newer Microsoft refresh token in the keychain when the old one came from there. One passed in the
-// environment is left alone: whoever set the variable owns it and should store the new value.
-export function keepRotatedToken(name, fresh, old, save = setSecret) {
-    if (!fresh || fresh === old || process.env[envName(name)])
-        return false;
-    try {
-        save(name, fresh);
-        return true;
-    }
-    catch {
-        return false;
-    }
-}
 const MICROSOFT_NEXT = 'lifecycle connect microsoft-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME --developer-token-env NAME';
 // Read only: the msads.manage scope is the only one Microsoft offers, but this CLI only ever calls GetAccount and
 // the reporting service. The developer token belongs to whoever registered the app; it is not the advertiser's.
@@ -207,6 +194,9 @@ export async function connectMicrosoftAds(opts, fetcher = fetchJson) {
     if (opts.developerTokenEnv)
         keys.push(['microsoft-ads-developer-token', developer]);
     const kept = keys.length ? keepKeys(keys) : NO_KEYS;
+    // Without a keychain the newer refresh token would be lost here, so it goes to LIFECYCLE_ROTATED_FILE when set.
+    if (!useKeychain())
+        keepRotated('microsoft-ads-refresh-token', t.refreshToken, refresh);
     writeConfig({ ...readConfig(), 'microsoft-ads': { account, customer: a.customer, clientId: opts.clientId, name: a.name, currency: a.currency, timezone: a.timezone } });
     return { connected: true, account, customer: a.customer, name: a.name, currency: a.currency, timezone: a.timezone, ...kept };
 }
@@ -290,20 +280,6 @@ export async function connectTiktokAds(opts, fetcher = fetchJson) {
     writeConfig({ ...readConfig(), 'tiktok-ads': { account, clientId: opts.appId, name: a.name, currency: a.currency, timezone: a.timezone } });
     return { connected: true, account, appId: opts.appId, name: a.name, currency: a.currency, timezone: a.timezone, ...kept };
 }
-// Pinterest hands back a new refresh token on every refresh, good for 60 days. When the saved one
-// came from the keychain, the new one replaces it there. One from the environment (CI, Cloud) cannot
-// be updated here: whoever set it keeps the newest one.
-export function keepRotatedPinterest(fresh, used) {
-    if (!fresh || fresh === used || process.env[envName('pinterest-ads-refresh-token')])
-        return false;
-    try {
-        setSecret('pinterest-ads-refresh-token', fresh);
-        return true;
-    }
-    catch {
-        return false;
-    }
-}
 const PINTEREST_ADS_NEXT = 'lifecycle connect pinterest-ads --account AD_ACCOUNT_ID --client-id ID --secret-env NAME --refresh-token-env NAME';
 // Read only: the refresh token is for the ads:read scope, and this CLI only ever reads the ad account,
 // its campaigns and campaign analytics.
@@ -324,8 +300,9 @@ export async function connectPinterestAds(opts, fetcher = fetchJson) {
     if (opts.refreshTokenEnv)
         keys.push(['pinterest-ads-refresh-token', newest]);
     const kept = keys.length ? keepKeys(keys) : NO_KEYS;
-    if (!opts.refreshTokenEnv)
-        keepRotatedPinterest(token.refreshToken, refresh);
+    // Pinterest hands back a new refresh token on every refresh, good for 60 days. See keepRotated.
+    if (!opts.refreshTokenEnv || !useKeychain())
+        keepRotated('pinterest-ads-refresh-token', token.refreshToken, refresh);
     writeConfig({ ...readConfig(), 'pinterest-ads': { account, clientId: opts.clientId, name: a.name, currency: a.currency, timezone: a.timezone } });
     return { connected: true, account, name: a.name, currency: a.currency, timezone: a.timezone, refreshTokenRotated: newest !== refresh, ...kept };
 }

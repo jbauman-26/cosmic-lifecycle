@@ -2,11 +2,11 @@
 import { Command } from 'commander';
 import { emit, emitError } from './output.js';
 import { init } from './commands/init.js';
-import { connectGa4, connectGoogleAds, connectHubspot, connectKlaviyo, connectLinkedinAds, connectMerchantCenter, connectMeta, connectMicrosoftAds, connectPinterestAds, connectRedditAds, connectShopify, connectSnapchatAds, connectStripe, connectTiktokAds, keepRotatedPinterest, keepRotatedToken } from './commands/connect.js';
+import { connectGa4, connectGoogleAds, connectHubspot, connectKlaviyo, connectLinkedinAds, connectMerchantCenter, connectMeta, connectMicrosoftAds, connectPinterestAds, connectRedditAds, connectShopify, connectSnapchatAds, connectStripe, connectTiktokAds } from './commands/connect.js';
 import { doctor } from './commands/doctor.js';
 import { openDb, migrate } from './db.js';
 import { readConfig, settingValue, writeConfig } from './config.js';
-import { getSecret, getSourceSecret } from './secrets.js';
+import { getSecret, getSourceSecret, keepRotated } from './secrets.js';
 import { CliError } from './errors.js';
 import { changedSinceQuery, fetchOrderCount, fetchOrders, shopifyToken } from './sources/shopify.js';
 import { keyer, newCustomerKey, plan as shopifyPlan, readSyncState } from './shopify-state.js';
@@ -506,7 +506,7 @@ program.command('sync').description('Pull fresh totals from connected sources, t
                     const m = config['microsoft-ads'];
                     const api = async () => {
                         const t = await microsoftAdsAccessToken(m.clientId, msSecret, msRefresh);
-                        keepRotatedToken('microsoft-ads-refresh-token', t.refreshToken, msRefresh);
+                        keepRotated('microsoft-ads-refresh-token', t.refreshToken, msRefresh);
                         return new MicrosoftAds(t.accessToken, msDeveloper, m.account, m.customer);
                     };
                     results.push(await syncMicrosoftAds(db, async (s, u) => (await api()).campaigns(s, u), { account: m.account, currency: m.currency }));
@@ -538,7 +538,7 @@ program.command('sync').description('Pull fresh totals from connected sources, t
                     const p = config['pinterest-ads'];
                     results.push(await syncPinterestAds(db, async (s, u) => {
                         const t = await pinterestAccessToken(p.clientId, pinsSecret, pinsRefresh);
-                        keepRotatedPinterest(t.refreshToken, pinsRefresh);
+                        keepRotated('pinterest-ads-refresh-token', t.refreshToken, pinsRefresh);
                         return new PinterestAds(t.accessToken, p.account).report(s, u, p.timezone);
                     }, { account: p.account, currency: p.currency }));
                 }

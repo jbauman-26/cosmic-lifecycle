@@ -7,12 +7,12 @@ import { PGlite } from '@electric-sql/pglite'
 import { migrate, wrapPglite, type Db } from '../src/db.js'
 import { csvRows, faultCodes, MicrosoftAds, microsoftAdsAccessToken, normalizeId, pacificToday, parseCsv, reportRequest, toDaily, unzipFirst } from '../src/sources/microsoft-ads.js'
 import { syncMicrosoftAds, writeMicrosoftAds } from '../src/sync.js'
-import { connectMicrosoftAds, keepRotatedToken } from '../src/commands/connect.js'
+import { connectMicrosoftAds } from '../src/commands/connect.js'
 import { readConfig, writeConfig } from '../src/config.js'
 import { workflowYaml } from '../src/deploy.js'
 import { HttpError } from '../src/http.js'
 import { NATIVE_SECRETS, NATIVE_TABLES, parseOnly } from '../src/native.js'
-import { envName } from '../src/secrets.js'
+import { envName, keepRotated } from '../src/secrets.js'
 
 // Answer shapes follow the Bing Ads API v13 REST reference (Request JSON and Response JSON templates on each
 // operation page, and the AdApiFaultDetail / ApiFaultDetail JSON syntax). They are written from the docs, not
@@ -199,12 +199,12 @@ describe('sign-in', () => {
   it('keeps a newer refresh token, but never overwrites one set in the environment', () => {
     const saved: string[] = []
     const save = (_n: unknown, v: string) => void saved.push(v)
-    expect(keepRotatedToken('microsoft-ads-refresh-token', 'new', 'old', save)).toBe(true)
-    expect(keepRotatedToken('microsoft-ads-refresh-token', 'old', 'old', save)).toBe(false)
-    expect(keepRotatedToken('microsoft-ads-refresh-token', null, 'old', save)).toBe(false)
+    expect(keepRotated('microsoft-ads-refresh-token', 'new', 'old', save)).toBe(true)
+    expect(keepRotated('microsoft-ads-refresh-token', 'old', 'old', save)).toBe(false)
+    expect(keepRotated('microsoft-ads-refresh-token', null, 'old', save)).toBe(false)
     process.env[envName('microsoft-ads-refresh-token')] = 'old'
     try {
-      expect(keepRotatedToken('microsoft-ads-refresh-token', 'newer', 'old', save)).toBe(false)
+      expect(keepRotated('microsoft-ads-refresh-token', 'newer', 'old', save)).toBe(false)
     } finally {
       delete process.env[envName('microsoft-ads-refresh-token')]
     }

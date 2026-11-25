@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { configPath } from '../paths.js'
 import { readConfig } from '../config.js'
-import { getSecret } from '../secrets.js'
+import { getSecret, keepRotated } from '../secrets.js'
 import { openDb, type Db } from '../db.js'
 import { Klaviyo, reportsVerified } from '../sources/klaviyo.js'
 import { shopifyToken } from '../sources/shopify.js'
@@ -13,12 +13,10 @@ import { GoogleAds, googleAdsAccessToken } from '../sources/google-ads.js'
 import { MerchantCenter, merchantAccessToken } from '../sources/google-merchant-center.js'
 import { MicrosoftAds, microsoftAdsAccessToken } from '../sources/microsoft-ads.js'
 import { LinkedinAds, linkedinAccessToken } from '../sources/linkedin-ads.js'
-import { keepRotatedToken } from './connect.js'
 import { RedditAds, redditAccessToken } from '../sources/reddit-ads.js'
 import { SnapchatAds, snapAccessToken } from '../sources/snapchat-ads.js'
 import { TikTokAds } from '../sources/tiktok-ads.js'
 import { PinterestAds, pinterestAccessToken } from '../sources/pinterest-ads.js'
-import { keepRotatedPinterest } from './connect.js'
 import { CliError } from '../errors.js'
 
 type Check = { name: string; ok: boolean; detail: string; next?: string }
@@ -102,7 +100,7 @@ export async function doctor(): Promise<{ healthy: boolean; checks: Check[] }> {
   else if (msads && msSecret && msRefresh && msDeveloper) {
     try {
       const t = await microsoftAdsAccessToken(msads.clientId, msSecret, msRefresh)
-      keepRotatedToken('microsoft-ads-refresh-token', t.refreshToken, msRefresh)
+      keepRotated('microsoft-ads-refresh-token', t.refreshToken, msRefresh)
       const a = await new MicrosoftAds(t.accessToken, msDeveloper, msads.account, msads.customer).check()
       checks.push({ name: 'microsoft-ads', ok: true, detail: `Sign-in reads ${a.name || a.account} in ${a.currency}` })
     } catch (e) {
@@ -168,7 +166,7 @@ export async function doctor(): Promise<{ healthy: boolean; checks: Check[] }> {
   else if (pins && pinsSecret && pinsRefresh) {
     try {
       const t = await pinterestAccessToken(pins.clientId, pinsSecret, pinsRefresh)
-      keepRotatedPinterest(t.refreshToken, pinsRefresh)
+      keepRotated('pinterest-ads-refresh-token', t.refreshToken, pinsRefresh)
       const a = await new PinterestAds(t.accessToken, pins.account).check()
       checks.push({ name: 'pinterest-ads', ok: true, detail: `Sign-in reads ${a.name || a.account} in ${a.currency}` })
     } catch (e) {

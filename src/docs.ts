@@ -131,7 +131,8 @@ Pinterest Ads, about 10 minutes (optional, for ad spend next to revenue):
 4. export PINTEREST_ADS_CLIENT_SECRET=... PINTEREST_ADS_REFRESH_TOKEN=...
 5. lifecycle connect pinterest-ads --account AD_ACCOUNT_ID --client-id APP_ID --secret-env PINTEREST_ADS_CLIENT_SECRET --refresh-token-env PINTEREST_ADS_REFRESH_TOKEN
 Only read calls are made. Pinterest gives a new refresh token each time one is used, good for
-60 days. With a keychain the CLI keeps the newest; from the environment, keep it current yourself.
+60 days. With a keychain the CLI keeps the newest. Without one, set LIFECYCLE_ROTATED_FILE and
+the CLI writes the newest there for you to store; otherwise keep it current yourself.
 
 Then:
   lifecycle sync
@@ -713,6 +714,11 @@ No keychain, such as on Linux, in CI, or when an app passes keys per call:
   lifecycle connect SOURCE --key-env NAME still works there: it checks the key,
   saves the source's settings, and reports keyStorage "environment" with the
   variable to set at sync time. The key itself is not saved anywhere.
+  Some sources replace a sign-in when it is used (Pinterest always, Microsoft
+  Advertising sometimes). Set LIFECYCLE_ROTATED_FILE to a path and the CLI merges
+  each new value into it as JSON, { "pinterest-ads-refresh-token": "..." }, keyed
+  by secret name, mode 0600. Store each value in its LIFECYCLE_* variable before
+  the next run. Values are never printed.
 
 "Another lifecycle command is writing to this store" (code busy):
   Two commands never write one local database at once. sync, connect, init,
@@ -769,7 +775,8 @@ Merchant Center says the account cannot be read:
 Microsoft Advertising refused the sign-in or the developer token:
   Code 105 usually means a sandbox developer token used against production, or the other way
   round. Use the production token from Settings, Developer settings. Microsoft may replace the
-  refresh token when it is used; the CLI keeps the new one in the keychain, but one passed in an
+  refresh token when it is used; the CLI keeps the new one in the keychain. Without a keychain it
+  writes the new one to LIFECYCLE_ROTATED_FILE when that is set. Otherwise one passed in an
   environment variable (as in GitHub Actions) is not updated, so sign in again if it stops working.
 
 Microsoft Advertising says the account cannot be read:
@@ -797,7 +804,8 @@ TikTok says the token is invalid, or that it cannot read the ad account:
 
 Pinterest says the sign-in was refused:
   A refresh token lasts 60 days, and each use gives a new one. If the saved one came from the
-  environment and was not updated, it runs out. Sign in with Pinterest again for a new one, then
+  environment and was not updated, it runs out. Without a keychain, set LIFECYCLE_ROTATED_FILE so
+  each run hands the new one back. Sign in with Pinterest again for a new one, then
   lifecycle connect pinterest-ads. A user needs Owner, Admin, Analyst or Campaign Manager access
   on the ad account.
 
