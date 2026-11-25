@@ -2,7 +2,7 @@
 import { Command } from 'commander';
 import { emit, emitError } from './output.js';
 import { init } from './commands/init.js';
-import { connectGa4, connectGoogleAds, connectHubspot, connectKlaviyo, connectMeta, connectShopify, connectStripe } from './commands/connect.js';
+import { connectGa4, connectGoogleAds, connectHubspot, connectKlaviyo, connectMeta, connectPinterestAds, connectShopify, connectStripe, connectTiktokAds, keepRotatedPinterest } from './commands/connect.js';
 import { doctor } from './commands/doctor.js';
 import { openDb, migrate } from './db.js';
 import { readConfig, settingValue, writeConfig } from './config.js';
@@ -16,8 +16,10 @@ import { Klaviyo } from './sources/klaviyo.js';
 import { Stripe } from './sources/stripe.js';
 import { MetaAds } from './sources/meta.js';
 import { GoogleAds, googleAdsAccessToken } from './sources/google-ads.js';
+import { TikTokAds } from './sources/tiktok-ads.js';
+import { PinterestAds, pinterestAccessToken } from './sources/pinterest-ads.js';
 import { HubSpot } from './sources/hubspot.js';
-import { exportProgress, syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncMeta, syncShopify, syncShopifyBulk, syncShopifyChanges, syncStripe } from './sync.js';
+import { exportProgress, syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncMeta, syncPinterestAds, syncShopify, syncShopifyBulk, syncShopifyChanges, syncStripe, syncTiktokAds } from './sync.js';
 import { shopifyGql } from './sources/shopify-bulk.js';
 import { runQuery } from './query.js';
 import { PUBLIC_TABLES } from './schema.js';
@@ -261,6 +263,23 @@ connect.command('google-ads').description('Read-only: daily cost and results by 
     const r = await connectGoogleAds(opts);
     emit(format(), r, () => `Connected to Google Ads account ${r.name || r.customer} (${r.currency}, ${r.timezone})${r.testAccount ? ', a test account' : ''}.${keyNote(r)}\nNext: lifecycle sync`);
 }));
+connect.command('tiktok-ads').description('Read-only: daily spend and results by campaign. No audiences, creatives or people.')
+    .option('--account <id>', 'TikTok advertiser id, the number under the account name in TikTok Ads Manager')
+    .option('--app-id <id>', 'TikTok app id from the TikTok API for Business developer portal')
+    .option('--token-env <name>', 'environment variable holding the long-term advertiser access token')
+    .action(write('connect tiktok-ads', async (opts) => {
+    const r = await connectTiktokAds(opts);
+    emit(format(), r, () => `Connected to TikTok ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: lifecycle sync`);
+}));
+connect.command('pinterest-ads').description('Read-only: daily spend and results by campaign. No audiences, pins, creatives or people.')
+    .option('--account <id>', 'Pinterest ad account id, the number in the Ads Manager address')
+    .option('--client-id <id>', 'Pinterest app id from developers.pinterest.com')
+    .option('--secret-env <name>', 'environment variable holding the Pinterest app secret')
+    .option('--refresh-token-env <name>', 'environment variable holding a refresh token with the ads:read scope')
+    .action(write('connect pinterest-ads', async (opts) => {
+    const r = await connectPinterestAds(opts);
+    emit(format(), r, () => `Connected to Pinterest ad account ${r.name || r.account} (${r.currency}${r.timezone ? `, ${r.timezone}` : ''}).${keyNote(r)}\nNext: lifecycle sync`);
+}));
 const collectList = (v, prev = []) => [...prev, v];
 // The store's key for scrambled customer ids: LIFECYCLE_SHOPIFY_CUSTOMER_KEY (the app and Cloud pass it), or this
 // workspace's keychain entry, made on the first sync. With neither (no keychain, nothing passed), Shopify syncs in
@@ -316,6 +335,9 @@ program.command('sync').description('Pull fresh totals from connected sources, t
         const hubspotToken = getSecret('hubspot-token');
         const gadsSecret = getSecret('google-ads-client-secret');
         const gadsRefresh = getSecret('google-ads-refresh-token');
+        const tiktokToken = getSecret('tiktok-ads-access-token');
+        const pinsSecret = getSecret('pinterest-ads-client-secret');
+        const pinsRefresh = getSecret('pinterest-ads-refresh-token');
         const chosen = chooseSources(only, {
             shopify: Boolean(config.shopify && shopifySecret),
             klaviyo: Boolean(key),
@@ -324,6 +346,8 @@ program.command('sync').description('Pull fresh totals from connected sources, t
             meta: Boolean(config.meta && metaToken),
             hubspot: Boolean(config.hubspot && hubspotToken),
             'google-ads': Boolean(config['google-ads'] && gadsSecret && gadsRefresh),
+            'tiktok-ads': Boolean(config['tiktok-ads'] && tiktokToken),
+            'pinterest-ads': Boolean(config['pinterest-ads'] && pinsSecret && pinsRefresh),
         });
         if (!chosen.length)
             throw new CliError('No sources connected.', readWorkspace().type === 'shopify' ? 'lifecycle connect klaviyo --key-env NAME' : `lifecycle connect ${TYPES[readWorkspace().type].sources[0]}`, 'not_connected');
@@ -403,6 +427,19 @@ program.command('sync').description('Pull fresh totals from connected sources, t
                 else if (source === 'meta') {
                     const meta = new MetaAds(metaToken, config.meta.account);
                     results.push(await syncMeta(db, (since, until) => meta.insights(since, until), { currency: config.meta.currency, account: config.meta.account }));
+                }
+                else if (source === 'tiktok-ads') {
+                    const t = config['tiktok-ads'];
+                    const tiktok = new TikTokAds(tiktokToken, t.account);
+                    results.push(await syncTiktokAds(db, (s, u) => tiktok.report(s, u), { account: t.account, currency: t.currency }));
+                }
+                else if (source === 'pinterest-ads') {
+                    const p = config['pinterest-ads'];
+                    results.push(await syncPinterestAds(db, async (s, u) => {
+                        const t = await pinterestAccessToken(p.clientId, pinsSecret, pinsRefresh);
+                        keepRotatedPinterest(t.refreshToken, pinsRefresh);
+                        return new PinterestAds(t.accessToken, p.account).report(s, u, p.timezone);
+                    }, { account: p.account, currency: p.currency }));
                 }
                 else {
                     const g = config['google-ads'];
@@ -938,7 +975,7 @@ program.command('deploy').description('Run the daily sync from your own GitHub a
         emit(format(), plan, () => [`This would create:`, ...plan.creates.map((c) => `  ${c}`), `Secrets to set: ${plan.secrets.join(', ')}`, `Cost: ${plan.expectedCost}`, `Nothing was created. Add --yes to go ahead.`].join('\n'));
         return;
     }
-    const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_SHOPIFY_CUSTOMER_KEY: 'shopify-customer-key', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token', LIFECYCLE_HUBSPOT_TOKEN: 'hubspot-token', LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET: 'google-ads-client-secret', LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN: 'google-ads-refresh-token' };
+    const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_SHOPIFY_CUSTOMER_KEY: 'shopify-customer-key', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token', LIFECYCLE_HUBSPOT_TOKEN: 'hubspot-token', LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET: 'google-ads-client-secret', LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN: 'google-ads-refresh-token', LIFECYCLE_TIKTOK_ADS_ACCESS_TOKEN: 'tiktok-ads-access-token', LIFECYCLE_PINTEREST_ADS_CLIENT_SECRET: 'pinterest-ads-client-secret', LIFECYCLE_PINTEREST_ADS_REFRESH_TOKEN: 'pinterest-ads-refresh-token' };
     const secrets = {};
     // The daily sync in GitHub Actions uses the same store key as this machine, so both keep the same scrambled ids.
     if (plan.secrets.includes('LIFECYCLE_SHOPIFY_CUSTOMER_KEY'))

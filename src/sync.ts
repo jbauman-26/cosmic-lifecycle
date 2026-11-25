@@ -8,6 +8,8 @@ import type { Ga4Day } from './sources/ga4.js'
 import { applyChanges, changedSince, clearState, readSyncState, replaceState, StateBuffer, stateRow, writeSyncState, type Keyer } from './shopify-state.js'
 import { toDaily, type RawInsight } from './sources/meta.js'
 import { toAdGroupDaily, toCampaignDaily, type RawAdGroupRow, type RawCampaignRow } from './sources/google-ads.js'
+import { toDaily as toTiktokDaily, type RawReportRow as RawTiktokRow } from './sources/tiktok-ads.js'
+import { clampSince as clampPinterestSince, toDaily as toPinterestDaily, type RawAnalyticsRow as RawPinterestRow } from './sources/pinterest-ads.js'
 import { aggregateCharges, aggregateSubscriptions, type RawCharge, type RawSubscription } from './sources/stripe.js'
 import { aggregateContacts, aggregateDeals, uniqueCount, type RawContact, type RawDeal } from './sources/hubspot.js'
 import { Klaviyo, isNoReportData, reportsVerified, type FlowDailyRow } from './sources/klaviyo.js'
@@ -527,5 +529,58 @@ export async function syncGoogleAds(
     await setTotal(db, 'google-ads', 'rows_pulled', campaigns.length + adGroups.length)
     const rows = campaignRows + adGroupRows
     return campaignRows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Google Ads returned no campaign activity from ${since} to ${until}.` }
+  })
+}
+
+// One daily campaign table per ad network, for TikTok and Pinterest. Both restate recent days as late
+// conversions come in, so every sync replaces the whole window in one transaction, and older days keep
+// what the last sync that covered them saw. Rows from any other account are removed, so switching
+// accounts never mixes two accounts' history.
+type AdsDaily = { date: string; campaignId: string; campaignName: string; spend: number; impressions: number; clicks: number; conversions: number; conversionValue: number }
+async function writeAdsDaily(db: Db, table: 'fact_tiktok_ads_daily' | 'fact_pinterest_ads_daily', rows: AdsDaily[], since: string, currency: string, account: string) {
+  const at = now()
+  await db.transaction(async (tx: Tx) => {
+    await tx.query(`DELETE FROM ${table} WHERE date >= $1 OR account_id <> $2`, [since, account])
+    for (const d of rows) {
+      await tx.query(
+        `INSERT INTO ${table} VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (date, account_id, campaign_id) DO NOTHING`,
+        [d.date, account, d.campaignId, d.campaignName, d.spend, d.impressions, d.clicks, d.conversions, d.conversionValue, currency, at],
+      )
+    }
+  })
+  return rows.length
+}
+
+const windowStart = (until: string, days?: number) =>
+  new Date(Date.parse(`${until}T00:00:00Z`) - (days ?? settingValue('metrics.default_days')) * 86400000).toISOString().slice(0, 10)
+
+export async function writeTiktokAds(db: Db, raw: RawTiktokRow[], since: string, currency: string, account: string) {
+  return writeAdsDaily(db, 'fact_tiktok_ads_daily', toTiktokDaily(raw), since, currency, account)
+}
+
+export async function syncTiktokAds(db: Db, load: (since: string, until: string) => Promise<RawTiktokRow[]>, opts: { account: string; currency?: string; days?: number; today?: string }) {
+  return recordRun(db, 'tiktok-ads', async () => {
+    const until = opts.today ?? now().slice(0, 10)
+    const since = windowStart(until, opts.days)
+    const raw = await load(since, until)
+    const rows = await writeTiktokAds(db, raw, since, opts.currency ?? '', opts.account)
+    await setTotal(db, 'tiktok-ads', 'rows_pulled', raw.length)
+    return rows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `TikTok returned no campaign activity from ${since} to ${until}.` }
+  })
+}
+
+export async function writePinterestAds(db: Db, data: { rows: RawPinterestRow[]; names: Map<string, string> }, since: string, currency: string, account: string) {
+  return writeAdsDaily(db, 'fact_pinterest_ads_daily', toPinterestDaily(data.rows, data.names), since, currency, account)
+}
+
+// Pinterest's daily report reaches only 90 days back, so the window never starts earlier than that.
+export async function syncPinterestAds(db: Db, load: (since: string, until: string) => Promise<{ rows: RawPinterestRow[]; names: Map<string, string> }>, opts: { account: string; currency?: string; days?: number; today?: string }) {
+  return recordRun(db, 'pinterest-ads', async () => {
+    const until = opts.today ?? now().slice(0, 10)
+    const since = clampPinterestSince(windowStart(until, opts.days), until)
+    const data = await load(since, until)
+    const rows = await writePinterestAds(db, data, since, opts.currency ?? '', opts.account)
+    await setTotal(db, 'pinterest-ads', 'rows_pulled', data.rows.length)
+    return rows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Pinterest returned no campaign activity from ${since} to ${until}.` }
   })
 }

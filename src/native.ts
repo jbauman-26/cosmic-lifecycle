@@ -7,7 +7,7 @@ import { clearState } from './shopify-state.js'
 
 // The sources built into the CLI. Each one has a config section written by
 // connect, the keys it saved, and the tables only it fills.
-export const NATIVE = ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'hubspot', 'google-ads'] as const
+export const NATIVE = ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'hubspot', 'google-ads', 'tiktok-ads', 'pinterest-ads'] as const
 export type NativeSource = (typeof NATIVE)[number]
 
 export const NATIVE_SECRETS: Record<NativeSource, SecretName[]> = {
@@ -19,6 +19,8 @@ export const NATIVE_SECRETS: Record<NativeSource, SecretName[]> = {
   meta: ['meta-ads-token'],
   hubspot: ['hubspot-token'],
   'google-ads': ['google-ads-client-secret', 'google-ads-refresh-token'],
+  'tiktok-ads': ['tiktok-ads-access-token'],
+  'pinterest-ads': ['pinterest-ads-client-secret', 'pinterest-ads-refresh-token'],
 }
 
 // Tables only this source writes. meta_sync_run is kept on purpose: it is the
@@ -31,6 +33,8 @@ export const NATIVE_TABLES: Record<NativeSource, string[]> = {
   meta: ['fact_meta_ads_daily'],
   hubspot: ['fact_crm_deals_daily', 'fact_crm_pipeline_open', 'fact_crm_contacts_daily'],
   'google-ads': ['fact_google_ads_campaign_daily', 'fact_google_ads_ad_group_daily'],
+  'tiktok-ads': ['fact_tiktok_ads_daily'],
+  'pinterest-ads': ['fact_pinterest_ads_daily'],
 }
 
 export const isNative = (s: string): s is NativeSource => (NATIVE as readonly string[]).includes(s)

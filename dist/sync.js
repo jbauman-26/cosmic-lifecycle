@@ -6,6 +6,8 @@ import { CompactOrders, isDone, pollExport, readExport, startOrdersExport, waitF
 import { applyChanges, changedSince, clearState, readSyncState, replaceState, StateBuffer, stateRow, writeSyncState } from './shopify-state.js';
 import { toDaily } from './sources/meta.js';
 import { toAdGroupDaily, toCampaignDaily } from './sources/google-ads.js';
+import { toDaily as toTiktokDaily } from './sources/tiktok-ads.js';
+import { clampSince as clampPinterestSince, toDaily as toPinterestDaily } from './sources/pinterest-ads.js';
 import { aggregateCharges, aggregateSubscriptions } from './sources/stripe.js';
 import { aggregateContacts, aggregateDeals, uniqueCount } from './sources/hubspot.js';
 import { isNoReportData, reportsVerified } from './sources/klaviyo.js';
@@ -443,5 +445,43 @@ export async function syncGoogleAds(db, load, opts) {
         await setTotal(db, 'google-ads', 'rows_pulled', campaigns.length + adGroups.length);
         const rows = campaignRows + adGroupRows;
         return campaignRows ? { status: 'ok', rows } : { status: 'warning', rows, detail: `Google Ads returned no campaign activity from ${since} to ${until}.` };
+    });
+}
+async function writeAdsDaily(db, table, rows, since, currency, account) {
+    const at = now();
+    await db.transaction(async (tx) => {
+        await tx.query(`DELETE FROM ${table} WHERE date >= $1 OR account_id <> $2`, [since, account]);
+        for (const d of rows) {
+            await tx.query(`INSERT INTO ${table} VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (date, account_id, campaign_id) DO NOTHING`, [d.date, account, d.campaignId, d.campaignName, d.spend, d.impressions, d.clicks, d.conversions, d.conversionValue, currency, at]);
+        }
+    });
+    return rows.length;
+}
+const windowStart = (until, days) => new Date(Date.parse(`${until}T00:00:00Z`) - (days ?? settingValue('metrics.default_days')) * 86400000).toISOString().slice(0, 10);
+export async function writeTiktokAds(db, raw, since, currency, account) {
+    return writeAdsDaily(db, 'fact_tiktok_ads_daily', toTiktokDaily(raw), since, currency, account);
+}
+export async function syncTiktokAds(db, load, opts) {
+    return recordRun(db, 'tiktok-ads', async () => {
+        const until = opts.today ?? now().slice(0, 10);
+        const since = windowStart(until, opts.days);
+        const raw = await load(since, until);
+        const rows = await writeTiktokAds(db, raw, since, opts.currency ?? '', opts.account);
+        await setTotal(db, 'tiktok-ads', 'rows_pulled', raw.length);
+        return rows ? { status: 'ok', rows } : { status: 'warning', rows, detail: `TikTok returned no campaign activity from ${since} to ${until}.` };
+    });
+}
+export async function writePinterestAds(db, data, since, currency, account) {
+    return writeAdsDaily(db, 'fact_pinterest_ads_daily', toPinterestDaily(data.rows, data.names), since, currency, account);
+}
+// Pinterest's daily report reaches only 90 days back, so the window never starts earlier than that.
+export async function syncPinterestAds(db, load, opts) {
+    return recordRun(db, 'pinterest-ads', async () => {
+        const until = opts.today ?? now().slice(0, 10);
+        const since = clampPinterestSince(windowStart(until, opts.days), until);
+        const data = await load(since, until);
+        const rows = await writePinterestAds(db, data, since, opts.currency ?? '', opts.account);
+        await setTotal(db, 'pinterest-ads', 'rows_pulled', data.rows.length);
+        return rows ? { status: 'ok', rows } : { status: 'warning', rows, detail: `Pinterest returned no campaign activity from ${since} to ${until}.` };
     });
 }

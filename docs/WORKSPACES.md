@@ -84,6 +84,8 @@ Trust line statuses: `passed`, `failed`, `unchecked`, and new in 0.14.0 `unrefer
 | Stripe subscriptions | already native | native | unchanged |
 | Salesforce | catalog | planned: needs an OAuth connected app | |
 | Google Ads | built in (`connect google-ads`), read only | built: from the Google Ads API docs (v26), tested against recorded answers; not run on a live or test account | daily cost and results by campaign and ad group; no audiences, keywords, people or creative |
+| TikTok Ads | built in (`connect tiktok-ads`), read only | built: from the TikTok API for Business docs (v1.3), tested against recorded answers; not run on a live ad account | daily spend and results by campaign; no audiences, creatives or people |
+| Pinterest Ads | built in (`connect pinterest-ads`), read only | built: from the Pinterest API v5 docs, tested against recorded answers; not run on a live ad account | daily spend and results by campaign; no audiences, pins, creatives or people |
 | LinkedIn Ads | catalog | planned: needs an approved Marketing API app | |
 | Google Search Console | catalog | planned: needs Google sign-in | |
 | PostHog, Mixpanel | catalog | planned: query results come as arrays or streams, which need a runner change | |

@@ -7,17 +7,6 @@ export const READINESS_LEGEND =
 
 export const WAREHOUSE_CATALOG: WarehouseSource[] = [
   {
-    "slug": "tiktok-ads",
-    "name": "TikTok Ads",
-    "category": "ads",
-    "readiness": "planned",
-    "why": "#5 of 100 tools Shopify stores use. StoreLeads: detected on 414,088 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/technology/TikTok%20Pixel",
-    "docs": "https://business-api.tiktok.com/portal/docs",
-    "credentials": [],
-    "params": [],
-    "notes": "Needs an OAuth sign-in flow, not built yet. CSV import meanwhile."
-  },
-  {
     "slug": "judge-me",
     "name": "Judge.me",
     "category": "reviews",
@@ -1044,17 +1033,6 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "readiness": "planned",
     "why": "#25 of 100 tools Shopify stores use. StoreLeads: detected on 49,268 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/technology/Bing%20Ads",
     "docs": "https://learn.microsoft.com/en-us/advertising/guides/",
-    "credentials": [],
-    "params": [],
-    "notes": "Needs an OAuth sign-in flow, not built yet. CSV import meanwhile."
-  },
-  {
-    "slug": "pinterest-ads",
-    "name": "Pinterest Ads",
-    "category": "ads",
-    "readiness": "planned",
-    "why": "#26 of 100 tools Shopify stores use. Ranking position is judgment. StoreLeads app page shows no install count (Pinterest app not detectable). StoreLeads: Pinterest account linked on 216,448 Shopify stores. Source: https://storeleads.app/reports/shopify",
-    "docs": "https://developers.pinterest.com/docs/api/v5/",
     "credentials": [],
     "params": [],
     "notes": "Needs an OAuth sign-in flow, not built yet. CSV import meanwhile."

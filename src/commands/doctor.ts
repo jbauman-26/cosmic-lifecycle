@@ -10,6 +10,9 @@ import { MetaAds } from '../sources/meta.js'
 import { HubSpot } from '../sources/hubspot.js'
 import { readWorkspace, REFERENCE_NAME } from '../workspace.js'
 import { GoogleAds, googleAdsAccessToken } from '../sources/google-ads.js'
+import { TikTokAds } from '../sources/tiktok-ads.js'
+import { PinterestAds, pinterestAccessToken } from '../sources/pinterest-ads.js'
+import { keepRotatedPinterest } from './connect.js'
 import { CliError } from '../errors.js'
 
 type Check = { name: string; ok: boolean; detail: string; next?: string }
@@ -82,6 +85,33 @@ export async function doctor(): Promise<{ healthy: boolean; checks: Check[] }> {
       checks.push({ name: 'google-ads', ok: true, detail: `Sign-in reads ${a.name || a.customer} in ${a.currency}${a.testAccount ? ' (a test account)' : ''}` })
     } catch (e) {
       checks.push({ name: 'google-ads', ok: false, detail: e instanceof Error ? e.message : 'Sign-in was refused.', next: e instanceof CliError ? e.next : 'lifecycle connect google-ads' })
+    }
+  }
+
+  const tiktok = config['tiktok-ads']
+  const tiktokToken = getSecret('tiktok-ads-access-token')
+  if (tiktok && !tiktokToken) checks.push({ name: 'tiktok-ads', ok: false, detail: 'Connected, but the access token is missing.', next: 'lifecycle connect tiktok-ads --account ID --app-id ID --token-env NAME' })
+  else if (tiktok && tiktokToken) {
+    try {
+      const a = await new TikTokAds(tiktokToken, tiktok.account).check()
+      checks.push({ name: 'tiktok-ads', ok: true, detail: `Token reads ${a.name || a.account} in ${a.currency}` })
+    } catch (e) {
+      checks.push({ name: 'tiktok-ads', ok: false, detail: e instanceof Error ? e.message : 'Token was refused.', next: e instanceof CliError ? e.next : 'lifecycle connect tiktok-ads' })
+    }
+  }
+
+  const pins = config['pinterest-ads']
+  const pinsSecret = getSecret('pinterest-ads-client-secret')
+  const pinsRefresh = getSecret('pinterest-ads-refresh-token')
+  if (pins && (!pinsSecret || !pinsRefresh)) checks.push({ name: 'pinterest-ads', ok: false, detail: 'Connected, but the client secret or refresh token is missing.', next: 'lifecycle connect pinterest-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME' })
+  else if (pins && pinsSecret && pinsRefresh) {
+    try {
+      const t = await pinterestAccessToken(pins.clientId, pinsSecret, pinsRefresh)
+      keepRotatedPinterest(t.refreshToken, pinsRefresh)
+      const a = await new PinterestAds(t.accessToken, pins.account).check()
+      checks.push({ name: 'pinterest-ads', ok: true, detail: `Sign-in reads ${a.name || a.account} in ${a.currency}` })
+    } catch (e) {
+      checks.push({ name: 'pinterest-ads', ok: false, detail: e instanceof Error ? e.message : 'Sign-in was refused.', next: e instanceof CliError ? e.next : 'lifecycle connect pinterest-ads' })
     }
   }
 

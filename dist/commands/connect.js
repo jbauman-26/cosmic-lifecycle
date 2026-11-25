@@ -8,6 +8,9 @@ import { Stripe, isRestrictedKey, stripeMode } from '../sources/stripe.js';
 import { MetaAds, normalizeAccountId } from '../sources/meta.js';
 import { HubSpot } from '../sources/hubspot.js';
 import { GoogleAds, googleAdsAccessToken, normalizeCustomerId } from '../sources/google-ads.js';
+import { TikTokAds, normalizeAdvertiserId } from '../sources/tiktok-ads.js';
+import { PinterestAds, pinterestAccessToken, normalizeAdAccountId } from '../sources/pinterest-ads.js';
+import { fetchJson } from '../http.js';
 const fromEnv = (name) => {
     const value = name ? process.env[name] : undefined;
     if (!value)
@@ -137,4 +140,61 @@ export async function connectGoogleAds(opts) {
     const kept = keys.length ? keepKeys(keys) : NO_KEYS;
     writeConfig({ ...readConfig(), 'google-ads': { customer, ...(loginCustomer ? { loginCustomer } : {}), clientId: opts.clientId, name: a.name, currency: a.currency, timezone: a.timezone, testAccount: a.testAccount } });
     return { connected: true, customer, loginCustomer: loginCustomer ?? null, name: a.name, currency: a.currency, timezone: a.timezone, testAccount: a.testAccount, ...kept };
+}
+const TIKTOK_ADS_NEXT = 'lifecycle connect tiktok-ads --account ADVERTISER_ID --app-id ID --token-env NAME';
+// Read only: the token is TikTok's long-term advertiser token, and this CLI only ever calls
+// advertiser/info and report/integrated/get, both GET. The app id is kept to say which app the
+// advertiser authorized; the app secret is never needed, because the token does not expire.
+export async function connectTiktokAds(opts, fetcher = fetchJson) {
+    if (!opts.account || !opts.appId)
+        throw new CliError('The advertiser id and TikTok app id are required.', TIKTOK_ADS_NEXT);
+    const account = normalizeAdvertiserId(opts.account);
+    const token = opts.tokenEnv ? fromEnv(opts.tokenEnv) : getSecret('tiktok-ads-access-token');
+    if (!token)
+        throw new CliError('No TikTok Ads access token given.', TIKTOK_ADS_NEXT, 'missing_secret');
+    if (/\s/.test(token))
+        throw new CliError('That token has spaces or line breaks in it.', 'Copy the access token again.', 'bad_token');
+    const a = await new TikTokAds(token, account, fetcher).check();
+    const kept = opts.tokenEnv ? keepKeys([['tiktok-ads-access-token', token]]) : NO_KEYS;
+    writeConfig({ ...readConfig(), 'tiktok-ads': { account, clientId: opts.appId, name: a.name, currency: a.currency, timezone: a.timezone } });
+    return { connected: true, account, appId: opts.appId, name: a.name, currency: a.currency, timezone: a.timezone, ...kept };
+}
+// Pinterest hands back a new refresh token on every refresh, good for 60 days. When the saved one
+// came from the keychain, the new one replaces it there. One from the environment (CI, Cloud) cannot
+// be updated here: whoever set it keeps the newest one.
+export function keepRotatedPinterest(fresh, used) {
+    if (!fresh || fresh === used || process.env[envName('pinterest-ads-refresh-token')])
+        return false;
+    try {
+        setSecret('pinterest-ads-refresh-token', fresh);
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+const PINTEREST_ADS_NEXT = 'lifecycle connect pinterest-ads --account AD_ACCOUNT_ID --client-id ID --secret-env NAME --refresh-token-env NAME';
+// Read only: the refresh token is for the ads:read scope, and this CLI only ever reads the ad account,
+// its campaigns and campaign analytics.
+export async function connectPinterestAds(opts, fetcher = fetchJson) {
+    if (!opts.account || !opts.clientId)
+        throw new CliError('The ad account id and Pinterest app id are required.', PINTEREST_ADS_NEXT);
+    const account = normalizeAdAccountId(opts.account);
+    const secret = opts.secretEnv ? fromEnv(opts.secretEnv) : getSecret('pinterest-ads-client-secret');
+    const refresh = opts.refreshTokenEnv ? fromEnv(opts.refreshTokenEnv) : getSecret('pinterest-ads-refresh-token');
+    if (!secret || !refresh)
+        throw new CliError('Pinterest Ads credentials are missing.', PINTEREST_ADS_NEXT, 'missing_secret');
+    const token = await pinterestAccessToken(opts.clientId, secret, refresh, fetcher);
+    const a = await new PinterestAds(token.accessToken, account, fetcher).check();
+    const newest = token.refreshToken ?? refresh;
+    const keys = [];
+    if (opts.secretEnv)
+        keys.push(['pinterest-ads-client-secret', secret]);
+    if (opts.refreshTokenEnv)
+        keys.push(['pinterest-ads-refresh-token', newest]);
+    const kept = keys.length ? keepKeys(keys) : NO_KEYS;
+    if (!opts.refreshTokenEnv)
+        keepRotatedPinterest(token.refreshToken, refresh);
+    writeConfig({ ...readConfig(), 'pinterest-ads': { account, clientId: opts.clientId, name: a.name, currency: a.currency, timezone: a.timezone } });
+    return { connected: true, account, name: a.name, currency: a.currency, timezone: a.timezone, refreshTokenRotated: newest !== refresh, ...kept };
 }
