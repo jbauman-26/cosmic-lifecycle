@@ -2,6 +2,65 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.13.2 (2026-11-24)
+
+A privacy fix. The promise is that customer names, emails, phone numbers and street addresses never enter the warehouse. Two gaps were found on 2026-11-24 and are closed here, and a third was found while closing them.
+
+### Fixed
+
+- **A person's name could be stored.** The loader removed personal fields by key name, and did not see that a row of a people table is itself a person. A plain `name` on a Zendesk user or a Gorgias customer was loaded, and so was a review's own `name` field, text under `author` or `reviewer`, and the name inside `ship_to`. The loader now knows which tables hold people, which objects hold a person, and which fields each vendor names in its own way.
+- **Callers had to guess which columns are personal.** `schema` said nothing about it, so the Mac app and Cosmic Cloud hid columns by name, and `SELECT name AS x FROM users` got through `query`. Every column now carries `personal`, and `query` refuses SQL that could return one.
+
+- **The loader kept a copy of every row it loaded.** dlt, the loader, leaves each finished load in its working folder (`~/.lifecycle/dlt/*/load/loaded`) as compressed files. Those files held the same rows as the warehouse, so a name stored before this release is in them too. The loader is now told to delete them after each load, and `warehouse scrub --confirm` removes the ones already there.
+
+### Added
+
+- **One rule list**, `PERSONAL_RULES` in `src/personal.ts`, read by the loader, `schema`, `query` and `scrub`. It is written to `connectors/personal-rules.json` for the Python loader on every build and sent with every loader job. A loader with no list stops and loads nothing. The rules are in `docs/PERSONAL-DATA.md` and `lifecycle docs warehouse`.
+- **`personal` and `freeText` on every column** of `lifecycle schema --format json` and `lifecycle warehouse schema --format json`. `schema --cloud` adds `personal` to each column: Cloud's own flag when it sends one, else what the rule list says about the name.
+- **`query` refuses a personal column**, with code `personal_column`. This covers `lifecycle query`, `lifecycle warehouse query`, saved metrics and the MCP `query` tool. It catches an alias, a quoted or mixed case name, a star, `t.*`, a subquery, a CTE, a cast, a function, a filter or sort on the column, and a whole row (`row_to_json(u)`, `to_jsonb(u)`, `SELECT u`, `u::text`). Forms the check cannot read exactly are refused as well.
+- **`lifecycle warehouse scrub [--confirm]`.** Empties personal columns an older version stored. Without `--confirm` it only counts. The report holds table names, column names and row counts, never a value. It also removes the loader's leftover row copies, and rebuilds a local warehouse file so the old values are gone from the bytes of the file, not only from queries.
+- **`warehouse.free_text`**, a setting with the values `keep` (the default, as before) and `drop`. Free text is ticket subjects, message bodies, review text and notes. With `keep` it is loaded with email addresses and phone numbers replaced by `[removed]`. With `drop` it is not loaded.
+- **Phone numbers are taken out of kept free text.** Email addresses already were. A value that is nothing but a phone number starting with `+` is removed under any key.
+- Open-ended fields (`custom_fields`, `metadata`, `properties`) are free text as a whole, and are removed when they sit inside a person. `created_by`, `updated_by`, `assigned_to` and the like hold a person.
+- **A query's answer is cleaned on the way out.** An email address or a phone number in returned text is replaced by `[removed]`, whatever column it came from, and the JSON gains `redacted` with the number of cells changed. This covers free text an older version stored, until `warehouse scrub` has run. A single word or code keeps its digits, so an id or a SKU is not touched.
+- More functions are blocked in every query with `blocked_object`, because they run SQL given as text or read the database's statistics: `query_to_xml`, `ts_stat`, `query()`, `query_table()`, and any name starting `pg_` or `duckdb_`.
+
+### Changed
+
+- **`lifecycle warehouse schema --format json` prints one object per column**, `{ "column", "type", "personal", "freeText" }`, the same shape as `lifecycle schema`. It used to print one string per column, `"name VARCHAR"`. The text output has the same lines as before, with `(personal)` after a personal column.
+- A nickname and a username are personal wherever they sit. They used to need a spec's `stripFields`.
+- Inside a table of people, any field with the word `name` is removed, so a tier or company name on a customer row goes too. Losing a label is the safe direction.
+- A statement that multiplies (`a * b`) beside a table that still has a personal column is refused, because the check cannot tell it from a star. A warehouse loaded by this version has no such table.
+- `warehouse connect` and `warehouse disconnect` no longer drop other keys under `warehouse` in `config.json`.
+
+### For the Mac app and Cosmic Cloud
+
+| What | Value |
+|---|---|
+| New error code | `personal_column`: "That query was refused because it could return personal details." plus the reason, with a next step in `next`. |
+| New error code | `scrub_failed`: `warehouse scrub` could not read or change the warehouse. |
+| New setting | `warehouse.free_text`: `keep` or `drop`. `lifecycle config set warehouse.free_text drop`. |
+| New command | `lifecycle warehouse scrub [--confirm] --format json`: `{ applied, database, freeText, tables: [{ table, rows, columns: [{ column, why, action, rows, status }] }], totals, loaderFiles: { files, removed, pending }, rebuilt, note, next }`. Run it once per store home with `--confirm`. |
+| Query | `query` and `warehouse query` JSON may carry `redacted: N` when text in the answer had an email address or phone number replaced. |
+| Schema | `personal: boolean` and `freeText: boolean` on every column of `schema` and `warehouse schema`. `warehouse schema` is now objects, not strings. |
+| Loader job | Gains `rules` and `free_text`. A job that passes through another program must keep both. |
+| Package | Ships `connectors/personal-rules.json` beside `connectors/run.py`. Bundle both. |
+
+The Mac app can stop adding name keys to the loader job once it bundles this version: the loader now does it per table, so a product name in a source that also loads people is kept.
+
+### What is proven and what is not
+
+- Typecheck and the full test suite pass.
+- The loader and the CLI are run over the same 341,880 table and key combinations and agree on every one.
+- Every catalog table that holds people has a made-up row in the vendor's documented shape, and the test proves the person is gone and the useful fields stay. No connector has run on a real account, so a field a vendor names in a way the docs do not show can still get through.
+- The query check is tested with more than 60 ways to read a personal column, on Postgres (PGlite) and on a local DuckDB warehouse. It is a token check, not a full SQL parser. It refuses what it cannot prove safe, so a safe statement can be refused.
+- `warehouse scrub` is tested on Postgres (PGlite) and on a local DuckDB file. It was not run on a hosted Postgres.
+- After a local scrub the test reads the bytes of every file under the store's home and finds none of the made-up name, email or alias. On Postgres old row versions stay until the table is vacuumed, and that was not measured.
+- The query check found two real ways through while it was being tested, both now refused and covered: `u.row_to_json` (Postgres reads it as a function on the whole row) and a no-break space in place of a space (DuckDB reads it as a space).
+- A name inside kept free text is not found. That is what `warehouse.free_text drop` is for.
+- A phone number inside text that is not free text, such as a status line, is not found unless it is the whole value and starts with `+`.
+- The end to end loader tests need uv, so they run on a developer machine and are skipped in CI.
+
 ## 0.13.1 (2026-11-24)
 
 The first release checked against the real Cosmic Cloud: a contract test runs this CLI against Cloud's own handlers and a local Postgres.

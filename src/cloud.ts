@@ -1,4 +1,6 @@
 import { CliError } from './errors.js'
+import { isPersonalColumn } from './personal.js'
+import { sourceOfSchema } from './warehouse-names.js'
 import { getSetting } from './config.js'
 import { envName, getSecret } from './secrets.js'
 
@@ -78,7 +80,8 @@ export type CloudStore = { id: string; name: string; [k: string]: unknown }
 export type CloudRun = { started_at?: string; finished_at?: string | null; status?: string; rows?: number; code?: string | null; source_id?: string; source?: string; [k: string]: unknown }
 export type CloudConnection = { id: string; source_id: string; source_name?: string; status?: string; status_code?: string; last_success_at?: string | null; freshness?: string; next_sync_at?: string | null; recent_runs?: CloudRun[]; [k: string]: unknown }
 export type CloudStoreReply = { contract_version?: string; store: CloudStore; connections: CloudConnection[] }
-export type CloudColumn = { name: string; type: string }
+// `personal` is Cloud's own flag when it sends one, or else what this CLI's rule list says about the name.
+export type CloudColumn = { name: string; type: string; personal: boolean }
 export type CloudTable = { name: string; columns: CloudColumn[]; rows?: number | null }
 export type CloudSchema = { schemas: { name: string; tables: CloudTable[] }[] }
 export type CloudQueryResult = { columns: string[]; rows: Record<string, unknown>[]; rowCount: number; truncated: boolean }
@@ -167,7 +170,7 @@ export class CloudClient {
 
   async schema(): Promise<CloudSchema> {
     const r = await this.call({ method: 'GET', path: '/schema' })
-    return { schemas: list<CloudSchema['schemas'][number]>(r, 'schemas').map((s) => ({ name: String(s.name), tables: (s.tables ?? []).map((t) => ({ name: String(t.name), columns: (t.columns ?? []).map((c) => ({ name: String(c.name), type: String(c.type) })), rows: typeof t.rows === 'number' ? t.rows : null })) })) }
+    return { schemas: list<CloudSchema['schemas'][number]>(r, 'schemas').map((s) => ({ name: String(s.name), tables: (s.tables ?? []).map((t) => ({ name: String(t.name), columns: (t.columns ?? []).map((c) => ({ name: String(c.name), type: String(c.type), personal: (c as { personal?: unknown }).personal === true || isPersonalColumn({ source: sourceOfSchema(String(s.name)), table: String(t.name), column: String(c.name), type: String(c.type) }) })), rows: typeof t.rows === 'number' ? t.rows : null })) })) }
   }
 
   // Rows come back as objects keyed by column, whether Cloud sends objects or arrays.

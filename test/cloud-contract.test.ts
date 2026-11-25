@@ -45,7 +45,7 @@ describe(`replies recorded from Cosmic Cloud (CLI ${fixture.cli})`, () => {
   it('GET /schema, POST /query and its refusals', async () => {
     const s = await client(reply('GET', '/schema', 200)).c.schema()
     expect(s.schemas.length).toBe(1)
-    expect(s.schemas[0]!.tables.find((t) => t.name === 'fact_orders_daily')!.columns).toContainEqual({ name: 'net_revenue', type: 'numeric' })
+    expect(s.schemas[0]!.tables.find((t) => t.name === 'fact_orders_daily')!.columns).toContainEqual({ name: 'net_revenue', type: 'numeric', personal: false })
     const q = await client(fixture.replies.find((x) => x.path === '/api/v1/query' && x.status === 200 && x.body.columns?.[0]?.name === '?column?')!).c.query('select 1')
     expect(q).toEqual({ columns: ['?column?'], rows: [{ '?column?': 1 }], rowCount: 1, truncated: false })
     expect(await code(client(reply('POST', '/query', 422, 'blocked_object')).c.query('SELECT * FROM cloud.tenants'))).toBe('blocked_object')

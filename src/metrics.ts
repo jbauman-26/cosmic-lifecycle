@@ -1,6 +1,6 @@
 import type { Db, Tx } from './db.js'
 import { CliError } from './errors.js'
-import { assertReadOnlySql } from './query.js'
+import { assertNoPersonal, assertReadOnlySql } from './query.js'
 import { trustLine } from './reconcile.js'
 import { ATTRIBUTION_NOTE } from './reports.js'
 import { settingValue } from './config.js'
@@ -168,6 +168,7 @@ function assertSavedSql(sql: string) {
 // One row, and the number is the column called value, or the first column when there is none.
 async function runSavedSql(db: Db, sql: string, since: string) {
   const body = assertSavedSql(sql)
+  await assertNoPersonal(db, body)
   let rows
   try {
     rows = await db.readOnly(`SELECT * FROM (${body}) AS q LIMIT 2`, usesWindow(body) ? [since] : undefined)

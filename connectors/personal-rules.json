@@ -1,0 +1,481 @@
+{
+  "version": 1,
+  "always": [
+    "email",
+    "phone",
+    "mobile",
+    "telephone",
+    "tel",
+    "fax",
+    "firstname",
+    "lastname",
+    "fullname",
+    "surname",
+    "fname",
+    "lname",
+    "givenname",
+    "familyname",
+    "middlename",
+    "maidenname",
+    "nickname",
+    "username",
+    "screenname",
+    "signedby",
+    "address",
+    "address1",
+    "address2",
+    "address3",
+    "street",
+    "street1",
+    "street2",
+    "zip",
+    "zipcode",
+    "postcode",
+    "postal",
+    "birthday",
+    "birthdate",
+    "birth",
+    "dob",
+    "ssn",
+    "ip",
+    "ipaddress",
+    "latitude",
+    "longitude",
+    "lat",
+    "lng",
+    "lon",
+    "geolocation",
+    "smses",
+    "msisdn",
+    "cellphone",
+    "landline",
+    "password",
+    "token",
+    "secret"
+  ],
+  "nameOwners": [
+    "first",
+    "last",
+    "full",
+    "middle",
+    "given",
+    "family",
+    "legal",
+    "maiden",
+    "nick",
+    "screen",
+    "customer",
+    "billing",
+    "shipping",
+    "contact",
+    "recipient",
+    "sender",
+    "author",
+    "reviewer",
+    "buyer",
+    "user",
+    "display",
+    "person",
+    "profile",
+    "subscriber",
+    "member",
+    "owner",
+    "assignee",
+    "requester",
+    "submitter",
+    "agent",
+    "shopper",
+    "respondent",
+    "receiver",
+    "cardholder",
+    "payer"
+  ],
+  "personWords": [
+    "customer",
+    "billing",
+    "shipping",
+    "contact",
+    "recipient",
+    "sender",
+    "author",
+    "reviewer",
+    "buyer",
+    "user",
+    "person",
+    "profile",
+    "subscriber",
+    "member",
+    "owner",
+    "assignee",
+    "requester",
+    "submitter",
+    "agent",
+    "shopper",
+    "respondent",
+    "receiver",
+    "addressee",
+    "consignee",
+    "cardholder",
+    "payer",
+    "asker"
+  ],
+  "personKeys": [
+    "shipto",
+    "shipfrom",
+    "returnto",
+    "billto",
+    "soldto",
+    "sendto",
+    "deliverto",
+    "createdby",
+    "updatedby",
+    "modifiedby",
+    "deletedby",
+    "approvedby",
+    "closedby",
+    "assignedto",
+    "assignedby",
+    "repliedby",
+    "submittedby",
+    "postedby",
+    "writtenby",
+    "reportedby",
+    "requestedby",
+    "ownedby"
+  ],
+  "peopleTables": [
+    "user",
+    "customer",
+    "contact",
+    "member",
+    "subscriber",
+    "profile",
+    "people",
+    "person",
+    "recipient",
+    "agent",
+    "reviewer",
+    "shopper",
+    "buyer",
+    "author",
+    "requester",
+    "assignee",
+    "respondent",
+    "lead"
+  ],
+  "authoredTables": [
+    "review",
+    "testimonial"
+  ],
+  "inPersonWords": [
+    "name",
+    "alias",
+    "handle",
+    "initials",
+    "signature",
+    "avatar",
+    "photo",
+    "picture",
+    "gravatar",
+    "bio",
+    "twitter",
+    "facebook",
+    "instagram",
+    "linkedin",
+    "tiktok",
+    "whatsapp",
+    "telegram",
+    "skype",
+    "social",
+    "custom",
+    "metadata",
+    "properties",
+    "traits",
+    "fields",
+    "extra"
+  ],
+  "inPersonKeys": [
+    "first",
+    "last",
+    "line1",
+    "line2",
+    "line3"
+  ],
+  "personScalars": [
+    "customer",
+    "contact",
+    "recipient",
+    "sender",
+    "author",
+    "reviewer",
+    "buyer",
+    "user",
+    "person",
+    "subscriber",
+    "member",
+    "owner",
+    "assignee",
+    "requester",
+    "submitter",
+    "agent",
+    "shopper",
+    "respondent",
+    "receiver",
+    "addressee",
+    "consignee",
+    "asker",
+    "createdby",
+    "updatedby",
+    "modifiedby",
+    "deletedby",
+    "approvedby",
+    "closedby",
+    "assignedto",
+    "assignedby",
+    "repliedby",
+    "submittedby",
+    "postedby",
+    "writtenby",
+    "reportedby",
+    "requestedby",
+    "ownedby"
+  ],
+  "authoredKeys": [
+    "name",
+    "nickname",
+    "displayname"
+  ],
+  "authoredFreeText": [
+    "title"
+  ],
+  "region": [
+    "country",
+    "countrycode",
+    "countryname",
+    "state",
+    "statecode",
+    "statename",
+    "province",
+    "provincecode",
+    "provincename",
+    "region",
+    "regioncode",
+    "regionname",
+    "city",
+    "cityname",
+    "timezone",
+    "ianatimezone",
+    "locale",
+    "language",
+    "currency"
+  ],
+  "freeTextWords": [
+    "subject",
+    "body",
+    "message",
+    "comment",
+    "comments",
+    "note",
+    "notes",
+    "description",
+    "content",
+    "excerpt",
+    "preview",
+    "snippet",
+    "summary",
+    "feedback",
+    "transcript",
+    "details",
+    "reply",
+    "answer",
+    "instructions"
+  ],
+  "freeTextContainers": [
+    "custom",
+    "metadata",
+    "properties"
+  ],
+  "freeTextTails": [
+    "html",
+    "text",
+    "plain",
+    "raw"
+  ],
+  "storeTables": [
+    "campaign",
+    "emailcampaign",
+    "smscampaign",
+    "flowcampaign",
+    "flow",
+    "automation",
+    "list",
+    "segment",
+    "folder",
+    "display",
+    "coupon",
+    "viptier",
+    "loyaltyreward",
+    "courier",
+    "shopinfo",
+    "campaignreport",
+    "inventorylevel",
+    "invoice",
+    "campaignperformance30d",
+    "flowperformance30d",
+    "displayperformance30d",
+    "transactionalemaildailystat",
+    "adsdaily",
+    "pixelattributiondaily",
+    "csatsurvey"
+  ],
+  "storePrefixes": [
+    "dim_",
+    "fact_",
+    "meta_",
+    "custom_"
+  ],
+  "sources": {
+    "zendesk": {
+      "users": {
+        "user_fields": "personal",
+        "notes": "free_text",
+        "details": "free_text"
+      },
+      "tickets": {
+        "via__source": "personal",
+        "custom_fields": "free_text",
+        "fields": "free_text"
+      }
+    },
+    "gorgias": {
+      "customers": {
+        "data": "personal",
+        "meta": "personal",
+        "note": "free_text"
+      },
+      "tickets": {
+        "meta": "free_text"
+      }
+    },
+    "recharge": {
+      "customers": {
+        "hash": "personal"
+      },
+      "subscriptions": {
+        "customer__hash": "personal"
+      },
+      "charges": {
+        "customer__hash": "personal",
+        "note_attributes": "free_text"
+      },
+      "orders": {
+        "customer__hash": "personal",
+        "note_attributes": "free_text"
+      }
+    },
+    "omnisend": {
+      "contacts": {
+        "identifiers": "personal",
+        "custom_properties": "personal"
+      }
+    },
+    "privy": {
+      "contacts": {
+        "custom_fields": "personal"
+      }
+    },
+    "loyaltylion": {
+      "customers": {
+        "properties": "personal",
+        "metadata": "personal"
+      }
+    },
+    "kustomer": {
+      "customers": {
+        "attributes__socials": "personal",
+        "attributes__shared_socials": "personal",
+        "attributes__urls": "personal",
+        "attributes__custom": "personal"
+      },
+      "conversations": {
+        "attributes__name": "free_text",
+        "attributes__custom": "free_text"
+      },
+      "messages": {
+        "attributes__meta": "personal",
+        "attributes__custom": "free_text"
+      }
+    },
+    "freshdesk": {
+      "contacts": {
+        "twitter_id": "personal",
+        "facebook_id": "personal",
+        "custom_fields": "personal"
+      },
+      "tickets": {
+        "name": "personal",
+        "twitter_id": "personal",
+        "facebook_id": "personal",
+        "custom_fields": "free_text"
+      }
+    },
+    "re-amaze": {
+      "conversations": {
+        "author__data": "personal"
+      },
+      "messages": {
+        "user__data": "personal"
+      }
+    },
+    "yotpo-reviews": {
+      "reviews": {
+        "custom_fields": "free_text"
+      },
+      "questions": {
+        "name": "personal",
+        "title": "free_text"
+      }
+    },
+    "judge-me": {
+      "reviews": {
+        "reviewer__tags": "personal"
+      }
+    },
+    "okendo": {
+      "reviews": {
+        "reviewer__location": "personal"
+      }
+    },
+    "fairing": {
+      "responses": {
+        "response": "keep",
+        "other_response": "free_text"
+      }
+    },
+    "aftership-tracking": {
+      "trackings": {
+        "destination_raw_location": "personal",
+        "origin_raw_location": "personal",
+        "custom_fields": "free_text"
+      }
+    },
+    "shippo": {
+      "transactions": {
+        "label_url": "personal",
+        "commercial_invoice_url": "personal",
+        "qr_code_url": "personal",
+        "metadata": "free_text"
+      },
+      "orders": {
+        "notes": "free_text"
+      }
+    },
+    "shipstation": {
+      "labels": {
+        "label_download": "personal",
+        "form_download": "personal",
+        "paperless_download": "personal"
+      }
+    }
+  }
+}

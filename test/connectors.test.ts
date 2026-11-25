@@ -87,12 +87,14 @@ describe('connectors added in 0.12.0 strip personal data from recorded responses
 import json, sys
 sys.path.insert(0, 'connectors')
 import run
-row = {'name': 'Spring Sale', 'product': {'name': 'Linen Shirt'}, 'reviewer': {'name': 'Ines Varga', 'verified': True, 'city': 'Chicago'}, 'recipients': [{'name': 'Ines', 'tier': 'gold'}], 'nickname': 'ines_v'}
-print(json.dumps([run.strip_personal(row), run.strip_personal(row, frozenset(['nickname']))]))
+row = {'name': 'Spring Sale', 'product': {'name': 'Linen Shirt'}, 'reviewer': {'name': 'Ines Varga', 'verified': True, 'city': 'Chicago'}, 'recipients': [{'name': 'Ines', 'tier': 'gold'}], 'nickname': 'ines_v', 'badge': 'ines_badge'}
+print(json.dumps([run.strip_personal(row), run.strip_personal(row, frozenset(['badge']))]))
 `], { encoding: 'utf8' })
     expect(res.status, res.stderr).toBe(0)
     const [plain, withExtra] = JSON.parse(res.stdout)
-    expect(plain).toEqual({ name: 'Spring Sale', product: { name: 'Linen Shirt' }, reviewer: { verified: true, city: 'Chicago' }, recipients: [{ tier: 'gold' }], nickname: 'ines_v' })
-    expect(withExtra.nickname).toBeUndefined()
+    expect(plain).toEqual({ name: 'Spring Sale', product: { name: 'Linen Shirt' }, reviewer: { verified: true, city: 'Chicago' }, recipients: [{ tier: 'gold' }], badge: 'ines_badge' })
+    // 0.13.2: a nickname is a person's name wherever it sits, so it no longer needs a spec's stripFields.
+    expect(plain.nickname).toBeUndefined()
+    expect(withExtra.badge).toBeUndefined()
   })
 })

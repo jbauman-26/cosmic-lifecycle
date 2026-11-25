@@ -23,7 +23,9 @@ const Config = z
             params: z.record(z.string(), z.string()).default({}),
             personalData: z.enum(['strip', 'keep']).default('strip'),
             connectedAt: z.string(),
-        })),
+        })).default({}),
+        // What happens to free text (ticket subjects, message bodies, review text) when a source loads.
+        free_text: z.enum(['keep', 'drop']).optional().catch(undefined),
     })
         .optional(),
 })
@@ -93,6 +95,11 @@ export const SETTINGS = {
     'reconcile.tolerance.ga4_purchases': { description: 'Percent GA4 purchases may differ from Shopify orders before the check fails', default: 15, parse: numberIn('reconcile.tolerance.ga4_purchases', 0, 100, { example: '15' }) },
     'reconcile.attributed_share_flag': { description: 'Warn when Klaviyo credits flows with more than this percent of Shopify net revenue', default: 60, parse: numberIn('reconcile.attributed_share_flag', 0, 100, { example: '60' }) },
     'reconcile.freshness_days': { description: 'Days since a source last synced before the freshness check fails', default: 2, parse: numberIn('reconcile.freshness_days', 0.5, 365, { example: '2' }) },
+    'warehouse.free_text': { description: 'Free text from warehouse sources, such as ticket subjects and review text: keep (with emails and phone numbers replaced) or drop', default: 'keep', parse: (v) => {
+            if (v !== 'keep' && v !== 'drop')
+                throw new CliError('Use keep or drop.', 'lifecycle config set warehouse.free_text drop', 'bad_value');
+            return v;
+        } },
     'query.row_cap': { description: 'Most rows lifecycle query returns', default: 1000, parse: numberIn('query.row_cap', 1, 100000, { whole: true, example: '1000' }) },
     'metrics.default_days': { description: 'Window in days for metrics, reports and sync pulls when none is given', default: 90, parse: numberIn('metrics.default_days', 1, 730, { whole: true, example: '90' }) },
 };
@@ -114,8 +121,8 @@ export const defaultOf = (key) => SETTINGS[key].default;
 // the file by hand that is out of range falls back to the default too.
 export function settingValue(key) {
     const d = defaultOf(key);
-    if (d === undefined)
-        throw new Error(`${key} has no default`);
+    if (typeof d !== 'number')
+        throw new Error(`${key} has no number default`);
     let raw;
     try {
         raw = getSetting(key);

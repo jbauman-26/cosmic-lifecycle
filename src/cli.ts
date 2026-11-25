@@ -48,7 +48,9 @@ import { neonPlan, provisionNeon } from './provision.js'
 import { envName, SECRET_NAMES as ALL_SECRETS } from './secrets.js'
 import { auditFlows, auditHtml, revenueHtml, revenuePerFlow, writeHtml } from './reports.js'
 import { applyPlan, buildPlan, readPlan, suggestLapsedDays, writePlan } from './segments.js'
-import { addCustomSource, connectSource, connectedSources, datasetFor, disconnectSource, duckQuery, duckSchema, findSource, searchCatalog, syncSources, type WarehouseSyncResult } from './warehouse.js'
+import { addCustomSource, connectSource, connectedSources, datasetFor, disconnectSource, duckQuery, duckSchema, findSource, freeTextMode, markColumns, scrubWarehouse, searchCatalog, syncSources, type SchemaColumn, type WarehouseSyncResult } from './warehouse.js'
+import { classifyColumn } from './personal.js'
+import { sourceOfSchema } from './warehouse-names.js'
 import { READINESS_LEGEND } from './warehouse-catalog.js'
 import { randomUUID } from 'node:crypto'
 import { NATIVE, chooseSources, disconnectNative, isNative, parseOnly } from './native.js'
@@ -308,7 +310,7 @@ program.command('schema').argument('[table]').description('List tables and colum
     const all = await new CloudClient().schema()
     const schemas = table ? all.schemas.map((s) => ({ ...s, tables: s.tables.filter((t) => t.name === table || `${s.name}.${t.name}` === table) })).filter((s) => s.tables.length) : all.schemas
     if (table && !schemas.length) throw new CliError(`Cosmic Cloud has no table ${table}.`, 'lifecycle schema --cloud', 'unknown_table')
-    emit(format(), { cloud: true, schemas }, () => schemas.flatMap((s) => s.tables.map((t) => `${s.name}.${t.name}${typeof t.rows === 'number' ? ` (${t.rows} rows)` : ''}\n${t.columns.map((c) => `  ${c.name} ${c.type}`).join('\n')}`)).join('\n\n') || 'Cosmic Cloud holds no tables yet. Start a sync: lifecycle sync --cloud')
+    emit(format(), { cloud: true, schemas }, () => schemas.flatMap((s) => s.tables.map((t) => `${s.name}.${t.name}${typeof t.rows === 'number' ? ` (${t.rows} rows)` : ''}\n${t.columns.map((c) => `  ${c.name} ${c.type}${c.personal ? ' (personal)' : ''}`).join('\n')}`)).join('\n\n') || 'Cosmic Cloud holds no tables yet. Start a sync: lifecycle sync --cloud')
     return
   }
   const db = await openDb()
@@ -316,12 +318,15 @@ program.command('schema').argument('[table]').description('List tables and colum
     const known = [...PUBLIC_TABLES, ...(await customTables(db))]
     const names = table ? [table] : known
     if (table && !known.includes(table)) throw new CliError(`Unknown table ${table}.`, 'lifecycle schema')
-    const out: Record<string, { column: string; type: string }[]> = {}
+    const out: Record<string, { column: string; type: string; personal: boolean; freeText: boolean }[]> = {}
     for (const n of names) {
       const rows = await db.query(`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`, [n])
-      out[n] = rows.map((r) => ({ column: String(r.column_name), type: String(r.data_type) }))
+      out[n] = rows.map((r) => {
+        const kind = classifyColumn({ table: n, column: String(r.column_name), type: String(r.data_type) })
+        return { column: String(r.column_name), type: String(r.data_type), personal: kind === 'personal', freeText: kind === 'free_text' }
+      })
     }
-    emit(format(), out, () => Object.entries(out).map(([t, cols]) => `${t}\n${cols.map((c) => `  ${c.column} ${c.type}`).join('\n')}`).join('\n\n'))
+    emit(format(), out, () => Object.entries(out).map(([t, cols]) => `${t}\n${cols.map((c) => `  ${c.column} ${c.type}${c.personal ? ' (personal)' : ''}`).join('\n')}`).join('\n\n'))
   } finally {
     await db.close()
   }
@@ -1006,9 +1011,9 @@ warehouse.command('sync').argument('[slugs...]').description('Load fresh data fr
   }
 }))
 
-warehouse.command('schema').argument('[slug]').description('Tables and columns the warehouse holds').action(run(async (slug?: string) => {
+warehouse.command('schema').argument('[slug]').description('Tables and columns the warehouse holds, each column marked personal or not').action(run(async (slug?: string) => {
   const config = readConfig()
-  let cols: { schema: string; table: string; column: string; type: string }[]
+  let cols: SchemaColumn[]
   if (config.database.kind === 'local') cols = await duckSchema(slug)
   else {
     const db = await openDb()
@@ -1017,14 +1022,37 @@ warehouse.command('schema').argument('[slug]').description('Tables and columns t
         `SELECT table_schema, table_name, column_name, data_type FROM information_schema.columns WHERE table_schema LIKE 'src\_%' AND table_schema NOT LIKE '%\_staging' AND column_name NOT LIKE '\_dlt%' AND table_name NOT LIKE '\_dlt%' ${slug ? 'AND table_schema = $1' : ''} ORDER BY 1, 2, ordinal_position`,
         slug ? [datasetFor(slug)] : [],
       )
-      cols = rows.map((r) => ({ schema: String(r.table_schema), table: String(r.table_name), column: String(r.column_name), type: String(r.data_type) }))
+      cols = markColumns(rows.map((r) => ({ schema: String(r.table_schema), table: String(r.table_name), column: String(r.column_name), type: String(r.data_type) }))).map(({ kind: _kind, ...c }) => c)
     } finally {
       await db.close()
     }
   }
-  const grouped: Record<string, string[]> = {}
-  for (const c of cols) (grouped[`${c.schema}.${c.table}`] ??= []).push(`${c.column} ${c.type}`)
-  emit(format(), grouped, () => Object.keys(grouped).length ? Object.entries(grouped).map(([t, c]) => `${t}\n  ${c.join('\n  ')}`).join('\n\n') : 'Nothing loaded yet. Run lifecycle warehouse sync')
+  // JSON: one object per column, the same shape as lifecycle schema. Text: one line per column.
+  const grouped: Record<string, { column: string; type: string; personal: boolean; freeText: boolean }[]> = {}
+  for (const c of cols) (grouped[`${c.schema}.${c.table}`] ??= []).push({ column: c.column, type: c.type, personal: c.personal, freeText: c.freeText })
+  emit(format(), grouped, () => Object.keys(grouped).length ? Object.entries(grouped).map(([t, c]) => `${t}\n  ${c.map((x) => `${x.column} ${x.type}${x.personal ? ' (personal)' : ''}`).join('\n  ')}`).join('\n\n') : 'Nothing loaded yet. Run lifecycle warehouse sync')
+}))
+
+warehouse.command('scrub').description('Empty personal columns that an older version stored. Shows counts first; --confirm applies').option('--confirm', 'empty the columns. Without it nothing is changed').action(write('warehouse scrub', async (opts) => {
+  const config = readConfig()
+  const db = config.database.kind === 'postgres' ? await openDb() : null
+  try {
+    const r = await scrubWarehouse({ confirm: Boolean(opts.confirm), db })
+    if (r.totals.failed) process.exitCode = 1
+    emit(format(), r, () => [
+      // Text shows what there is to do. The JSON lists every column that was looked at.
+      (() => {
+        const busy = r.tables.map((t) => ({ ...t, columns: t.columns.filter((c) => c.rows > 0 || c.status === 'blocked' || c.status === 'failed') })).filter((t) => t.columns.length)
+        if (!busy.length) return 'No stored personal values were found.'
+        const words = (c: (typeof busy)[number]['columns'][number]) => c.status === 'blocked' ? 'left alone, it may not be empty' : c.status === 'failed' ? 'could not be changed' : `${c.rows} rows ${r.applied ? (c.action === 'rewrite' ? 'rewritten' : 'emptied') : c.action === 'rewrite' ? 'to rewrite' : 'to empty'}`
+        return busy.map((t) => `${t.table}\n${t.columns.map((c) => `  ${c.column}: ${words(c)} (${c.why === 'personal' ? 'personal' : 'free text'})`).join('\n')}`).join('\n\n')
+      })(),
+      r.note,
+      `Next: ${r.next}`,
+    ].join('\n\n'))
+  } finally {
+    await db?.close()
+  }
 }))
 
 warehouse.command('query').argument('<sql>').description('Run one read-only SQL query across warehouse schemas, such as src_gorgias.tickets').action(run(async (sql: string) => {

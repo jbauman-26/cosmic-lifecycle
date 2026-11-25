@@ -44,7 +44,7 @@ describe('config', () => {
     expect(listSettings().map((s) => s.key)).toEqual([
       'registry.uri', 'deploy.repo', 'update.check', 'cloud.url',
       'reconcile.tolerance.klaviyo_orders', 'reconcile.tolerance.ga4_purchases', 'reconcile.attributed_share_flag', 'reconcile.freshness_days',
-      'query.row_cap', 'metrics.default_days',
+      'warehouse.free_text', 'query.row_cap', 'metrics.default_days',
     ])
   })
 

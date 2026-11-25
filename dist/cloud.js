@@ -1,4 +1,6 @@
 import { CliError } from './errors.js';
+import { isPersonalColumn } from './personal.js';
+import { sourceOfSchema } from './warehouse-names.js';
 import { getSetting } from './config.js';
 import { envName, getSecret } from './secrets.js';
 // Cosmic Cloud: the hosted copy of a store's warehouse. `lifecycle login` saves the Cloud
@@ -153,7 +155,7 @@ export class CloudClient {
     }
     async schema() {
         const r = await this.call({ method: 'GET', path: '/schema' });
-        return { schemas: list(r, 'schemas').map((s) => ({ name: String(s.name), tables: (s.tables ?? []).map((t) => ({ name: String(t.name), columns: (t.columns ?? []).map((c) => ({ name: String(c.name), type: String(c.type) })), rows: typeof t.rows === 'number' ? t.rows : null })) })) };
+        return { schemas: list(r, 'schemas').map((s) => ({ name: String(s.name), tables: (s.tables ?? []).map((t) => ({ name: String(t.name), columns: (t.columns ?? []).map((c) => ({ name: String(c.name), type: String(c.type), personal: c.personal === true || isPersonalColumn({ source: sourceOfSchema(String(s.name)), table: String(t.name), column: String(c.name), type: String(c.type) }) })), rows: typeof t.rows === 'number' ? t.rows : null })) })) };
     }
     // Rows come back as objects keyed by column, whether Cloud sends objects or arrays.
     async query(sql) {
