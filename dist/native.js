@@ -2,15 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { readRawConfig, removeConfigSection } from './config.js';
 import { CliError } from './errors.js';
 import { deleteSecret, envName } from './secrets.js';
-// The five sources built into the CLI. Each one has a config section written by
+// The sources built into the CLI. Each one has a config section written by
 // connect, the keys it saved, and the tables only it fills.
-export const NATIVE = ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta'];
+export const NATIVE = ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'google-ads'];
 export const NATIVE_SECRETS = {
     shopify: ['shopify-client-secret'],
     klaviyo: ['klaviyo-read-key', 'klaviyo-write-key'],
     ga4: ['ga4-client-secret', 'ga4-refresh-token'],
     stripe: ['stripe-read-key'],
     meta: ['meta-ads-token'],
+    'google-ads': ['google-ads-client-secret', 'google-ads-refresh-token'],
 };
 // Tables only this source writes. meta_sync_run is kept on purpose: it is the
 // history of what ran, and the disconnect is recorded in it.
@@ -20,6 +21,7 @@ export const NATIVE_TABLES = {
     ga4: ['fact_ga4_daily'],
     stripe: ['fact_stripe_daily', 'fact_stripe_subscriptions_daily', 'fact_stripe_mrr'],
     meta: ['fact_meta_ads_daily'],
+    'google-ads': ['fact_google_ads_campaign_daily', 'fact_google_ads_ad_group_daily'],
 };
 export const isNative = (s) => NATIVE.includes(s);
 // `--only shopify --only meta` and `--only shopify,meta` mean the same thing.

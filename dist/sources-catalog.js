@@ -44,6 +44,15 @@ export const CATALOG = [
         connect: 'lifecycle connect meta --account ID --token-env META_ADS_TOKEN',
         tested: 'Written from the Ads Insights API docs (v27.0) and tested against recorded answers. Not yet run on a live ad account.',
     },
+    {
+        slug: 'google-ads',
+        name: 'Google Ads',
+        syncs: 'Daily cost, impressions, clicks, and the conversions and conversion value Google attributes to its ads, by campaign and by ad group. No audiences, keywords, search terms, people or creative.',
+        credential: 'OAuth client id and secret, plus a refresh token from Google sign-in with the adwords scope. Only read calls are made.',
+        setupMinutes: 10,
+        connect: 'lifecycle connect google-ads --customer 123-456-7890 --client-id ID --secret-env NAME --refresh-token-env NAME',
+        tested: 'Written from the Google Ads API docs (v26) and tested against recorded answers. Not yet run on a live or test account.',
+    },
 ];
 // Connected means configured with a key present. lastSync comes from the database when it is reachable.
 export async function sourceStatus(config, hasKey, db) {

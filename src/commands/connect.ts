@@ -6,6 +6,7 @@ import { shopifyToken } from '../sources/shopify.js'
 import { ga4AccessToken, fetchGa4Daily } from '../sources/ga4.js'
 import { Stripe, isRestrictedKey, stripeMode } from '../sources/stripe.js'
 import { MetaAds, normalizeAccountId } from '../sources/meta.js'
+import { GoogleAds, googleAdsAccessToken, normalizeCustomerId } from '../sources/google-ads.js'
 
 const fromEnv = (name?: string) => {
   const value = name ? process.env[name] : undefined
@@ -99,4 +100,24 @@ export async function connectMeta(opts: { account?: string; tokenEnv?: string })
   const kept = opts.tokenEnv ? keepKeys([['meta-ads-token', token]]) : NO_KEYS
   writeConfig({ ...readConfig(), meta: { account: a.id, name: a.name, currency: a.currency, timezone: a.timezone } })
   return { connected: true, account: a.id, name: a.name, currency: a.currency, timezone: a.timezone, ...kept }
+}
+
+const GOOGLE_ADS_NEXT = 'lifecycle connect google-ads --customer 123-456-7890 --client-id ID --secret-env NAME --refresh-token-env NAME'
+
+// Read only: the refresh token is for the adwords scope, but this CLI only ever calls GoogleAdsService.Search.
+export async function connectGoogleAds(opts: { customer?: string; loginCustomer?: string; clientId?: string; secretEnv?: string; refreshTokenEnv?: string }) {
+  if (!opts.customer || !opts.clientId) throw new CliError('The customer id and OAuth client id are required.', GOOGLE_ADS_NEXT)
+  const customer = normalizeCustomerId(opts.customer)
+  const loginCustomer = opts.loginCustomer ? normalizeCustomerId(opts.loginCustomer) : undefined
+  const secret = opts.secretEnv ? fromEnv(opts.secretEnv) : getSecret('google-ads-client-secret')
+  const refresh = opts.refreshTokenEnv ? fromEnv(opts.refreshTokenEnv) : getSecret('google-ads-refresh-token')
+  if (!secret || !refresh) throw new CliError('Google Ads credentials are missing.', GOOGLE_ADS_NEXT, 'missing_secret')
+  const token = await googleAdsAccessToken(opts.clientId, secret, refresh)
+  const a = await new GoogleAds(token, customer, loginCustomer).check()
+  const keys: [SecretName, string][] = []
+  if (opts.secretEnv) keys.push(['google-ads-client-secret', secret])
+  if (opts.refreshTokenEnv) keys.push(['google-ads-refresh-token', refresh])
+  const kept = keys.length ? keepKeys(keys) : NO_KEYS
+  writeConfig({ ...readConfig(), 'google-ads': { customer, ...(loginCustomer ? { loginCustomer } : {}), clientId: opts.clientId, name: a.name, currency: a.currency, timezone: a.timezone, testAccount: a.testAccount } })
+  return { connected: true, customer, loginCustomer: loginCustomer ?? null, name: a.name, currency: a.currency, timezone: a.timezone, testAccount: a.testAccount, ...kept }
 }

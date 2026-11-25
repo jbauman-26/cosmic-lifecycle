@@ -1,0 +1,17 @@
+{
+  "results": [
+    {
+      "campaign": { "resourceName": "customers/1234567890/campaigns/111", "id": "111", "name": "Brand Search" },
+      "metrics": { "clicks": "40", "conversions": 3.5, "conversionsValue": 412.345, "costMicros": "25120000", "impressions": "900" },
+      "segments": { "date": "2026-11-22" }
+    },
+    {
+      "campaign": { "resourceName": "customers/1234567890/campaigns/222", "id": "222", "name": "Shopping" },
+      "metrics": { "clicks": "12", "costMicros": "9999999", "impressions": "3100" },
+      "segments": { "date": "2026-11-22" }
+    }
+  ],
+  "nextPageToken": "page-2-token",
+  "fieldMask": "segments.date,campaign.id,campaign.name,metrics.costMicros,metrics.impressions,metrics.clicks,metrics.conversions,metrics.conversionsValue",
+  "queryResourceConsumption": "120"
+}

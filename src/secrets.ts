@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { CliError } from './errors.js'
 
 const SERVICE = 'lifecycle-cli'
-export type SecretName = 'klaviyo-read-key' | 'shopify-client-secret' | 'database-url' | 'klaviyo-write-key' | 'ga4-client-secret' | 'ga4-refresh-token' | 'stripe-read-key' | 'meta-ads-token' | 'kie-api-key' | 'fal-key' | 'apify-token' | 'scrapecreators-key' | 'cloud-token'
+export type SecretName = 'klaviyo-read-key' | 'shopify-client-secret' | 'database-url' | 'klaviyo-write-key' | 'ga4-client-secret' | 'ga4-refresh-token' | 'stripe-read-key' | 'meta-ads-token' | 'google-ads-client-secret' | 'google-ads-refresh-token' | 'kie-api-key' | 'fal-key' | 'apify-token' | 'scrapecreators-key' | 'cloud-token'
 
 const ENV: Record<SecretName, string> = {
   'klaviyo-read-key': 'LIFECYCLE_KLAVIYO_READ_KEY',
@@ -13,6 +13,8 @@ const ENV: Record<SecretName, string> = {
   'ga4-refresh-token': 'LIFECYCLE_GA4_REFRESH_TOKEN',
   'stripe-read-key': 'LIFECYCLE_STRIPE_READ_KEY',
   'meta-ads-token': 'LIFECYCLE_META_ADS_TOKEN',
+  'google-ads-client-secret': 'LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET',
+  'google-ads-refresh-token': 'LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN',
   'kie-api-key': 'LIFECYCLE_KIE_API_KEY',
   'fal-key': 'LIFECYCLE_FAL_KEY',
   'apify-token': 'LIFECYCLE_APIFY_TOKEN',

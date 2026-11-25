@@ -1,0 +1,16 @@
+{
+  "error": {
+    "code": 403,
+    "message": "The caller does not have permission",
+    "status": "PERMISSION_DENIED",
+    "details": [
+      {
+        "@type": "type.googleapis.com/google.ads.googleads.v26.errors.GoogleAdsFailure",
+        "errors": [
+          { "errorCode": { "authorizationError": "CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION" }, "message": "The Google Cloud project is not approved for use with production accounts." }
+        ],
+        "requestId": "fake-request-id-1"
+      }
+    ]
+  }
+}

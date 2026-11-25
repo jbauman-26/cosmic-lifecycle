@@ -10,6 +10,8 @@ const ENV = {
     'ga4-refresh-token': 'LIFECYCLE_GA4_REFRESH_TOKEN',
     'stripe-read-key': 'LIFECYCLE_STRIPE_READ_KEY',
     'meta-ads-token': 'LIFECYCLE_META_ADS_TOKEN',
+    'google-ads-client-secret': 'LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET',
+    'google-ads-refresh-token': 'LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN',
     'kie-api-key': 'LIFECYCLE_KIE_API_KEY',
     'fal-key': 'LIFECYCLE_FAL_KEY',
     'apify-token': 'LIFECYCLE_APIFY_TOKEN',

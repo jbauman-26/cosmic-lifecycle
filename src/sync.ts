@@ -5,6 +5,7 @@ import { settingValue } from './config.js'
 import { aggregateOrders, type RawOrder } from './sources/shopify.js'
 import type { Ga4Day } from './sources/ga4.js'
 import { toDaily, type RawInsight } from './sources/meta.js'
+import { toAdGroupDaily, toCampaignDaily, type RawAdGroupRow, type RawCampaignRow } from './sources/google-ads.js'
 import { aggregateCharges, aggregateSubscriptions, type RawCharge, type RawSubscription } from './sources/stripe.js'
 import { Klaviyo, isNoReportData, reportsVerified, type FlowDailyRow } from './sources/klaviyo.js'
 
@@ -240,5 +241,49 @@ export async function syncMeta(db: Db, load: (since: string, until: string) => P
     const { rows } = await writeMeta(db, raw, since, opts.currency ?? '', opts.account ?? '')
     await setTotal(db, 'meta', 'rows_pulled', raw.length)
     return rows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Meta returned no campaign activity from ${since} to ${until}.` }
+  })
+}
+
+// Google restates recent days as late conversions come in, the same as Meta, so every sync replaces the whole
+// window in one transaction and older days keep what the last sync that covered them saw. Rows from any other
+// customer id are removed, so switching accounts never mixes two accounts' history.
+export async function writeGoogleAds(db: Db, data: { campaigns: RawCampaignRow[]; adGroups: RawAdGroupRow[] }, since: string, currency: string, customer: string) {
+  const campaigns = toCampaignDaily(data.campaigns)
+  const adGroups = toAdGroupDaily(data.adGroups)
+  const at = now()
+  await db.transaction(async (tx: Tx) => {
+    for (const t of ['fact_google_ads_campaign_daily', 'fact_google_ads_ad_group_daily']) {
+      await tx.query(`DELETE FROM ${t} WHERE date >= $1 OR account_id <> $2`, [since, customer])
+    }
+    for (const d of campaigns) {
+      await tx.query(
+        `INSERT INTO fact_google_ads_campaign_daily VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (date, account_id, campaign_id) DO NOTHING`,
+        [d.date, customer, d.campaignId, d.campaignName, d.cost, d.impressions, d.clicks, d.conversions, d.conversionsValue, currency, at],
+      )
+    }
+    for (const d of adGroups) {
+      await tx.query(
+        `INSERT INTO fact_google_ads_ad_group_daily VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT (date, account_id, ad_group_id) DO NOTHING`,
+        [d.date, customer, d.campaignId, d.adGroupId, d.adGroupName, d.cost, d.impressions, d.clicks, d.conversions, d.conversionsValue, currency, at],
+      )
+    }
+  })
+  return { campaignRows: campaigns.length, adGroupRows: adGroups.length }
+}
+
+export async function syncGoogleAds(
+  db: Db,
+  load: { campaigns: (since: string, until: string) => Promise<RawCampaignRow[]>; adGroups: (since: string, until: string) => Promise<RawAdGroupRow[]> },
+  opts: { customer: string; currency?: string; days?: number; today?: string },
+) {
+  return recordRun(db, 'google-ads', async () => {
+    const until = opts.today ?? now().slice(0, 10)
+    const since = new Date(Date.parse(`${until}T00:00:00Z`) - (opts.days ?? settingValue('metrics.default_days')) * 86400000).toISOString().slice(0, 10)
+    const campaigns = await load.campaigns(since, until)
+    const adGroups = await load.adGroups(since, until)
+    const { campaignRows, adGroupRows } = await writeGoogleAds(db, { campaigns, adGroups }, since, opts.currency ?? '', opts.customer)
+    await setTotal(db, 'google-ads', 'rows_pulled', campaigns.length + adGroups.length)
+    const rows = campaignRows + adGroupRows
+    return campaignRows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Google Ads returned no campaign activity from ${since} to ${until}.` }
   })
 }

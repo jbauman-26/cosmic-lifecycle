@@ -6,7 +6,7 @@ import { sourceStatus, type SourceStatus } from './sources-catalog.js'
 import { trustLine } from './reconcile.js'
 import { targetDir } from './skills.js'
 
-export const SECRET_FOR: Record<string, Parameters<typeof getSecret>[0]> = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret', stripe: 'stripe-read-key', meta: 'meta-ads-token' }
+export const SECRET_FOR: Record<string, Parameters<typeof getSecret>[0]> = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret', stripe: 'stripe-read-key', meta: 'meta-ads-token', 'google-ads': 'google-ads-refresh-token' }
 
 export type Step = { step: string; done: boolean; next: string | null }
 export type Checklist = { steps: Step[]; done: number; total: number }

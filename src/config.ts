@@ -12,6 +12,7 @@ const Config = z
     ga4: z.object({ property: z.string(), clientId: z.string() }).optional(),
     stripe: z.object({ mode: z.enum(['test', 'live']), subscriptions: z.boolean() }).optional(),
     meta: z.object({ account: z.string(), name: z.string(), currency: z.string(), timezone: z.string() }).optional(),
+    'google-ads': z.object({ customer: z.string(), loginCustomer: z.string().optional(), clientId: z.string(), name: z.string(), currency: z.string(), timezone: z.string(), testAccount: z.boolean() }).optional(),
     registry: z.object({ uri: z.string() }).partial().optional(),
     deploy: z.object({ repo: z.string() }).partial().optional(),
     update: z.object({ check: z.boolean() }).partial().optional(),

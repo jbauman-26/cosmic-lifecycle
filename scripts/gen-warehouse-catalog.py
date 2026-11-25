@@ -14,7 +14,7 @@ research = json.loads((ROOT / "connectors/research-2026-11-07.json").read_text()
 specs = {p.stem: json.loads(p.read_text()) for p in sorted((ROOT / "connectors/specs").glob("*.json"))}
 
 # Built into the CLI already, with reconcile checks.
-NATIVE = {"klaviyo", "google-analytics-4", "stripe", "meta-ads-facebook-and-instagram"}
+NATIVE = {"klaviyo", "google-analytics-4", "stripe", "meta-ads-facebook-and-instagram", "google-ads"}
 SHORT = {
     "meta-ads-facebook-and-instagram": "meta-ads",
     "amazon-seller-central-sp-api": "amazon-seller-central",
@@ -45,7 +45,6 @@ SKIPPED = {
     "rebuy": "The public API is storefront only: product recommendations out, analytics events in. Nothing returns a merchant's own results (https://developers.rebuyengine.com/reference/rebuy-analytic-v2-endpoints/). CSV import meanwhile.",
     "northbeam": "Attribution data only leaves Northbeam through an export job: create, poll, then download a CSV or read a cloud bucket (https://docs.northbeam.io/docs/northbeam-api-data-exports-overview). That needs an export runner, not a REST spec. Planned.",
     "taxjar": "List endpoints return only IDs and skip transactions synced from Shopify, so a connector would mislead. CSV import instead.",
-    "google-ads": "Planned as a built-in source, not a warehouse connector. Needs Google sign-in: the owner signs in with Google in the Cosmic AI app and picks an ad account. The CLI has no connector code for it yet, and Google Ads also needs a developer token that Cosmic holds. CSV import meanwhile.",
 }
 
 # Tools that are not in the research file. Each says plainly where it came from,
