@@ -11,6 +11,9 @@ import { envName, getSecret } from './secrets.js';
 // 2. The token is only sent over https, or to this machine (localhost) for tests.
 // 3. A route Cloud does not have yet answers 404. That becomes code `not_built` with a
 //    plain sentence, so an agent knows to wait for Cloud rather than retry.
+// 4. The token only goes to an address the owner chose: LIFECYCLE_CLOUD_URL or the one `login`
+//    saved. With neither (after `logout`, say), a token left in the environment is not sent to
+//    the public address: the command stops with `not_logged_in` before anything leaves.
 export const DEFAULT_CLOUD_URL = 'https://cosmic-cloud.vercel.app';
 export const CLOUD_URL_ENV = 'LIFECYCLE_CLOUD_URL';
 export const CLOUD_TOKEN_ENV = envName('cloud-token');
@@ -51,7 +54,18 @@ export function cloudUrl() {
     return { url: DEFAULT_CLOUD_URL, source: 'default' };
 }
 export const cloudToken = () => getSecret('cloud-token');
-export const loggedIn = () => Boolean(cloudToken());
+// Where a --cloud command would send the token, or null when the owner never chose an address.
+export function chosenCloudUrl() {
+    try {
+        const u = cloudUrl();
+        return u.source === 'default' ? null : u.url;
+    }
+    catch {
+        return null;
+    }
+}
+// Logged in means a token and an address the owner chose. A token alone is not enough.
+export const loggedIn = () => Boolean(cloudToken()) && chosenCloudUrl() !== null;
 export const cloudTokenSource = () => (process.env[CLOUD_TOKEN_ENV] ? 'env' : cloudToken() ? 'keychain' : 'missing');
 // Text that came from the server is shown to a person or an agent: one line, no control characters, not too long.
 export const clean = (text, max = 300) => text.replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').trim().slice(0, max);
@@ -62,10 +76,18 @@ export class CloudClient {
     fetchFn;
     timeoutMs;
     constructor(opts = {}) {
-        this.url = opts.url ? normalizeCloudUrl(opts.url) : cloudUrl().url;
         const token = opts.token ?? cloudToken();
         if (!token)
             throw new CliError('Not logged in to Cosmic Cloud.', LOGIN_NEXT, 'not_logged_in');
+        if (opts.url) {
+            this.url = normalizeCloudUrl(opts.url);
+        }
+        else {
+            // Never fall back to the public address: a token kept after logout must not go anywhere.
+            if (cloudUrl().source === 'default')
+                throw new CliError('Not logged in to Cosmic Cloud.', LOGIN_NEXT, 'not_logged_in');
+            this.url = cloudUrl().url;
+        }
         // A token is plain printable text. Anything else cannot go in a header, and is not a token.
         if (!/^[\x21-\x7e]+$/.test(token))
             throw new CliError('That token has spaces, line breaks or other characters a token never has.', 'Copy the token again from Cosmic Cloud under Settings, export it, then run lifecycle login again.', 'bad_token');
@@ -156,8 +178,38 @@ export class CloudClient {
         const r = await this.call({ method: 'POST', path: '/sync', ...(connectionId ? { body: { connection_id: connectionId } } : {}) });
         return { started: list(r.started, ''), already_running: list(r.already_running, '') };
     }
+    // The list names each skill and its files. Cloud leaves the file text out of it, so the list stays small.
     async skills() {
         return list(await this.call({ method: 'GET', path: '/skills' }), 'skills');
+    }
+    async skill(slug) {
+        const r = await this.call({ method: 'GET', path: `/skills/${encodeURIComponent(slug)}` });
+        return (r?.skill ?? r);
+    }
+    // Every skill with its file text, for `skills sync`. A skill the list sent whole is not asked for
+    // again. One deleted between the list and the read is left out.
+    async skillsWithFiles() {
+        const out = [];
+        for (const s of await this.skills()) {
+            const files = Array.isArray(s?.files) ? s.files : [];
+            if (files.length && files.every((f) => typeof f?.content === 'string')) {
+                out.push(s);
+                continue;
+            }
+            if (typeof s?.slug !== 'string' || !/^[a-z0-9][a-z0-9-]{0,62}$/.test(s.slug)) {
+                out.push(s);
+                continue;
+            }
+            try {
+                out.push(await this.skill(s.slug));
+            }
+            catch (e) {
+                if (e instanceof CliError && e.code === 'unknown_skill')
+                    continue;
+                throw e;
+            }
+        }
+        return out;
     }
     putSkill(slug, files) {
         return this.call({ method: 'PUT', path: `/skills/${encodeURIComponent(slug)}`, body: { files } });

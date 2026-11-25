@@ -41,7 +41,7 @@ export async function runChecks(db: Tx, t: Tolerances = tolerances()): Promise<C
   const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
 
   // 1. Did the pull get everything Shopify says exists? This is the check that
-  // would have caught the silent gap we measured in Graphed's page table.
+  // would have caught a silent gap in a page table like the one we once measured.
   const totals = await db.query(`SELECT metric, value FROM meta_source_total WHERE source = 'shopify'`)
   const total = totals.find((t) => t.metric === 'orders_reported')
   const pulled = totals.find((t) => t.metric === 'orders_pulled')

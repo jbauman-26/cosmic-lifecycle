@@ -123,8 +123,9 @@ program.command('logout').description('Forget the Cosmic Cloud token and address
     unsetSetting('cloud.url')
     urlRemoved = true
   }
-  const envStill = Boolean(process.env[CLOUD_TOKEN_ENV])
-  const note = envStill ? `${CLOUD_TOKEN_ENV} is still set in this environment, so --cloud commands still work until you unset it.` : null
+  // A token left in the environment only works with an address the owner set in the environment too.
+  const envStill = Boolean(process.env[CLOUD_TOKEN_ENV]) && Boolean(process.env[CLOUD_URL_ENV])
+  const note = envStill ? `${CLOUD_TOKEN_ENV} and ${CLOUD_URL_ENV} are still set in this environment, so --cloud commands still work until you unset them.` : process.env[CLOUD_TOKEN_ENV] ? `${CLOUD_TOKEN_ENV} is still set. Without a saved address it is not sent anywhere, but unset it if you are done with it.` : null
   emit(format(), { loggedOut: !envStill, tokenRemoved: removed, urlRemoved, note }, () => [envStill ? 'The saved token and address were removed.' : 'Logged out of Cosmic Cloud.', note, 'To stop the token working everywhere, revoke it in Cosmic Cloud under Settings.'].filter(Boolean).join('\n'))
 }))
 
@@ -132,8 +133,10 @@ const cloud = program.command('cloud').description('Cosmic Cloud: the hosted cop
 cloud.command('status').description('Whether this machine is logged in to Cosmic Cloud, which store, and what is connected there').action(run(async () => {
   const { url, source: urlSource } = cloudUrl()
   const tokenSource = cloudTokenSource()
-  if (tokenSource === 'missing') {
-    emit(format(), { loggedIn: false, url, urlSource, tokenSource }, () => `Not logged in to Cosmic Cloud.\nNext: lifecycle login --token-env YOUR_VAR`)
+  // A token with no address the owner chose is not logged in: it would not be sent anywhere.
+  if (tokenSource === 'missing' || urlSource === 'default') {
+    const note = tokenSource === 'missing' ? null : `A token is set, but no Cloud address is saved, so it is not used. Run lifecycle login again, or set ${CLOUD_URL_ENV}.`
+    emit(format(), { loggedIn: false, url, urlSource, tokenSource, note }, () => [`Not logged in to Cosmic Cloud.`, note, `Next: lifecycle login --token-env YOUR_VAR`].filter(Boolean).join('\n'))
     return
   }
   try {
@@ -600,7 +603,7 @@ withRegistry(skills.command('sync').description('Install or update /lifecycle an
     let info: { status: 'ok' | 'not_logged_in' | 'not_built' | 'failed'; skills: string[]; skipped: string[]; code?: string } = { status: 'not_logged_in', skills: [], skipped: [] }
     if (loggedIn()) {
       try {
-        const a = accountSkillFiles(await new CloudClient().skills())
+        const a = accountSkillFiles(await new CloudClient().skillsWithFiles())
         account = a.files
         info = { status: 'ok', skills: a.installed, skipped: a.skipped }
       } catch (e) {

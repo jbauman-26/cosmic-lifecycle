@@ -248,6 +248,9 @@ Log in:
   lifecycle cloud status shows the store, the address, where the token comes
   from, and each connection on Cloud. lifecycle logout forgets the token and
   the address on this machine. To stop a token working everywhere, revoke it in Cloud.
+  A token alone is not a login: with no saved address and no LIFECYCLE_CLOUD_URL,
+  --cloud stops with not_logged_in and sends nothing, even if LIFECYCLE_CLOUD_TOKEN
+  is still set.
 
 Without a keychain, such as on Linux or in CI:
     LIFECYCLE_CLOUD_URL     the Cloud address. It wins over the saved one.
@@ -291,7 +294,8 @@ Tool runs:
 
 "Cosmic Cloud does not have this yet" (code not_built):
   Cloud is being built route by route. A route it does not have yet answers
-  404, and the CLI says so plainly. Run the command without --cloud to use
+  404 not_found, and the CLI says so plainly. Something that is not there has
+  its own code instead: unknown_skill, unknown_connection, unknown_metric, unknown_table. Run the command without --cloud to use
   the data on this machine. Do not retry in a loop.
 
 Rules:
@@ -493,7 +497,7 @@ Error codes (the "code" field with --format json, and in lifecycle logs):
   reserved_name    metrics save or delete named a built-in metric. Pick another name.
   bad_metric       A saved metric must be one SELECT that returns one row with one number.
   bad_schema       LIFECYCLE_DB_SCHEMA is not a plain schema name.
-  not_logged_in    A Cosmic Cloud command ran with no store token. lifecycle login --token-env VAR.
+  not_logged_in    A Cosmic Cloud command ran with no store token, or with no saved address. lifecycle login --token-env VAR.
   unauthorized     Cosmic Cloud refused the store token. Create a new one in Cloud, then log in again.
   not_built        Cosmic Cloud does not have that route yet, or a source has no connector yet. Run it without --cloud.
   cloud_unreachable  Cosmic Cloud did not answer. Check the network and lifecycle cloud status.
@@ -505,6 +509,7 @@ Error codes (the "code" field with --format json, and in lifecycle logs):
   secret_found     skills push: a file looks like it holds a key. Nothing was sent.
   bad_skill        skills push or delete: no SKILL.md, a bad name, a file that is not text, or a link.
   unknown_skill    skills delete named a skill this store does not have on Cloud.
+  unknown_connection  Cosmic Cloud has no connection with that id for this store.
   cannot_abort     tools abort: this provider cannot stop a job, or the run has no cancel link.
   not_running      tools abort named a run that had already ended.
 

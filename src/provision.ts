@@ -2,7 +2,7 @@ import { CliError } from './errors.js'
 import { fetchJson } from './http.js'
 
 // Provision: create the managed Postgres for you, in your own Neon account, from your own
-// API key. Graphed hosts a warehouse for its customers; this gives the same one-command
+// API key. Instead of a warehouse hosted for you, this gives a one-command
 // managed database without the data leaving your account.
 
 export const NEON_API = 'https://console.neon.tech/api/v2'

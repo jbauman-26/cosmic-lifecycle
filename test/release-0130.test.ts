@@ -72,15 +72,22 @@ describe('the Cloud client', () => {
     const c = new CloudClient({ url: f.url, token: f.token })
     expect((await c.store()).store.name).toBe('Sample store')
     expect((await c.schema()).schemas[0]!.tables[0]).toMatchObject({ name: 'fact_orders_daily', rows: 90, columns: [{ name: 'date', type: 'date' }, { name: 'orders', type: 'integer' }] })
-    // Rows arrive as arrays here and leave as objects keyed by column.
-    expect(await c.query('SELECT date, orders FROM fact_orders_daily')).toEqual({ columns: ['date', 'orders'], rows: [{ date: '2026-11-23', orders: 14 }, { date: '2026-11-24', orders: 9 }], rowCount: 2, truncated: false })
+    // Cloud sends typed columns and rows as objects; they leave as column names and objects keyed by column.
+    const want = { columns: ['date', 'orders'], rows: [{ date: '2026-11-23', orders: 14 }, { date: '2026-11-24', orders: 9 }], rowCount: 2, truncated: false }
+    expect(await c.query('SELECT date, orders FROM fact_orders_daily')).toEqual(want)
+    // Rows sent as arrays come out the same.
+    const arrays = await fakeCloud({ arrayRows: true })
+    expect(await new CloudClient({ url: arrays.url, token: arrays.token }).query('SELECT date, orders FROM fact_orders_daily')).toEqual(want)
     expect((await c.metrics()).map((m) => m.name)).toEqual(['shopify_orders', 'repeat_orders'])
     expect(await c.metric('shopify_orders', 30)).toMatchObject({ metric: 'shopify_orders', days: 30, value: 412 })
     expect((await c.runs(1)).length).toBe(1)
     expect(await c.sync('c_klaviyo000001')).toEqual({ started: ['c_klaviyo000001'], already_running: [] })
     expect((await c.sync()).started.length).toBe(2)
     await c.putSkill('winback-brief', [{ path: 'SKILL.md', content: '# Winback' }])
-    expect(await c.skills()).toEqual([{ slug: 'winback-brief', files: [{ path: 'SKILL.md', content: '# Winback' }] }])
+    // The list leaves the file text out, as Cloud does; skillsWithFiles reads each skill whole.
+    expect(await c.skills()).toEqual([{ slug: 'winback-brief', bytes: 17, files: [{ path: 'SKILL.md', bytes: 9 }] }])
+    expect(await c.skillsWithFiles()).toEqual([{ slug: 'winback-brief', bytes: 17, files: [{ path: 'SKILL.md', content: '# Winback' }] }])
+    expect(await code(c.skill('not-there'))).toBe('unknown_skill')
     await c.deleteSkill('winback-brief')
     expect(await c.skills()).toEqual([])
     await c.postToolRun({ id: 'abc' })
@@ -240,11 +247,32 @@ describe('login, logout and --cloud, through the real CLI', () => {
     expect(text).toMatch(/Logged in to Cosmic Cloud\. Store: Sample store/)
 
     const logout = await run(['logout'])
-    expect(logout.json()).toMatchObject({ loggedOut: false, urlRemoved: true, note: expect.stringMatching(/LIFECYCLE_CLOUD_TOKEN is still set/) })
+    expect(logout.json()).toMatchObject({ loggedOut: true, urlRemoved: true, note: expect.stringMatching(/LIFECYCLE_CLOUD_TOKEN is still set/) })
     expect(readRawConfig().cloud).toBeUndefined()
+    // The token is still in the environment, but no address is saved: nothing is sent, not even to the
+    // public address, and every --cloud command says not_logged_in.
+    const sent = f.requests.length
+    const fetches: string[] = []
+    vi.stubGlobal('fetch', async (u: string) => {
+      fetches.push(String(u))
+      throw new Error('no call expected')
+    })
+    for (const args of [['query', 'SELECT 1', '--cloud'], ['schema', '--cloud'], ['metrics', 'list', '--cloud'], ['metrics', 'run', 'shopify_orders', '--cloud'], ['sources', 'list', '--cloud'], ['sync', '--cloud'], ['skills', 'delete', 'x']]) {
+      expect((await run(args)).error(), args.join(' ')).toMatchObject({ code: 'not_logged_in' })
+    }
+    const stillSet = (await run(['cloud', 'status'])).json()
+    expect(stillSet).toMatchObject({ loggedIn: false, tokenSource: 'env', urlSource: 'default', note: expect.stringMatching(/no Cloud address is saved/) })
+    expect(f.requests.length).toBe(sent)
+    // In this process too: a token, no address, so the client refuses before any fetch.
+    process.env.LIFECYCLE_CLOUD_TOKEN = f.token
+    expect(() => new CloudClient()).toThrow(/Not logged in/)
+    delete process.env.LIFECYCLE_CLOUD_TOKEN
+    expect(fetches).toEqual([])
     const out = await cli(['cloud', 'status'], { LIFECYCLE_CLOUD_URL: f.url })
     all.push(out.stdout, out.stderr)
     expect(out.json()).toMatchObject({ loggedIn: false, tokenSource: 'missing', urlSource: 'env' })
+    // With both in the environment, as an app or a CI job sets them, --cloud works without login.
+    expect((await cli(['query', 'SELECT 1', '--cloud'], { LIFECYCLE_CLOUD_URL: f.url, LIFECYCLE_CLOUD_TOKEN: f.token })).json()).toMatchObject({ cloud: true, rowCount: 2 })
     expect((await cli(['query', 'SELECT 1', '--cloud'], { LIFECYCLE_CLOUD_URL: f.url })).error()).toMatchObject({ code: 'not_logged_in' })
 
     expect(all.join('\n')).not.toContain(f.token)
@@ -627,8 +655,8 @@ describe('docs and release', () => {
     for (const f of ['CHANGELOG.md', 'README.md', 'src/cloud.ts', 'src/cli.ts', 'src/skills.ts', 'src/tools.ts', 'src/open-tools.ts', 'src/docs.ts', 'test/fixtures/fake-cloud.mjs']) expect(readFileSync(f, 'utf8'), f).not.toMatch(/[\u2013\u2014]/)
   })
 
-  it('is version 0.13.0, and the Cloud token is a secret like any other, with its own variable', () => {
-    expect(VERSION).toBe('0.13.0')
+  it('is version 0.13.1, and the Cloud token is a secret like any other, with its own variable', () => {
+    expect(VERSION).toBe('0.13.1')
     expect(SECRET_NAMES).toContain('cloud-token')
     expect(envName('cloud-token')).toBe('LIFECYCLE_CLOUD_TOKEN')
   })
