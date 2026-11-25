@@ -214,7 +214,7 @@ lifecycle tools providers                        # Kie, fal, Apify and ScrapeCre
 lifecycle tools run kie:gpt-image-2-text-to-image --input '{"prompt":"A red running shoe"}' --wait
 lifecycle exec -- node my-report.js              # run a script with your keys in its environment
 lifecycle sources import meta_ads --csv ads.csv  # any other tool's daily totals
-lifecycle sources catalog --category reviews      # 98 tools Shopify stores use, 25 with connectors
+lifecycle sources catalog --category reviews      # 100 tools Shopify stores use, 30 with connectors
 lifecycle warehouse connect gorgias --secret api_key=GORGIAS_KEY --set subdomain=you --set username=you@store.com
 lifecycle warehouse sync && lifecycle warehouse query "select status, count(*) from src_gorgias.tickets group by 1"
 lifecycle files ls                               # every saved report, dashboard and plan
