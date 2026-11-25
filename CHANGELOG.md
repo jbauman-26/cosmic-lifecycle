@@ -16,6 +16,7 @@ Reconcile checks only what it can honestly check. Found on a test store whose wa
 ### Added
 
 - Setting `reconcile.min_difference` (3): two order counts that differ by this many orders or fewer pass whatever the percent, so a small store does not fail on one late order. A Klaviyo account with no orders against a store with this many orders or fewer is not checked yet.
+- A `connected` list in config.json (for example `["shopify", "klaviyo"]`) names the connected sources outright, for a host such as Cosmic Cloud that passes each source's settings only to the command that needs them.
 - `compareCounts` and `connectedNow` in `reconcile.ts`. `tolerances()` carries `minDifference` and `connected`.
 
 ## 0.15.0 (2026-11-25)

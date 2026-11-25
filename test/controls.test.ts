@@ -95,6 +95,14 @@ describe('settings wired into the numbers', () => {
     await db.query(`INSERT INTO fact_klaviyo_orders_daily VALUES ($1, 95, 950, now())`, [day(1)])
   }
 
+  it('reads the connected sources from an explicit list when a host passes one (Cosmic Cloud)', async () => {
+    writeConfig({ database: { kind: 'postgres' }, connected: ['shopify', 'klaviyo'] } as any)
+    expect(tolerances().connected).toEqual(['shopify', 'klaviyo'])
+    writeConfig({ database: { kind: 'postgres' }, connected: ['shopify'] } as any)
+    await seedKlaviyoGap()
+    expect((await runChecks(db)).find((c) => c.name === 'klaviyo_orders')).toMatchObject({ status: 'skipped', detail: 'Not checked yet: Klaviyo is not connected.' })
+  })
+
   it('uses the Klaviyo tolerance from config', async () => {
     await seedKlaviyoGap()
     expect((await runChecks(db)).find((c) => c.name === 'klaviyo_orders')!.status).toBe('fail')

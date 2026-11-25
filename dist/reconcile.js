@@ -22,6 +22,10 @@ export function connectedNow() {
         const raw = readRawConfig();
         if (!raw || typeof raw !== 'object' || !('database' in raw))
             return undefined;
+        // A host that hands keys per command (Cosmic Cloud) names the store's connected sources here, so a
+        // read that carries no source blocks still checks against what is connected.
+        if (Array.isArray(raw.connected))
+            return raw.connected.filter((s) => typeof s === 'string');
         return ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'google-ads', 'hubspot'].filter((s) => raw[s] !== undefined && raw[s] !== null);
     }
     catch {

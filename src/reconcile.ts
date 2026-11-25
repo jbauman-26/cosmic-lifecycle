@@ -32,6 +32,9 @@ export function connectedNow(): string[] | undefined {
   try {
     const raw = readRawConfig() as Record<string, unknown>
     if (!raw || typeof raw !== 'object' || !('database' in raw)) return undefined
+    // A host that hands keys per command (Cosmic Cloud) names the store's connected sources here, so a
+    // read that carries no source blocks still checks against what is connected.
+    if (Array.isArray(raw.connected)) return raw.connected.filter((s: unknown): s is string => typeof s === 'string')
     return ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'google-ads', 'hubspot'].filter((s) => raw[s] !== undefined && raw[s] !== null)
   } catch {
     return undefined
