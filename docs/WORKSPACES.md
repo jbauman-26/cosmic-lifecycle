@@ -84,6 +84,8 @@ Trust line statuses: `passed`, `failed`, `unchecked`, and new in 0.14.0 `unrefer
 | Stripe subscriptions | already native | native | unchanged |
 | Salesforce | catalog | planned: needs an OAuth connected app | |
 | Google Ads | built in (`connect google-ads`), read only | built: from the Google Ads API docs (v26), tested against recorded answers; not run on a live or test account | daily cost and results by campaign and ad group; no audiences, keywords, people or creative |
+| Reddit Ads | built in (`connect reddit-ads`), read only | built: from the Reddit Ads API docs (v3), tested against recorded answers; not run on a live account | daily spend and attributed purchases by campaign; no audiences, communities, keywords, people or creative |
+| Snapchat Ads | built in (`connect snapchat-ads`), read only | built: from the Snapchat Marketing API docs (v1), tested against recorded answers; not run on a live account | daily spend and attributed purchases by campaign; no audiences, creatives, people or pixel events |
 | LinkedIn Ads | catalog | planned: needs an approved Marketing API app | |
 | Google Search Console | catalog | planned: needs Google sign-in | |
 | PostHog, Mixpanel | catalog | planned: query results come as arrays or streams, which need a runner change | |

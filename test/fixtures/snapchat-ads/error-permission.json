@@ -1,0 +1,1 @@
+{ "request_status": "ERROR", "request_id": "UNIQUE_ID", "debug_message": "None of the requested actions READ_STATS can be authorized. Current user principal: MEMBER_ID", "display_message": "We're sorry, but the requested resource is not available at this time", "error_code": "E3002" }

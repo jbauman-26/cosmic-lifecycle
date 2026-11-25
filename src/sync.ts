@@ -8,6 +8,8 @@ import type { Ga4Day } from './sources/ga4.js'
 import { applyChanges, changedSince, clearState, readSyncState, replaceState, StateBuffer, stateRow, writeSyncState, type Keyer } from './shopify-state.js'
 import { toDaily, type RawInsight } from './sources/meta.js'
 import { toAdGroupDaily, toCampaignDaily, type RawAdGroupRow, type RawCampaignRow } from './sources/google-ads.js'
+import { toRedditDaily, type AdsDaily, type RawRedditRow } from './sources/reddit-ads.js'
+import { localDate, toSnapDaily, type RawSnapCampaign } from './sources/snapchat-ads.js'
 import { aggregateCharges, aggregateSubscriptions, type RawCharge, type RawSubscription } from './sources/stripe.js'
 import { aggregateContacts, aggregateDeals, uniqueCount, type RawContact, type RawDeal } from './sources/hubspot.js'
 import { Klaviyo, isNoReportData, reportsVerified, type FlowDailyRow } from './sources/klaviyo.js'
@@ -527,5 +529,53 @@ export async function syncGoogleAds(
     await setTotal(db, 'google-ads', 'rows_pulled', campaigns.length + adGroups.length)
     const rows = campaignRows + adGroupRows
     return campaignRows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Google Ads returned no campaign activity from ${since} to ${until}.` }
+  })
+}
+
+// Reddit Ads and Snapchat Ads restate recent days as late conversions arrive, like Google, so every sync replaces the
+// whole window in one transaction and older days keep what the last sync that covered them saw. Rows from any other
+// ad account are removed, so switching accounts never mixes two accounts' history. Days follow the account's time zone.
+export async function writeAdsDaily(db: Db, table: 'fact_reddit_ads_daily' | 'fact_snapchat_ads_daily', rows: AdsDaily[], since: string, currency: string, account: string) {
+  const at = now()
+  await db.transaction(async (tx: Tx) => {
+    await tx.query(`DELETE FROM ${table} WHERE date >= $1 OR account_id <> $2`, [since, account])
+    for (const d of rows) {
+      await tx.query(
+        `INSERT INTO ${table} VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (date, account_id, campaign_id) DO NOTHING`,
+        [d.date, account, d.campaignId, d.campaignName, d.spend, d.impressions, d.clicks, d.conversions, d.conversionValue, currency, at],
+      )
+    }
+  })
+  return rows.length
+}
+
+function adsWindow(opts: { timezone?: string; days?: number; today?: string }) {
+  const until = opts.today ?? localDate(Date.now(), opts.timezone ?? '')
+  const since = new Date(Date.parse(`${until}T00:00:00Z`) - (opts.days ?? settingValue('metrics.default_days')) * 86400000).toISOString().slice(0, 10)
+  return { since, until }
+}
+
+type AdsOpts = { account: string; currency?: string; timezone?: string; days?: number; today?: string }
+
+export async function syncRedditAds(db: Db, load: { names: () => Promise<Map<string, string>>; report: (since: string, until: string) => Promise<RawRedditRow[]> }, opts: AdsOpts) {
+  return recordRun(db, 'reddit-ads', async () => {
+    const { since, until } = adsWindow(opts)
+    const raw = await load.report(since, until)
+    const names = await load.names()
+    const rows = await writeAdsDaily(db, 'fact_reddit_ads_daily', toRedditDaily(raw, names, since, until), since, opts.currency ?? '', opts.account)
+    await setTotal(db, 'reddit-ads', 'rows_pulled', raw.length)
+    return rows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Reddit Ads returned no campaign activity from ${since} to ${until}.` }
+  })
+}
+
+export async function syncSnapchatAds(db: Db, load: { names: () => Promise<Map<string, string>>; stats: (since: string, until: string) => Promise<RawSnapCampaign[]> }, opts: AdsOpts) {
+  return recordRun(db, 'snapchat-ads', async () => {
+    const { since, until } = adsWindow(opts)
+    const raw = await load.stats(since, until)
+    const names = await load.names()
+    const daily = toSnapDaily(raw, names, opts.timezone ?? '', since, until)
+    const rows = await writeAdsDaily(db, 'fact_snapchat_ads_daily', daily, since, opts.currency ?? '', opts.account)
+    await setTotal(db, 'snapchat-ads', 'rows_pulled', daily.length)
+    return rows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Snapchat Ads returned no campaign activity from ${since} to ${until}.` }
   })
 }

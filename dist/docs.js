@@ -58,6 +58,24 @@ Google Ads, about 10 minutes (optional, for ad spend next to revenue):
 5. lifecycle connect google-ads --customer 123-456-7890 --client-id ID --secret-env GOOGLE_ADS_CLIENT_SECRET --refresh-token-env GOOGLE_ADS_REFRESH_TOKEN [--login-customer MANAGER_ID]
 Only read calls are made, even though Google's scope is named for full access.
 
+Reddit Ads, about 10 minutes (optional, for ad spend next to revenue):
+1. You need a developer application from Business > Developer Portal in Reddit Ads (a business
+   admin makes it). Note its app id and secret. The Cosmic AI app does this sign-in for you.
+2. Sign in with Reddit for a refresh token: scope adsread, duration permanent.
+3. Copy the ad account id from Accounts in Reddit Ads Manager, such as a2_abc123.
+4. export REDDIT_ADS_CLIENT_SECRET=... REDDIT_ADS_REFRESH_TOKEN=...
+5. lifecycle connect reddit-ads --account a2_abc123 --client-id APP_ID --secret-env REDDIT_ADS_CLIENT_SECRET --refresh-token-env REDDIT_ADS_REFRESH_TOKEN
+Only read calls are made. The adsread scope cannot change anything.
+
+Snapchat Ads, about 10 minutes (optional, for ad spend next to revenue):
+1. You need an OAuth app from Business Details in Snap Business Manager (an organization admin
+   makes it). Note its client id and secret. The Cosmic AI app does this sign-in for you.
+2. Sign in with Snapchat for a refresh token with the snapchat-marketing-api scope.
+3. Copy the ad account id from Snapchat Ads Manager.
+4. export SNAPCHAT_ADS_CLIENT_SECRET=... SNAPCHAT_ADS_REFRESH_TOKEN=...
+5. lifecycle connect snapchat-ads --account AD_ACCOUNT_ID --client-id ID --secret-env SNAPCHAT_ADS_CLIENT_SECRET --refresh-token-env SNAPCHAT_ADS_REFRESH_TOKEN
+Only read calls are made, even though Snap's scope also allows changes.
+
 Then:
   lifecycle sync
   lifecycle reconcile
@@ -164,7 +182,8 @@ Rules:
 - fact_crm_* tables hold HubSpot counts and amounts by day, pipeline, stage and original source. There are no contact, company or deal records.
 - Purchases and purchase value in fact_meta_ads_daily are what Meta attributes to its own ads. They are a claim, not orders. Never add them to Shopify revenue or to email revenue. For a number with no attribution in it, use the marketing_efficiency_ratio metric.
 - Conversions and conversions_value in fact_google_ads_campaign_daily and fact_google_ads_ad_group_daily are what Google attributes to its own ads. They are a claim, not orders, and they overlap with Meta's claims. Never add them to Shopify revenue, to email revenue or to Meta's purchases. cost is in the account currency.
-- Nothing in this tool sends a message, and nothing changes an ad account. Meta Ads and Google Ads are read only.
+- conversions and conversion_value in fact_reddit_ads_daily and fact_snapchat_ads_daily are the purchases Reddit and Snapchat attribute to their own ads (Reddit: click-through plus view-through; Snapchat: its default 28-day swipe and 1-day view windows). They are a claim, not orders, and they overlap with Meta's and Google's claims. Never add them to Shopify revenue, to email revenue or to another network's claims. spend is in the account currency. clicks in fact_snapchat_ads_daily are swipe-ups. Days follow each ad account's own time zone.
+- Nothing in this tool sends a message, and nothing changes an ad account. Meta Ads, Google Ads, Reddit Ads and Snapchat Ads are read only.
 - If a command fails with code \`busy\`, another lifecycle command is writing to the store. Wait and run it again. Do not delete files to get past it.
 - \`--cloud\` on a read command asks Cosmic Cloud instead of this machine. Use it only when the user is logged in (\`lifecycle cloud status --format json\`). Code \`not_built\` means Cloud does not have that route yet: run the command without \`--cloud\`, and do not retry. See \`lifecycle docs cloud\`.
 `,
@@ -261,7 +280,7 @@ Without either, the workspace is ~/.lifecycle, as before 0.14.0.
 ## Sources for each type
 
 Built in, with reconcile checks: shopify, klaviyo, ga4, stripe, meta, hubspot.
-Built in, read only, not yet run on a live account: google-ads.
+Built in, read only, not yet run on a live account: google-ads, reddit-ads, snapchat-ads.
 Warehouse connectors written from the vendor docs and not yet run on a real
 account: hubspot-records, pipedrive, woocommerce, bigcommerce, customer-io.
 Planned: salesforce, linkedin-ads, google-search-console, posthog, mixpanel.
@@ -324,6 +343,8 @@ lifecycle connect stripe --key-env NAME
 lifecycle connect meta --account ID --token-env NAME
 lifecycle connect hubspot --token-env NAME
 lifecycle connect google-ads --customer ID --client-id ID --secret-env NAME --refresh-token-env NAME [--login-customer ID]
+lifecycle connect reddit-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
+lifecycle connect snapchat-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
 lifecycle sync [--since DATE] [--only SOURCE[,SOURCE]] [--cloud]
 lifecycle disconnect SOURCE [--delete-data]
 lifecycle schema [TABLE] [--cloud]
@@ -529,7 +550,7 @@ Find and connect a source:
   lifecycle warehouse list | disconnect SLUG
 
 Readiness, said plainly:
-  native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads, Google Ads). Shopify, Klaviyo and GA4 have reconcile checks
+  native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads, Google Ads, Reddit Ads, Snapchat Ads). Shopify, Klaviyo and GA4 have reconcile checks
   tested   a warehouse connector that has synced a real account
   built    written from the vendor's API docs, not yet run on a real account.
            Expect the first sync to need a fix. Report it: lifecycle feedback
@@ -668,6 +689,15 @@ Google Ads says the account cannot be read, or that it is a manager account:
   Connect a client account, not a manager. If access comes through a manager account, add
   --login-customer MANAGER_ID. A refresh token from an app in Testing mode stops working after
   seven days; sign in again for a new one.
+
+Reddit Ads or Snapchat Ads says the account cannot be read:
+  The signed-in member needs access to that ad account: on Reddit, a role in the business that
+  includes reporting; on Snapchat, a role on the ad account that can see reports. Check the id,
+  then connect again. A refresh token stops working if the member revokes the app or leaves.
+
+Reddit Ads or Snapchat Ads numbers change for recent days:
+  Both restate recent days as late conversions arrive. Each sync pulls the last 90 days
+  (metrics.default_days) again, so the numbers settle after a few syncs.
 
 Meta spend looks low for the last few days:
   Meta restates recent days as late conversions arrive. Each sync pulls the last 90 days

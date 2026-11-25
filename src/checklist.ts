@@ -7,7 +7,7 @@ import { trustLine } from './reconcile.js'
 import { targetDir } from './skills.js'
 import { readWorkspace, REFERENCE_NAME, type Workspace } from './workspace.js'
 
-export const SECRET_FOR: Record<string, Parameters<typeof getSecret>[0]> = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret', stripe: 'stripe-read-key', meta: 'meta-ads-token', hubspot: 'hubspot-token', 'google-ads': 'google-ads-refresh-token' }
+export const SECRET_FOR: Record<string, Parameters<typeof getSecret>[0]> = { klaviyo: 'klaviyo-read-key', shopify: 'shopify-client-secret', ga4: 'ga4-client-secret', stripe: 'stripe-read-key', meta: 'meta-ads-token', hubspot: 'hubspot-token', 'google-ads': 'google-ads-refresh-token', 'reddit-ads': 'reddit-ads-refresh-token', 'snapchat-ads': 'snapchat-ads-refresh-token' }
 
 export type Step = { step: string; done: boolean; next: string | null }
 export type Checklist = { steps: Step[]; done: number; total: number }

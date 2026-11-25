@@ -8,6 +8,8 @@ import { Stripe, isRestrictedKey, stripeMode } from '../sources/stripe.js';
 import { MetaAds, normalizeAccountId } from '../sources/meta.js';
 import { HubSpot } from '../sources/hubspot.js';
 import { GoogleAds, googleAdsAccessToken, normalizeCustomerId } from '../sources/google-ads.js';
+import { RedditAds, normalizeRedditAccountId, redditAccessToken } from '../sources/reddit-ads.js';
+import { SnapchatAds, normalizeSnapAccountId, snapAccessToken } from '../sources/snapchat-ads.js';
 const fromEnv = (name) => {
     const value = name ? process.env[name] : undefined;
     if (!value)
@@ -137,4 +139,44 @@ export async function connectGoogleAds(opts) {
     const kept = keys.length ? keepKeys(keys) : NO_KEYS;
     writeConfig({ ...readConfig(), 'google-ads': { customer, ...(loginCustomer ? { loginCustomer } : {}), clientId: opts.clientId, name: a.name, currency: a.currency, timezone: a.timezone, testAccount: a.testAccount } });
     return { connected: true, customer, loginCustomer: loginCustomer ?? null, name: a.name, currency: a.currency, timezone: a.timezone, testAccount: a.testAccount, ...kept };
+}
+const REDDIT_ADS_NEXT = 'lifecycle connect reddit-ads --account a2_abc123 --client-id ID --secret-env NAME --refresh-token-env NAME';
+// Read only: the refresh token carries the adsread scope, and this CLI only reads the account, campaign names and reports.
+export async function connectRedditAds(opts) {
+    if (!opts.account || !opts.clientId)
+        throw new CliError('The ad account id and app id are required.', REDDIT_ADS_NEXT);
+    const account = normalizeRedditAccountId(opts.account);
+    const secret = opts.secretEnv ? fromEnv(opts.secretEnv) : getSecret('reddit-ads-client-secret');
+    const refresh = opts.refreshTokenEnv ? fromEnv(opts.refreshTokenEnv) : getSecret('reddit-ads-refresh-token');
+    if (!secret || !refresh)
+        throw new CliError('Reddit Ads credentials are missing.', REDDIT_ADS_NEXT, 'missing_secret');
+    const a = await new RedditAds(await redditAccessToken(opts.clientId, secret, refresh), account).check();
+    const keys = [];
+    if (opts.secretEnv)
+        keys.push(['reddit-ads-client-secret', secret]);
+    if (opts.refreshTokenEnv)
+        keys.push(['reddit-ads-refresh-token', refresh]);
+    const kept = keys.length ? keepKeys(keys) : NO_KEYS;
+    writeConfig({ ...readConfig(), 'reddit-ads': { account, clientId: opts.clientId, name: a.name, currency: a.currency, timezone: a.timezone } });
+    return { connected: true, account, name: a.name, currency: a.currency, timezone: a.timezone, ...kept };
+}
+const SNAPCHAT_ADS_NEXT = 'lifecycle connect snapchat-ads --account AD_ACCOUNT_ID --client-id ID --secret-env NAME --refresh-token-env NAME';
+// Read only: Snap's snapchat-marketing-api scope also allows writes, but this CLI only reads the account, campaign names and stats.
+export async function connectSnapchatAds(opts) {
+    if (!opts.account || !opts.clientId)
+        throw new CliError('The ad account id and OAuth client id are required.', SNAPCHAT_ADS_NEXT);
+    const account = normalizeSnapAccountId(opts.account);
+    const secret = opts.secretEnv ? fromEnv(opts.secretEnv) : getSecret('snapchat-ads-client-secret');
+    const refresh = opts.refreshTokenEnv ? fromEnv(opts.refreshTokenEnv) : getSecret('snapchat-ads-refresh-token');
+    if (!secret || !refresh)
+        throw new CliError('Snapchat Ads credentials are missing.', SNAPCHAT_ADS_NEXT, 'missing_secret');
+    const a = await new SnapchatAds(await snapAccessToken(opts.clientId, secret, refresh), account).check();
+    const keys = [];
+    if (opts.secretEnv)
+        keys.push(['snapchat-ads-client-secret', secret]);
+    if (opts.refreshTokenEnv)
+        keys.push(['snapchat-ads-refresh-token', refresh]);
+    const kept = keys.length ? keepKeys(keys) : NO_KEYS;
+    writeConfig({ ...readConfig(), 'snapchat-ads': { account, clientId: opts.clientId, name: a.name, currency: a.currency, timezone: a.timezone, ...(a.organizationId ? { organizationId: a.organizationId } : {}) } });
+    return { connected: true, account, name: a.name, currency: a.currency, timezone: a.timezone, organizationId: a.organizationId || null, ...kept };
 }

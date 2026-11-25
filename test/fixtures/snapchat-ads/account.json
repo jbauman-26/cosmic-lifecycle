@@ -1,0 +1,22 @@
+{
+  "request_status": "success",
+  "request_id": "57b0021900ff06bbfeb44f77240001737e616473617069736300016275696c642d35396264653638322d312d31312d370001010e",
+  "adaccounts": [
+    {
+      "sub_request_status": "success",
+      "adaccount": {
+        "id": "8adc3db7-8148-4fbf-999c-8d2266369d74",
+        "updated_at": "2016-08-11T22:03:58.869Z",
+        "created_at": "2016-08-11T22:03:58.869Z",
+        "name": "Northwind Snap Ads",
+        "type": "PARTNER",
+        "status": "ACTIVE",
+        "organization_id": "40d6719b-da09-410b-9185-0cc9c0dfed1d",
+        "funding_source_ids": ["e703eb9f-8eac-4eda-a9c7-deec3935222d"],
+        "currency": "USD",
+        "timezone": "America/Los_Angeles",
+        "advertiser": "Northwind"
+      }
+    }
+  ]
+}

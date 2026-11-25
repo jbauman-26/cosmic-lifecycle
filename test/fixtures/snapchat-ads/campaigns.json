@@ -1,0 +1,8 @@
+{
+  "request_status": "SUCCESS",
+  "request_id": "b1c56bf8-ab79-496d-8084-efc322a94172",
+  "campaigns": [
+    { "sub_request_status": "SUCCESS", "campaign": { "id": "c6a9e09a-7126-48e1-96e0-4dbf9ab8d3c2", "name": "Holiday Sales" } },
+    { "sub_request_status": "SUCCESS", "campaign": { "id": "11162f29-85c7-4d43-a037-62d540487e29", "name": "Retargeting" } }
+  ]
+}

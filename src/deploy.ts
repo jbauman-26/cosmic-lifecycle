@@ -29,12 +29,14 @@ function customFields(slug: string): string[] {
   }
 }
 
-export function workflowYaml(hasGa4: boolean, hasStripe = false, warehouseEnvs: string[] = [], hasWarehouse = warehouseEnvs.length > 0, hasMeta = false, hasHubspot = false, hasGoogleAds = false) {
+export function workflowYaml(hasGa4: boolean, hasStripe = false, warehouseEnvs: string[] = [], hasWarehouse = warehouseEnvs.length > 0, hasMeta = false, hasHubspot = false, hasGoogleAds = false, hasRedditAds = false, hasSnapchatAds = false) {
   const ga4 = hasGa4
     ? `      LIFECYCLE_GA4_CLIENT_SECRET: \${{ secrets.LIFECYCLE_GA4_CLIENT_SECRET }}\n      LIFECYCLE_GA4_REFRESH_TOKEN: \${{ secrets.LIFECYCLE_GA4_REFRESH_TOKEN }}\n`
     : ''
   const stripe = (hasStripe ? `      LIFECYCLE_STRIPE_READ_KEY: \${{ secrets.LIFECYCLE_STRIPE_READ_KEY }}\n` : '') + (hasMeta ? `      LIFECYCLE_META_ADS_TOKEN: \${{ secrets.LIFECYCLE_META_ADS_TOKEN }}\n` : '') + (hasHubspot ? `      LIFECYCLE_HUBSPOT_TOKEN: \${{ secrets.LIFECYCLE_HUBSPOT_TOKEN }}\n` : '')
     + (hasGoogleAds ? `      LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET: \${{ secrets.LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET }}\n      LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN: \${{ secrets.LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN }}\n` : '')
+    + (hasRedditAds ? `      LIFECYCLE_REDDIT_ADS_CLIENT_SECRET: \${{ secrets.LIFECYCLE_REDDIT_ADS_CLIENT_SECRET }}\n      LIFECYCLE_REDDIT_ADS_REFRESH_TOKEN: \${{ secrets.LIFECYCLE_REDDIT_ADS_REFRESH_TOKEN }}\n` : '')
+    + (hasSnapchatAds ? `      LIFECYCLE_SNAPCHAT_ADS_CLIENT_SECRET: \${{ secrets.LIFECYCLE_SNAPCHAT_ADS_CLIENT_SECRET }}\n      LIFECYCLE_SNAPCHAT_ADS_REFRESH_TOKEN: \${{ secrets.LIFECYCLE_SNAPCHAT_ADS_REFRESH_TOKEN }}\n` : '')
   return `name: Daily sync
 on:
   schedule:
@@ -80,7 +82,7 @@ export function deployPlan(config: Config, repo: string) {
     repo,
     creates: [`Private GitHub repo ${repo}`, 'A daily sync at 09:17 UTC in GitHub Actions'],
     // A store needs Klaviyo and Shopify keys, as in 0.13. Any other workspace only the ones it connected.
-    secrets: ['LIFECYCLE_DATABASE_URL', ...(readWorkspace().type === 'shopify' || config.klaviyo ? ['LIFECYCLE_KLAVIYO_READ_KEY'] : []), ...(readWorkspace().type === 'shopify' || config.shopify ? ['LIFECYCLE_SHOPIFY_CLIENT_SECRET', 'LIFECYCLE_SHOPIFY_CUSTOMER_KEY'] : []), ...((config as { hubspot?: unknown }).hubspot ? ['LIFECYCLE_HUBSPOT_TOKEN'] : []), ...(config.ga4 ? ['LIFECYCLE_GA4_CLIENT_SECRET', 'LIFECYCLE_GA4_REFRESH_TOKEN'] : []), ...(config.stripe ? ['LIFECYCLE_STRIPE_READ_KEY'] : []), ...(config.meta ? ['LIFECYCLE_META_ADS_TOKEN'] : []), ...(config['google-ads'] ? ['LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET', 'LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN'] : []), ...warehouseSecrets(config).map((w) => w.env)],
+    secrets: ['LIFECYCLE_DATABASE_URL', ...(readWorkspace().type === 'shopify' || config.klaviyo ? ['LIFECYCLE_KLAVIYO_READ_KEY'] : []), ...(readWorkspace().type === 'shopify' || config.shopify ? ['LIFECYCLE_SHOPIFY_CLIENT_SECRET', 'LIFECYCLE_SHOPIFY_CUSTOMER_KEY'] : []), ...((config as { hubspot?: unknown }).hubspot ? ['LIFECYCLE_HUBSPOT_TOKEN'] : []), ...(config.ga4 ? ['LIFECYCLE_GA4_CLIENT_SECRET', 'LIFECYCLE_GA4_REFRESH_TOKEN'] : []), ...(config.stripe ? ['LIFECYCLE_STRIPE_READ_KEY'] : []), ...(config.meta ? ['LIFECYCLE_META_ADS_TOKEN'] : []), ...(config['google-ads'] ? ['LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET', 'LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN'] : []), ...(config['reddit-ads'] ? ['LIFECYCLE_REDDIT_ADS_CLIENT_SECRET', 'LIFECYCLE_REDDIT_ADS_REFRESH_TOKEN'] : []), ...(config['snapchat-ads'] ? ['LIFECYCLE_SNAPCHAT_ADS_CLIENT_SECRET', 'LIFECYCLE_SNAPCHAT_ADS_REFRESH_TOKEN'] : []), ...warehouseSecrets(config).map((w) => w.env)],
     expectedCost: 'Likely $0 on free plans for a small brand: about 150 of 2,000 Actions minutes a month, and summary tables inside Neon Free. Check both plans for your size.',
   }
 }
@@ -92,7 +94,7 @@ export function writeProject(config: Config, dir: string) {
   mkdirSync(join(dir, '.github', 'workflows'), { recursive: true })
   mkdirSync(join(dir, '.lifecycle'), { recursive: true })
   const wh = warehouseSecrets(config)
-  writeFileSync(join(dir, '.github', 'workflows', 'sync.yml'), workflowYaml(Boolean(config.ga4), Boolean(config.stripe), wh.map((w) => w.env), Object.keys(config.warehouse?.sources ?? {}).length > 0, Boolean(config.meta), Boolean((config as { hubspot?: unknown }).hubspot), Boolean(config['google-ads'])))
+  writeFileSync(join(dir, '.github', 'workflows', 'sync.yml'), workflowYaml(Boolean(config.ga4), Boolean(config.stripe), wh.map((w) => w.env), Object.keys(config.warehouse?.sources ?? {}).length > 0, Boolean(config.meta), Boolean((config as { hubspot?: unknown }).hubspot), Boolean(config['google-ads']), Boolean(config['reddit-ads']), Boolean(config['snapchat-ads'])))
   // Custom API specs travel with the project, so the runner can load them.
   if (existsSync(join(appHome(), 'custom-apis'))) cpSync(join(appHome(), 'custom-apis'), join(dir, '.lifecycle', 'custom-apis'), { recursive: true })
   // The store name and client id are not secret, and the runner needs them.
