@@ -6,13 +6,15 @@ import { shopifyQueryError, scopeDenied, SHOPIFY_VERSION } from './shopify.js';
 // and hand back one file, with no rate limit cost per order. It can take minutes, so the operation id is saved
 // and a later sync picks it up where this one stopped.
 // Docs: https://shopify.dev/docs/api/usage/bulk-operations/queries (2026-01 and later poll with bulkOperation(id:)).
-// The same fields as the paged query plus createdAt, and no personal field. customer { id } is an object, not a connection,
+// The same fields as the paged query, and no personal field. The order id and customer id are hashed with the store's key before they are stored. customer { id } is an object, not a connection,
 // so every line of the file is one order and there is no __parentId to follow.
 export const BULK_ORDERS_QUERY = `{
   orders {
     edges {
       node {
+        id
         createdAt
+        updatedAt
         processedAt
         cancelledAt
         customer { id }
@@ -87,6 +89,7 @@ export async function waitForExport(gql, id, budgetMs, opts = {}) {
 // Cancelled orders are counted as pulled and then dropped, as aggregateOrders drops them.
 export class CompactOrders {
     cutoff;
+    state;
     pulled = 0;
     // Orders created at or before the cutoff, so they can be checked against Shopify's count for the same moment.
     pulledBefore = 0;
@@ -100,8 +103,10 @@ export class CompactOrders {
     dayIndex = new Map();
     customers = new Map();
     earliest = null;
-    constructor(cutoff = Infinity) {
+    // With a state buffer, every order (cancelled ones too) is also kept there under keyed hashes, for an incremental sync.
+    constructor(cutoff = Infinity, state) {
         this.cutoff = cutoff;
+        this.state = state;
     }
     grow() {
         const n = this.time.length * 2;
@@ -114,6 +119,7 @@ export class CompactOrders {
     }
     add(o) {
         this.pulled++;
+        this.state?.add(o);
         if (o.createdAt && Date.parse(o.createdAt) <= this.cutoff)
             this.pulledBefore++;
         if (o.cancelledAt)

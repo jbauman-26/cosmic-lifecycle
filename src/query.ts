@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { Db, Tx } from './db.js'
 import { CliError } from './errors.js'
-import { MIGRATIONS } from './schema.js'
+import { MIGRATIONS, SCRAMBLED_ID_COLUMNS } from './schema.js'
 import { settingValue } from './config.js'
 import { assertNoPersonalColumns, markCatalog, type CatalogColumn } from './sql-guard.js'
 import { sourceOfSchema } from './warehouse-names.js'
@@ -26,7 +26,9 @@ export function assertReadOnlySql(sql: string) {
 // Every column this database holds, marked by the personal data rule list (src/personal.ts).
 export async function pgCatalog(db: Tx): Promise<CatalogColumn[]> {
   const rows = await db.query(`SELECT table_schema, table_name, column_name, data_type FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog', 'information_schema')`)
+  const scrambled = (t: string, c: string) => SCRAMBLED_ID_COLUMNS.some((s) => s.table === t && s.column === c)
   return markCatalog(rows.map((r) => ({ schema: String(r.table_schema), table: String(r.table_name), column: String(r.column_name), type: String(r.data_type) })), sourceOfSchema)
+    .map((c) => (scrambled(c.table, c.column) ? { ...c, personal: true } : c))
 }
 
 // Refuses SQL that could return a personal column. If the list of columns cannot be read, nothing runs.

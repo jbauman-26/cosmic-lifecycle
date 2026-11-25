@@ -5,13 +5,15 @@ import { settingValue } from './config.js'
 import { aggregateOrders, type CohortMonthly, type OrdersDaily, type RawOrder } from './sources/shopify.js'
 import { CompactOrders, isDone, pollExport, readExport, startOrdersExport, waitForExport, type BulkOperation, type Gql } from './sources/shopify-bulk.js'
 import type { Ga4Day } from './sources/ga4.js'
+import { applyChanges, changedSince, clearState, readSyncState, replaceState, StateBuffer, stateRow, writeSyncState, type Keyer } from './shopify-state.js'
 import { toDaily, type RawInsight } from './sources/meta.js'
 import { toAdGroupDaily, toCampaignDaily, type RawAdGroupRow, type RawCampaignRow } from './sources/google-ads.js'
 import { aggregateCharges, aggregateSubscriptions, type RawCharge, type RawSubscription } from './sources/stripe.js'
 import { aggregateContacts, aggregateDeals, uniqueCount, type RawContact, type RawDeal } from './sources/hubspot.js'
 import { Klaviyo, isNoReportData, reportsVerified, type FlowDailyRow } from './sources/klaviyo.js'
 
-export type SourceResult = { source: string; status: 'ok' | 'warning' | 'failed'; rows: number; detail?: string; code?: string; progress?: ExportProgress }
+// mode (Shopify only, 0.15.0): full when the whole order history was read, incremental when only changed orders were.
+export type SourceResult = { source: string; status: 'ok' | 'warning' | 'failed'; rows: number; detail?: string; code?: string; progress?: ExportProgress; mode?: 'full' | 'incremental' }
 
 // How far a large store's Shopify order export has got, for an app's history loading line. Counts and times only.
 // state: running while Shopify builds the file, done once a file was read in full, failed when the last one ended badly.
@@ -48,26 +50,65 @@ export async function writeShopify(db: Db, orders: RawOrder[]) {
   return writeShopifyTotals(db, aggregateOrders(orders))
 }
 
-export async function writeShopifyTotals(db: Db, { daily, cohorts }: { daily: OrdersDaily[]; cohorts: CohortMonthly[] }) {
-  const at = now()
-  await db.transaction(async (tx: Tx) => {
-    await tx.query('DELETE FROM fact_orders_daily')
-    await tx.query('DELETE FROM fact_cohort_monthly')
-    for (const d of daily) {
-      await tx.query(
-        `INSERT INTO fact_orders_daily (date, orders, gross_revenue, net_revenue, discounts, new_orders, returning_orders, guest_orders, source_synced_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [d.date, d.orders, d.gross, d.net, d.discounts, d.newOrders, d.returningOrders, d.guestOrders, at],
-      )
-    }
-    for (const c of cohorts) {
-      await tx.query(
-        `INSERT INTO fact_cohort_monthly (cohort_month, months_since, customers, orders, revenue, source_synced_at) VALUES ($1,$2,$3,$4,$5,$6)`,
-        [c.cohortMonth, c.monthsSince, c.customers, c.orders, c.revenue, at],
-      )
-    }
-  })
+export async function writeShopifyTotals(db: Db, totals: { daily: OrdersDaily[]; cohorts: CohortMonthly[] }) {
+  return db.transaction((tx) => writeTotalsTx(tx, totals, now()))
+}
+
+async function writeTotalsTx(tx: Tx, { daily, cohorts }: { daily: OrdersDaily[]; cohorts: CohortMonthly[] }, at: string) {
+  await tx.query('DELETE FROM fact_orders_daily')
+  await tx.query('DELETE FROM fact_cohort_monthly')
+  for (const d of daily) {
+    await tx.query(
+      `INSERT INTO fact_orders_daily (date, orders, gross_revenue, net_revenue, discounts, new_orders, returning_orders, guest_orders, source_synced_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [d.date, d.orders, d.gross, d.net, d.discounts, d.newOrders, d.returningOrders, d.guestOrders, at],
+    )
+  }
+  for (const c of cohorts) {
+    await tx.query(
+      `INSERT INTO fact_cohort_monthly (cohort_month, months_since, customers, orders, revenue, source_synced_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+      [c.cohortMonth, c.monthsSince, c.customers, c.orders, c.revenue, at],
+    )
+  }
   return daily.length + cohorts.length
 }
+
+// Days whose stored totals differ from a full pull's, so the weekly check can say what the daily syncs missed
+// (an order deleted in Shopify, for one, which a search by updated_at never returns).
+async function driftDays(tx: Tx, daily: OrdersDaily[]) {
+  const had = new Map((await tx.query(`SELECT date::text AS date, orders, net_revenue, new_orders, returning_orders, guest_orders FROM fact_orders_daily`)).map((r) => [String(r.date), r]))
+  let n = 0
+  for (const d of daily) {
+    const h = had.get(d.date)
+    had.delete(d.date)
+    if (!h || Number(h.orders) !== d.orders || Number(h.net_revenue) !== d.net || Number(h.new_orders) !== d.newOrders || Number(h.returning_orders) !== d.returningOrders || Number(h.guest_orders) !== d.guestOrders) n++
+  }
+  return n + had.size
+}
+
+// A full pull with a store key also replaces every order's state and moves the cursor, in the same transaction
+// as the totals. Without a key the state is cleared, because it could no longer be kept in step.
+async function writeFull(db: Db, totals: { daily: OrdersDaily[]; cohorts: CohortMonthly[] }, state: { buf: StateBuffer; keyer: Keyer; cursor: string; windowLimited: boolean } | null) {
+  const at = now()
+  let drift: number | null = null
+  const rows = await db.transaction(async (tx) => {
+    if (state) {
+      const prior = await readSyncState(tx)
+      if (prior?.keyCheck === state.keyer.check && prior.lastFullAt) drift = await driftDays(tx, totals.daily)
+    }
+    const n = await writeTotalsTx(tx, totals, at)
+    if (state) {
+      await replaceState(tx, state.buf)
+      await writeSyncState(tx, { cursor: state.cursor, keyCheck: state.keyer.check, full: { at, windowLimited: state.windowLimited } })
+    } else {
+      await clearState(tx)
+    }
+    return n
+  })
+  return { rows, drift }
+}
+
+const sixtyOneDaysBefore = (today: string) => new Date(Date.parse(`${today}T00:00:00Z`) - 61 * 86400000).toISOString().slice(0, 10)
+const driftNote = (drift: number | null) => (drift ? ` The weekly full check corrected ${drift} day${drift === 1 ? '' : 's'} the daily syncs had differently.` : '')
 
 export async function writeFlowDaily(tx: Tx, rows: FlowDailyRow[], at: string) {
   for (const r of rows) {
@@ -89,16 +130,67 @@ async function setTotal(db: Tx, source: string, metric: string, value: number) {
   )
 }
 
-export async function syncShopify(db: Db, loadOrders: () => Promise<RawOrder[]>, reportedCount?: () => Promise<number | null>) {
+export type ShopifyKeyOpts = { keyer?: Keyer | null; today?: string }
+
+export async function syncShopify(db: Db, loadOrders: () => Promise<RawOrder[]>, reportedCount?: () => Promise<number | null>, opts: ShopifyKeyOpts = {}) {
   return recordRun(db, 'shopify', async () => {
+    const started = now()
     const orders = await loadOrders()
-    const rows = await writeShopify(db, orders)
+    const totals = aggregateOrders(orders)
+    let state = null
+    if (opts.keyer) {
+      const buf = new StateBuffer(opts.keyer)
+      let earliest: string | null = null
+      for (const o of orders) {
+        buf.add(o)
+        if (!o.cancelledAt && (earliest === null || o.processedAt.slice(0, 10) < earliest)) earliest = o.processedAt.slice(0, 10)
+      }
+      const today = opts.today ?? started.slice(0, 10)
+      state = { buf, keyer: opts.keyer, cursor: started, windowLimited: earliest === null || earliest >= sixtyOneDaysBefore(today) }
+    }
+    const { rows, drift } = await writeFull(db, totals, state)
     await setTotal(db, 'shopify', 'orders_pulled', orders.length)
     const reported = reportedCount ? await reportedCount() : null
     if (reported === null) await db.query(`DELETE FROM meta_source_total WHERE source = 'shopify' AND metric = 'orders_reported'`)
     else await setTotal(db, 'shopify', 'orders_reported', reported)
-    return { status: 'ok', rows }
+    return { status: 'ok' as const, rows, mode: 'full' as const, ...(drift ? { detail: driftNote(drift).trim() } : {}) }
   })
+}
+
+export type IncrementalDeps = {
+  keyer: Keyer
+  // Orders changed at or after the given moment, from Shopify's search.
+  changed: (since: string) => Promise<RawOrder[]>
+  // Shopify's own count of every order, read after the changes, for orders_complete.
+  reportedCount?: () => Promise<number | null>
+  // How far before the cursor to look again: late edits, refunds and Shopify's search index lag. Default 3.
+  overlapDays?: number
+}
+
+// Only what changed since the last sync, from the cursor minus the overlap. The changed orders are upserted, and
+// only the days and cohorts they touch are rebuilt. Everything in one transaction, so a failure changes nothing.
+async function incremental(db: Db, deps: IncrementalDeps) {
+  const state = await readSyncState(db)
+  if (!state?.cursor || state.keyCheck !== deps.keyer.check) throw new CliError('The stored Shopify sync state was made with another key.', 'lifecycle sync --only shopify --full', 'state_mismatch')
+  const orders = await deps.changed(changedSince(state.cursor, deps.overlapDays ?? 3))
+  const rows = orders.map((o) => stateRow(o, deps.keyer))
+  const at = now()
+  const maxSeen = rows.reduce<string | null>((m, r) => (r.updatedAt && (!m || Date.parse(r.updatedAt) > Date.parse(m)) ? new Date(r.updatedAt).toISOString() : m), null)
+  const touched = await db.transaction(async (tx) => {
+    const t = await applyChanges(tx, rows, at)
+    if (maxSeen) await writeSyncState(tx, { cursor: maxSeen, keyCheck: deps.keyer.check })
+    const pulled = await tx.query(`SELECT count(*)::int AS n FROM shopify_order_state`)
+    await setTotal(tx, 'shopify', 'orders_pulled', Number(pulled[0]!.n))
+    return t
+  })
+  const reported = deps.reportedCount ? await deps.reportedCount() : null
+  if (reported === null) await db.query(`DELETE FROM meta_source_total WHERE source = 'shopify' AND metric = 'orders_reported'`)
+  else await setTotal(db, 'shopify', 'orders_reported', reported)
+  return { rows: touched.days + touched.cohorts, detail: `${touched.orders} changed order${touched.orders === 1 ? '' : 's'}; rebuilt ${touched.days} day${touched.days === 1 ? '' : 's'} and ${touched.cohorts} cohort month${touched.cohorts === 1 ? '' : 's'}.` }
+}
+
+export async function syncShopifyChanges(db: Db, deps: IncrementalDeps) {
+  return recordRun(db, 'shopify', async () => ({ status: 'ok' as const, mode: 'incremental' as const, ...(await incremental(db, deps)) }))
 }
 
 export type BulkDeps = {
@@ -112,6 +204,10 @@ export type BulkDeps = {
   expected?: number | null
   sleep?: (ms: number) => Promise<void>
   today?: string
+  // 0.15.0: the store key. With it, a finished export also rebuilds every order's state for incremental syncs.
+  keyer?: Keyer | null
+  // While a weekly check export is still building, the changed orders keep the totals fresh meanwhile.
+  incremental?: IncrementalDeps
 }
 
 const RUNNING_DETAIL = 'Shopify is still building the full order export. The totals from the last finished export stay in place, and the next sync reads the new one.'
@@ -137,13 +233,19 @@ export async function syncShopifyBulk(db: Db, deps: BulkDeps) {
     }
     if (!isDone(op.status)) op = (await waitForExport(deps.gql, op.id, deps.waitMs, { sleep: deps.sleep })) ?? op
     await mark(op, false)
-    if (!isDone(op.status)) return { status: 'warning' as const, rows: 0, detail: RUNNING_DETAIL, code: 'export_running', progress: (await exportProgress(db)) ?? undefined }
+    if (!isDone(op.status)) {
+      if (deps.incremental) {
+        const r = await incremental(db, deps.incremental)
+        return { status: 'ok' as const, mode: 'incremental' as const, rows: r.rows, detail: `${r.detail} Shopify is still building this week's full check export; the next sync reads it.`, progress: (await exportProgress(db)) ?? undefined }
+      }
+      return { status: 'warning' as const, rows: 0, detail: RUNNING_DETAIL, code: 'export_running', progress: (await exportProgress(db)) ?? undefined }
+    }
     if (op.status !== 'COMPLETED') {
       await mark(op, true)
       throw new CliError(`Shopify's order export ended as ${op.status.toLowerCase()}${op.errorCode ? ` (${op.errorCode})` : ''}.`, 'Run lifecycle sync again to start a new export.', 'export_failed')
     }
     const cutoff = op.createdAt ? Date.parse(op.createdAt) : Infinity
-    const buf = new CompactOrders(cutoff)
+    const buf = new CompactOrders(cutoff, deps.keyer ? new StateBuffer(deps.keyer) : undefined)
     if (op.url) {
       try {
         await readExport(op.url, buf, deps.download)
@@ -156,7 +258,11 @@ export async function syncShopifyBulk(db: Db, deps: BulkDeps) {
     if (buf.pulled !== op.objectCount) {
       throw new CliError(`The Shopify export file had ${buf.pulled} orders, and Shopify says it holds ${op.objectCount}.`, 'Run lifecycle sync again. It reads the same file again.', 'export_incomplete')
     }
-    const rows = await writeShopifyTotals(db, buf.aggregate())
+    // Without read_all_orders Shopify hands over only the last 60 days, and every older customer looks new.
+    const today = deps.today ?? at.slice(0, 10)
+    const limited = buf.earliest !== null && buf.earliest >= sixtyOneDaysBefore(today)
+    // The cursor is the moment the export started: anything changed after it is asked for again by the next sync.
+    const { rows, drift } = await writeFull(db, buf.aggregate(), deps.keyer && buf.state ? { buf: buf.state, keyer: deps.keyer, cursor: op.createdAt ?? at, windowLimited: limited || buf.earliest === null } : null)
     // Orders keep arriving while Shopify builds the file, so both sides of the completeness check stop at the
     // moment the export started.
     await setTotal(db, 'shopify', 'orders_pulled', op.createdAt ? buf.pulledBefore : buf.pulled)
@@ -164,13 +270,10 @@ export async function syncShopifyBulk(db: Db, deps: BulkDeps) {
     if (reported === null) await db.query(`DELETE FROM meta_source_total WHERE source = 'shopify' AND metric = 'orders_reported'`)
     else await setTotal(db, 'shopify', 'orders_reported', reported)
     await mark(op, true)
-    // Without read_all_orders Shopify hands over only the last 60 days, and every older customer looks new.
-    const today = deps.today ?? at.slice(0, 10)
-    const sixtyOneDaysAgo = new Date(Date.parse(`${today}T00:00:00Z`) - 61 * 86400000).toISOString().slice(0, 10)
-    if (buf.earliest !== null && buf.earliest >= sixtyOneDaysAgo) {
-      return { status: 'warning' as const, rows, detail: `The oldest order Shopify returned is from ${buf.earliest}. Without the read_all_orders scope Shopify hands over only the last 60 days, so if the store is older, add that scope, or older customers count as new.` }
+    if (limited) {
+      return { status: 'warning' as const, rows, mode: 'full' as const, detail: `The oldest order Shopify returned is from ${buf.earliest}. Without the read_all_orders scope Shopify hands over only the last 60 days, so if the store is older, add that scope, or older customers count as new.${driftNote(drift)}` }
     }
-    return { status: 'ok' as const, rows }
+    return { status: 'ok' as const, rows, mode: 'full' as const, ...(drift ? { detail: driftNote(drift).trim() } : {}) }
   })
 }
 

@@ -8,7 +8,8 @@ import { openDb, migrate } from './db.js';
 import { readConfig, settingValue, writeConfig } from './config.js';
 import { getSecret, getSourceSecret } from './secrets.js';
 import { CliError } from './errors.js';
-import { fetchOrderCount, fetchOrders, shopifyToken } from './sources/shopify.js';
+import { changedSinceQuery, fetchOrderCount, fetchOrders, shopifyToken } from './sources/shopify.js';
+import { keyer, newCustomerKey, plan as shopifyPlan, readSyncState } from './shopify-state.js';
 import { fetchGa4Daily, ga4AccessToken } from './sources/ga4.js';
 import { reconcile } from './reconcile.js';
 import { Klaviyo } from './sources/klaviyo.js';
@@ -16,7 +17,7 @@ import { Stripe } from './sources/stripe.js';
 import { MetaAds } from './sources/meta.js';
 import { GoogleAds, googleAdsAccessToken } from './sources/google-ads.js';
 import { HubSpot } from './sources/hubspot.js';
-import { exportProgress, syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncMeta, syncShopify, syncShopifyBulk, syncStripe } from './sync.js';
+import { exportProgress, syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncMeta, syncShopify, syncShopifyBulk, syncShopifyChanges, syncStripe } from './sync.js';
 import { shopifyGql } from './sources/shopify-bulk.js';
 import { runQuery } from './query.js';
 import { PUBLIC_TABLES } from './schema.js';
@@ -31,7 +32,7 @@ import { startMcp } from './mcp.js';
 import { DEMO_TYPES, demoFor, runDemo, runTypeDemo } from './demo.js';
 import { deploy, deployLogs, deployPlan, deployRun, deployRunById, deployStatus, followRun, warehouseSecrets, writeProject } from './deploy.js';
 import { defaultOf, getSetting, listSettings, setSetting, unsetSetting } from './config.js';
-import { deleteSecret, secretStatus, setSecret, SECRET_NAMES } from './secrets.js';
+import { deleteSecret, secretStatus, setSecret, useKeychain, SECRET_NAMES } from './secrets.js';
 import { buildDashboard, dashboardHtml } from './dashboard.js';
 import { SECRET_FOR, checklistLines, loadChecklist } from './checklist.js';
 import { checkForUpdate, UPDATE_HINT } from './update.js';
@@ -261,11 +262,23 @@ connect.command('google-ads').description('Read-only: daily cost and results by 
     emit(format(), r, () => `Connected to Google Ads account ${r.name || r.customer} (${r.currency}, ${r.timezone})${r.testAccount ? ', a test account' : ''}.${keyNote(r)}\nNext: lifecycle sync`);
 }));
 const collectList = (v, prev = []) => [...prev, v];
+// The store's key for scrambled customer ids: LIFECYCLE_SHOPIFY_CUSTOMER_KEY (the app and Cloud pass it), or this
+// workspace's keychain entry, made on the first sync. With neither (no keychain, nothing passed), Shopify syncs in
+// full each time as before 0.15.0 and no per-order state is kept. The key is never printed or logged.
+export function storeKeyer() {
+    let key = getSecret('shopify-customer-key');
+    if (!key && useKeychain()) {
+        key = newCustomerKey();
+        setSecret('shopify-customer-key', key);
+    }
+    return key ? keyer(key) : null;
+}
 program.command('sync').description('Pull fresh totals from connected sources, then reconcile')
     .option('--since <date>', 'start of the Klaviyo report window')
     .option('--only <source>', `sync only this built-in source: ${NATIVE.join(', ')} (repeatable, or a comma list)`, collectList)
     .option('--cloud', 'start the sync on Cosmic Cloud instead of on this machine. It returns at once. Needs lifecycle login')
     .option('--export-wait <seconds>', 'for a large Shopify store, seconds to wait for its bulk export before leaving it for the next sync')
+    .option('--full', 'for Shopify, read the whole order history now instead of only the orders changed since the last sync')
     .action(run(async (opts) => {
     if (opts.exportWait !== undefined && !(Number.isInteger(Number(opts.exportWait)) && Number(opts.exportWait) >= 0 && Number(opts.exportWait) <= 3600)) {
         throw new CliError('Use a whole number of seconds from 0 to 3600.', 'lifecycle sync --only shopify --export-wait 120', 'bad_value');
@@ -329,16 +342,32 @@ program.command('sync').description('Pull fresh totals from connected sources, t
                     // A failure here (a bad key, a missing scope) falls through to the paged path, which records it as this run's error.
                     const total = await (async () => fetchOrderCount(store, await tok()))().catch(() => undefined);
                     const minOrders = settingValue('shopify.bulk_min_orders');
-                    if (total !== undefined && (total === null || total >= minOrders)) {
+                    // 0.15.0: after the first full pull, a sync asks Shopify only for orders changed since the last one, and a
+                    // full pull runs again every shopify.full_check_days as a check. Without a store key it is full every time.
+                    const k = storeKeyer();
+                    const p = shopifyPlan(k ? await readSyncState(db) : null, k, { force: Boolean(opts.full), fullEveryDays: settingValue('shopify.full_check_days') });
+                    const changes = k ? {
+                        keyer: k,
+                        changed: async (since) => fetchOrders(store, await tok(), { query: changedSinceQuery(since) }),
+                        reportedCount: async () => fetchOrderCount(store, await tok()),
+                        overlapDays: settingValue('shopify.overlap_days'),
+                    } : null;
+                    if (p.mode === 'incremental' && changes) {
+                        results.push(await syncShopifyChanges(db, changes));
+                    }
+                    else if (total !== undefined && (total === null || total >= minOrders)) {
                         results.push(await syncShopifyBulk(db, {
                             gql: shopifyGql(store, await tok()),
                             reportedCount: async (before) => fetchOrderCount(store, await tok(), before ?? undefined),
                             waitMs: (opts.exportWait !== undefined ? Number(opts.exportWait) : settingValue('shopify.export_wait_seconds')) * 1000,
                             expected: total,
+                            keyer: k,
+                            // A weekly check on a store whose state is fine: the changed orders keep it fresh while the export builds.
+                            incremental: p.reason === 'weekly_check' && changes ? changes : undefined,
                         }));
                     }
                     else {
-                        results.push(await syncShopify(db, async () => fetchOrders(store, await tok()), async () => fetchOrderCount(store, await tok())));
+                        results.push(await syncShopify(db, async () => fetchOrders(store, await tok()), async () => fetchOrderCount(store, await tok()), { keyer: k }));
                     }
                     // Unit costs, once the owner has run lifecycle costs sync. Its own result line, so a cost failure never hides the orders.
                     if (config.costs?.shopify) {
@@ -909,8 +938,11 @@ program.command('deploy').description('Run the daily sync from your own GitHub a
         emit(format(), plan, () => [`This would create:`, ...plan.creates.map((c) => `  ${c}`), `Secrets to set: ${plan.secrets.join(', ')}`, `Cost: ${plan.expectedCost}`, `Nothing was created. Add --yes to go ahead.`].join('\n'));
         return;
     }
-    const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token', LIFECYCLE_HUBSPOT_TOKEN: 'hubspot-token', LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET: 'google-ads-client-secret', LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN: 'google-ads-refresh-token' };
+    const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_SHOPIFY_CUSTOMER_KEY: 'shopify-customer-key', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token', LIFECYCLE_HUBSPOT_TOKEN: 'hubspot-token', LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET: 'google-ads-client-secret', LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN: 'google-ads-refresh-token' };
     const secrets = {};
+    // The daily sync in GitHub Actions uses the same store key as this machine, so both keep the same scrambled ids.
+    if (plan.secrets.includes('LIFECYCLE_SHOPIFY_CUSTOMER_KEY'))
+        storeKeyer();
     const wh = new Map(warehouseSecrets(config).map((w) => [w.env, w]));
     for (const s of plan.secrets) {
         const w = wh.get(s);

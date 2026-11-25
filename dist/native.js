@@ -2,11 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { readRawConfig, removeConfigSection } from './config.js';
 import { CliError } from './errors.js';
 import { deleteSecret, envName } from './secrets.js';
+import { clearState } from './shopify-state.js';
 // The sources built into the CLI. Each one has a config section written by
 // connect, the keys it saved, and the tables only it fills.
 export const NATIVE = ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'hubspot', 'google-ads'];
 export const NATIVE_SECRETS = {
-    shopify: ['shopify-client-secret'],
+    // The store key goes with the store: disconnecting Shopify deletes it, and the scrambled ids it made (below).
+    shopify: ['shopify-client-secret', 'shopify-customer-key'],
     klaviyo: ['klaviyo-read-key', 'klaviyo-write-key'],
     ga4: ['ga4-client-secret', 'ga4-refresh-token'],
     stripe: ['stripe-read-key'],
@@ -77,6 +79,9 @@ export async function disconnectNative(source, opts = {}) {
                 await tx.query('DELETE FROM meta_source_window WHERE source = $1', [source]);
             });
         }
+        // The scrambled customer ids are only usable with the key, which was just deleted, so they go too, data kept or not.
+        if (source === 'shopify')
+            await opts.db.transaction((tx) => clearState(tx));
         // Logged as a run, so freshness stops counting this source and the history shows when it left.
         const at = new Date().toISOString();
         await opts.db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status, rows_written, detail) VALUES ($1, $2, $3, $3, 'disconnected', 0, $4)`, [randomUUID(), source, at, opts.deleteData ? 'Disconnected. Its data was deleted.' : 'Disconnected. Its data was kept.']);
@@ -85,6 +90,7 @@ export async function disconnectNative(source, opts = {}) {
         throw new CliError('The database could not be opened, so no data was deleted.', 'lifecycle doctor, then lifecycle disconnect SOURCE --delete-data again', 'no_database');
     }
     const notes = [
+        source === 'shopify' && opts.db ? 'Its store key and the scrambled customer ids made with it were deleted.' : '',
         opts.deleteData ? `Deleted its data from ${dataDeleted.join(', ')}.` : `Its data is kept in ${NATIVE_TABLES[source].join(', ')}. Add --delete-data to remove it.`,
         stillInEnvironment.length ? `${stillInEnvironment.join(' and ')} ${stillInEnvironment.length === 1 ? 'is' : 'are'} still set in the environment, so sync will keep using ${stillInEnvironment.length === 1 ? 'it' : 'them'}. Unset ${stillInEnvironment.length === 1 ? 'it' : 'them'} too.` : '',
     ].filter(Boolean);

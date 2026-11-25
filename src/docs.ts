@@ -159,7 +159,7 @@ If the tool is not set up yet, follow \`lifecycle docs quickstart\` instead.
 8. For a named job, such as a flow audit, use a kit: \`lifecycle kits search "flow audit"\`, then \`lifecycle kits add NAME\`, then follow its AGENT.md through the Verify checklist.
 
 Rules:
-- The database holds totals only. It has no customer names, emails, phones or addresses.
+- The database holds totals only. It has no customer names, emails, phones or addresses. shopify_order_state and shopify_customer_first hold a scrambled id per Shopify customer and order (a keyed hash, the key kept outside the database) so a sync can fetch only changed orders. They are sync machinery: queries that would return those ids are refused, and you never need them for a number.
 - Revenue in fact_flow_daily is Klaviyo attributed revenue. Say so, and never present it as proof of causation.
 - fact_crm_* tables hold HubSpot counts and amounts by day, pipeline, stage and original source. There are no contact, company or deal records.
 - Purchases and purchase value in fact_meta_ads_daily are what Meta attributes to its own ads. They are a claim, not orders. Never add them to Shopify revenue or to email revenue. For a number with no attribution in it, use the marketing_efficiency_ratio metric.
@@ -440,7 +440,7 @@ Tool runs:
   the data on this machine. Do not retry in a loop.
 
 Rules:
-- Cloud holds totals only, like the local database. No customer names, emails or addresses.
+- Cloud holds totals only, like the local database, plus the scrambled per-store Shopify ids an incremental sync needs (a keyed hash; the key is kept apart in Cloud's encrypted secrets). No customer names, emails or addresses.
 - Never put the token in a prompt, a URL, a file or a commit.
 `,
   tools: `# Tools

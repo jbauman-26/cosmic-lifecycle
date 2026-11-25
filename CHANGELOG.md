@@ -2,6 +2,41 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.15.0 (2026-11-25)
+
+Incremental Shopify sync. After the first full pull, a daily sync asks Shopify only for orders changed since the last one and rebuilds only the days and cohorts they touch. To do that and still count new versus returning customers right, the database now keeps one scrambled id per Shopify customer, made with a key that belongs to that store and is held outside the database. Built from Shopify's documentation and tested against hand-made and synthetic orders; no real store was connected.
+
+### Added
+
+- **Only what changed.** `lifecycle sync` reads `orders(query: "updated_at:>='CURSOR minus 3 days'", sortKey: UPDATED_AT)`, upserts those orders and rebuilds only the days they were on before and after, the days of their customers' first orders before and after, and those customers' cohort months. Everything in one transaction, so a failure changes nothing. The cursor moves to the latest `updatedAt` seen and never back. The 3-day overlap (`shopify.overlap_days`) picks up late edits, refunds and Shopify's search lag.
+- **A full pull every week as a check.** The first sync, a sync after `shopify.full_check_days` (7), and `lifecycle sync --only shopify --full` read the whole history as before (paged, or the bulk export for large stores). The full pull replaces the stored state and says how many days it corrected, which catches what a search by `updated_at` cannot see, such as an order deleted in Shopify. While a large store's weekly export is still building, the changed orders keep the totals fresh and the sync counts as fresh.
+- **Scrambled customer ids.** `shopify_order_state` (per order: a keyed hash of the order id, a keyed hash of the customer id or none for a guest, processed day, net, discounts, cancelled, updated_at) and `shopify_customer_first` (per customer: the keyed hash, the first order's day and month). The hash is HMAC-SHA256 of Shopify's id with a random 32-byte key per store. The key comes from `LIFECYCLE_SHOPIFY_CUSTOMER_KEY` (the Cosmic AI app and Cosmic Cloud pass it), or this workspace's keychain entry `shopify-customer-key`, made on the first sync. It is never written to the database or a log. `meta_shopify_sync` keeps the cursor, the last full pull, and a check value (an HMAC of a fixed text, not the key) so a sync with a different key starts over with a full pull.
+- A sync result for Shopify carries `mode`: `full` or `incremental`.
+- `lifecycle deploy` passes `LIFECYCLE_SHOPIFY_CUSTOMER_KEY` to the daily GitHub Actions sync, so it keeps the same ids as this machine.
+- Settings `shopify.full_check_days` (7) and `shopify.overlap_days` (3).
+
+### Changed
+
+- The schema rule in `src/schema.ts` now reads: customers are counts everywhere, except one scrambled id per customer in the two Shopify state tables. The privacy test in `test/sync.test.ts` asserts exactly that: the hash is present, the raw Shopify id is absent, the key is absent, and no other table has a per-customer column.
+- A query that would return a scrambled id (`order_key`, `customer_key`, `first_order_key`) is refused with `personal_column`. `count(*)` still works.
+- `lifecycle disconnect shopify` also deletes the store key and both state tables, even when the totals are kept.
+- The Shopify order queries also ask for `id` and `updatedAt`. Both are hashed or used as a time; no personal field is asked for.
+
+### Kept as before
+
+- Without a key (no keychain and nothing passed in), Shopify syncs in full every time as in 0.14.1, and any stored state is cleared so it can never go stale.
+- A store whose oldest order Shopify returns is within 60 days (no `read_all_orders`, or a new store) keeps syncing in full, because Shopify's count moves as orders age out of the window.
+
+### For the app and Cloud
+
+- Pass the store's key as `LIFECYCLE_SHOPIFY_CUSTOMER_KEY`: 64 hex characters, one per store, kept in the app's keychain or Cloud's encrypted secrets, and deleted with the store. A malformed key fails with `bad_customer_key`. New secret name `shopify-customer-key`. New tables `shopify_order_state`, `shopify_customer_first`, `meta_shopify_sync`. New code `state_mismatch` (internal; the plan runs a full pull first).
+
+### What is proven and what is not
+
+- Typecheck and the full suite pass. On a hand-made fixture, editing an old order and syncing changes only that order's day (and rebuilds the day of its customer's first order, unchanged), and every daily and cohort row equals a full pull of the edited history. Cancelling a customer's first order moves them to a new cohort and makes their next order new. On 5,000 random orders with 300 random edits (amounts, cancels, customer changes, moved days), the incremental totals equal a full pull row for row. Two mutations of the rebuild rules each fail the tests.
+- Not run against a real Shopify store. The `updated_at:>=` search with `sortKey: UPDATED_AT` is from Shopify's search syntax docs and unverified on a live store. A deleted order is caught only by the weekly full pull.
+- Timed on this Mac with PGlite: a 300,000-order full pull with state in 4.5 s, and 12,000 changed orders spread over three years in 1.1 s (992 days rebuilt). Not timed at 3 million orders or on Supabase.
+
 ## 0.14.1 (2026-11-25)
 
 Shopify sync for large stores, and Google Ads as a built-in read-only source. Both were built from the vendors' documentation and tested against stand-ins; no real Shopify store and no live or test Google Ads account was connected. Everything 0.14.0 does is unchanged.

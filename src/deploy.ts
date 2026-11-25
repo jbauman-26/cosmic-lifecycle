@@ -50,6 +50,7 @@ jobs:
       LIFECYCLE_DATABASE_URL: \${{ secrets.LIFECYCLE_DATABASE_URL }}
       LIFECYCLE_KLAVIYO_READ_KEY: \${{ secrets.LIFECYCLE_KLAVIYO_READ_KEY }}
       LIFECYCLE_SHOPIFY_CLIENT_SECRET: \${{ secrets.LIFECYCLE_SHOPIFY_CLIENT_SECRET }}
+      LIFECYCLE_SHOPIFY_CUSTOMER_KEY: \${{ secrets.LIFECYCLE_SHOPIFY_CUSTOMER_KEY }}
 ${ga4}${stripe}${warehouseEnvs.map((e) => `      ${e}: \${{ secrets.${e} }}\n`).join('')}      LIFECYCLE_HOME: .lifecycle
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +80,7 @@ export function deployPlan(config: Config, repo: string) {
     repo,
     creates: [`Private GitHub repo ${repo}`, 'A daily sync at 09:17 UTC in GitHub Actions'],
     // A store needs Klaviyo and Shopify keys, as in 0.13. Any other workspace only the ones it connected.
-    secrets: ['LIFECYCLE_DATABASE_URL', ...(readWorkspace().type === 'shopify' || config.klaviyo ? ['LIFECYCLE_KLAVIYO_READ_KEY'] : []), ...(readWorkspace().type === 'shopify' || config.shopify ? ['LIFECYCLE_SHOPIFY_CLIENT_SECRET'] : []), ...((config as { hubspot?: unknown }).hubspot ? ['LIFECYCLE_HUBSPOT_TOKEN'] : []), ...(config.ga4 ? ['LIFECYCLE_GA4_CLIENT_SECRET', 'LIFECYCLE_GA4_REFRESH_TOKEN'] : []), ...(config.stripe ? ['LIFECYCLE_STRIPE_READ_KEY'] : []), ...(config.meta ? ['LIFECYCLE_META_ADS_TOKEN'] : []), ...(config['google-ads'] ? ['LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET', 'LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN'] : []), ...warehouseSecrets(config).map((w) => w.env)],
+    secrets: ['LIFECYCLE_DATABASE_URL', ...(readWorkspace().type === 'shopify' || config.klaviyo ? ['LIFECYCLE_KLAVIYO_READ_KEY'] : []), ...(readWorkspace().type === 'shopify' || config.shopify ? ['LIFECYCLE_SHOPIFY_CLIENT_SECRET', 'LIFECYCLE_SHOPIFY_CUSTOMER_KEY'] : []), ...((config as { hubspot?: unknown }).hubspot ? ['LIFECYCLE_HUBSPOT_TOKEN'] : []), ...(config.ga4 ? ['LIFECYCLE_GA4_CLIENT_SECRET', 'LIFECYCLE_GA4_REFRESH_TOKEN'] : []), ...(config.stripe ? ['LIFECYCLE_STRIPE_READ_KEY'] : []), ...(config.meta ? ['LIFECYCLE_META_ADS_TOKEN'] : []), ...(config['google-ads'] ? ['LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET', 'LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN'] : []), ...warehouseSecrets(config).map((w) => w.env)],
     expectedCost: 'Likely $0 on free plans for a small brand: about 150 of 2,000 Actions minutes a month, and summary tables inside Neon Free. Check both plans for your size.',
   }
 }
