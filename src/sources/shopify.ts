@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto'
 import { fetchJson, HttpError } from '../http.js'
 import { CliError } from '../errors.js'
 
-const VERSION = '2026-10'
+export const SHOPIFY_VERSION = '2026-10'
+const VERSION = SHOPIFY_VERSION
 
 export type RawOrder = {
   processedAt: string
@@ -43,9 +44,9 @@ const ORDERS_QUERY = `query($c: String) {
   }
 }`
 
-const SCOPE_NEXT = 'In the Shopify admin open Settings, then Apps and sales channels, then Develop apps, then your app, then Configuration, and add the read_orders scope. Install the app again, then lifecycle connect shopify.'
+const SCOPE_NEXT = 'In the Shopify admin open Settings, then Apps and sales channels, then Develop apps, then your app, then Configuration, and add the read_orders scope, plus read_all_orders for orders older than 60 days. Install the app again, then lifecycle connect shopify.'
 
-function scopeDenied(text: string) {
+export function scopeDenied(text: string) {
   const scope = /`?(read_[a-z_]+)`?/.exec(text)?.[1]
   return new CliError(`Shopify did not let this app read orders${scope ? `. It needs the ${scope} scope` : ', because the app is missing a scope'}.`, SCOPE_NEXT, 'scope_denied')
 }
@@ -69,10 +70,27 @@ export function shopifyQueryError(errors: unknown): CliError {
   return new CliError('Shopify rejected the orders query.', 'lifecycle doctor', 'shopify_query')
 }
 
-export async function fetchOrders(store: string, token: string): Promise<RawOrder[]> {
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const throttled = (errors: unknown) => Array.isArray(errors) && errors.some((e: any) => e?.extensions?.code === 'THROTTLED')
+
+// Shopify reports a spent rate limit as THROTTLED inside a 200 reply, so fetchJson's retry never sees it.
+// Wait for the bucket to refill, using the cost Shopify sends back, and try the same page again a few times.
+export function throttleWait(body: any, attempt: number) {
+  const t = body?.extensions?.cost?.throttleStatus
+  const need = Number(body?.extensions?.cost?.requestedQueryCost)
+  if (t && Number(t.restoreRate) > 0 && Number.isFinite(need)) {
+    return Math.min(60000, Math.max(1000, Math.ceil(((need - Number(t.currentlyAvailable)) / Number(t.restoreRate)) * 1000) + 250))
+  }
+  return Math.min(60000, 2 ** attempt * 1000)
+}
+
+export async function fetchOrders(store: string, token: string, opts: { wait?: (ms: number) => Promise<void>; retries?: number } = {}): Promise<RawOrder[]> {
+  const wait = opts.wait ?? sleep
+  const retries = opts.retries ?? 5
   const out: RawOrder[] = []
   let cursor: string | null = null
-  do {
+  let attempt = 0
+  for (;;) {
     const body: any = await fetchJson(
       `https://${store}/admin/api/${VERSION}/graphql.json`,
       {
@@ -86,22 +104,30 @@ export async function fetchOrders(store: string, token: string): Promise<RawOrde
       if (e instanceof HttpError && e.status === 403) throw scopeDenied(e.body)
       throw e
     })
+    if (body.errors && throttled(body.errors) && attempt < retries) {
+      await wait(throttleWait(body, attempt++))
+      continue
+    }
     if (body.errors) throw shopifyQueryError(body.errors)
-    out.push(...body.data.orders.nodes)
-    cursor = body.data.orders.pageInfo.hasNextPage ? body.data.orders.pageInfo.endCursor : null
-  } while (cursor)
-  return out
+    attempt = 0
+    for (const n of body.data.orders.nodes) out.push(n)
+    if (!body.data.orders.pageInfo.hasNextPage) return out
+    cursor = body.data.orders.pageInfo.endCursor
+  }
 }
 
 // The store's own count, used to prove the pull was complete. Returns null when
 // Shopify only gives a lower bound, because that cannot prove anything.
-export async function fetchOrderCount(store: string, token: string): Promise<number | null> {
+// With createdBefore, only orders created up to that moment, to compare with an export started then.
+export async function fetchOrderCount(store: string, token: string, createdBefore?: string): Promise<number | null> {
   const body = await fetchJson(
     `https://${store}/admin/api/${VERSION}/graphql.json`,
     {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-shopify-access-token': token },
-      body: JSON.stringify({ query: '{ ordersCount(limit: null) { count precision } }' }),
+      body: JSON.stringify(createdBefore
+        ? { query: 'query($q: String) { ordersCount(query: $q, limit: null) { count precision } }', variables: { q: `created_at:<='${createdBefore}'` } }
+        : { query: '{ ordersCount(limit: null) { count precision } }' }),
     },
     'Shopify order count',
   )
