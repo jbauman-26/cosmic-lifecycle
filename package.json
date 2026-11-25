@@ -38,6 +38,7 @@
     "registry-snapshot",
     "llms.txt",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "license": "MIT",
