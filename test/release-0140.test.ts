@@ -586,11 +586,12 @@ describe('doctor and deploy outside a store', () => {
 
 // 0.15.0: was the 0.14.1 check; a version bump has to change it.
 describe('0.15.0', () => {
-  it('is version 0.15.0 everywhere a version is written, and its changelog has no dash a person would not type', async () => {
+  it('is version 0.15.1 everywhere a version is written, and its changelog has no dash a person would not type', async () => {
     const { VERSION } = await import('../src/version.js')
-    expect(VERSION).toBe('0.15.0')
-    expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe('0.15.0')
+    expect(VERSION).toBe('0.15.1')
+    expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe('0.15.1')
     const log = readFileSync('CHANGELOG.md', 'utf8')
+    expect(log).toMatch(/^## 0\.15\.1 \(2026-11-25\)/m)
     expect(log).toMatch(/^## 0\.15\.0 \(2026-11-25\)/m)
     expect(log).toMatch(/^## 0\.14\.1 \(2026-11-25\)/m)
     expect(log).not.toMatch(/^## Unreleased/m)
