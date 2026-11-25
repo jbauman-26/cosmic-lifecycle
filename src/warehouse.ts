@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, isAbsolute, join } from 'node:path'
 import { z } from 'zod'
@@ -9,6 +9,10 @@ import { getSecret, getSourceSecret, setSourceSecret, deleteSourceSecret, source
 import { CliError } from './errors.js'
 import { WAREHOUSE_CATALOG } from './warehouse-catalog.js'
 import { assertReadOnlySql } from './query.js'
+import type { Db } from './db.js'
+import { PERSONAL_RULES, classifyColumn, EMAIL_PATTERN, PHONE_PATTERN, REMOVED, type FieldClass, type FreeTextMode } from './personal.js'
+import { assertNoPersonalColumns, markCatalog } from './sql-guard.js'
+import { datasetFor, isWarehouseSchema, sourceOfSchema } from './warehouse-names.js'
 
 // The pipeline engine is dlt (Apache 2.0), pinned so every machine loads data the same way.
 export const DLT_VERSION = '1.32.0'
@@ -105,9 +109,15 @@ export function searchCatalog(opts: { category?: string; query?: string; readine
   )
 }
 
-export const datasetFor = (slug: string) => `src_${slug.replace(/-/g, '_')}`
+export { datasetFor }
 export const warehouseDuckPath = () => join(appHome(), 'warehouse.duckdb')
 const pipelinesDir = () => join(appHome(), 'dlt')
+
+// warehouse.free_text: keep (the default) loads free text with email addresses and phone numbers
+// replaced, drop leaves free text out. A value this version does not know reads as keep.
+export function freeTextMode(config: Config = readConfig()): FreeTextMode {
+  return config.warehouse?.free_text === 'drop' ? 'drop' : 'keep'
+}
 
 function runnerPath() {
   // dist/warehouse.js and src/warehouse.ts both sit one level below the package root.
@@ -171,7 +181,8 @@ export function runRunner(job: Record<string, unknown>, env: Record<string, stri
   }
   const args = ['run', '--quiet', '--no-project', '--python', PYTHON_VERSION, '--with', `dlt[postgres,duckdb]==${DLT_VERSION}`, 'python', runnerPath()]
   return new Promise((resolve, reject) => {
-    const child = spawn(uv, args, { env: { ...process.env, ...uvEnv(), ...env, RUNTIME__LOG_LEVEL: 'WARNING' }, stdio: ['pipe', 'pipe', opts.verbose ? 'inherit' : 'pipe'] })
+    // LOAD__DELETE_COMPLETED_JOBS: dlt otherwise keeps a copy of every loaded row in its working folder.
+    const child = spawn(uv, args, { env: { ...process.env, ...uvEnv(), ...env, RUNTIME__LOG_LEVEL: 'WARNING', LOAD__DELETE_COMPLETED_JOBS: 'true' }, stdio: ['pipe', 'pipe', opts.verbose ? 'inherit' : 'pipe'] })
     let out = ''
     let err = ''
     child.stdout?.on('data', (d) => (out += d))
@@ -243,7 +254,7 @@ export async function connectSource(slug: string, opts: { secret?: string[]; set
   let check: Record<string, unknown> | null = null
   if (!opts.skipCheck) {
     const { dest, env: destEnv } = destination(config)
-    const r = await runRunner({ action: 'check', source: { slug, config: source.config, strip_fields: source.stripFields ?? [] }, params, destination: dest, dataset: datasetFor(slug), pipelines_dir: pipelinesDir() }, { ...env, ...destEnv })
+    const r = await runRunner({ action: 'check', source: { slug, config: source.config, strip_fields: source.stripFields ?? [] }, params, rules: PERSONAL_RULES, free_text: freeTextMode(config), destination: dest, dataset: datasetFor(slug), pipelines_dir: pipelinesDir() }, { ...env, ...destEnv })
     if (!r.ok) throw new CliError(`${source.name} check failed: ${explain(r.error)}`, `lifecycle warehouse show ${slug}`, 'check_failed')
     check = r
   }
@@ -260,7 +271,7 @@ export async function connectSource(slug: string, opts: { secret?: string[]; set
   }
   const sources = { ...(config.warehouse?.sources ?? {}) }
   sources[slug] = { params, personalData: opts.keepPersonalData ? 'keep' : 'strip', connectedAt: new Date().toISOString() }
-  writeConfig({ ...config, warehouse: { sources } })
+  writeConfig({ ...config, warehouse: { ...config.warehouse, sources } })
   return {
     connected: slug,
     personalData: opts.keepPersonalData ? 'kept (you chose --keep-personal-data)' : 'removed before anything is written',
@@ -277,7 +288,7 @@ export function disconnectSource(slug: string) {
   const sources = { ...(config.warehouse?.sources ?? {}) }
   if (!sources[slug]) throw new CliError(`${slug} is not connected.`, 'lifecycle warehouse list', 'bad_value')
   delete sources[slug]
-  writeConfig({ ...config, warehouse: { sources } })
+  writeConfig({ ...config, warehouse: { ...config.warehouse, sources } })
   const removed = (source?.credentials ?? []).map((c) => deleteSourceSecret(slug, c.name))
   return { disconnected: slug, keysRemoved: removed.filter(Boolean).length, note: `Data already loaded stays in ${datasetFor(slug)}. Drop it yourself if you no longer want it.` }
 }
@@ -310,7 +321,7 @@ export async function syncSources(slugs: string[] | undefined, opts: { verbose?:
       const source = findSource(c.slug)
       if (!source.config) throw new Error(`${source.name} has no connector in this version.`)
       const r = await runRunner(
-        { action: 'sync', source: { slug: c.slug, config: source.config, strip_fields: source.stripFields ?? [] }, params: c.params, personal_data: c.personalData, destination: dest, dataset: datasetFor(c.slug), pipelines_dir: pipelinesDir(), verbose: opts.verbose },
+        { action: 'sync', source: { slug: c.slug, config: source.config, strip_fields: source.stripFields ?? [] }, params: c.params, personal_data: c.personalData, rules: PERSONAL_RULES, free_text: freeTextMode(config), destination: dest, dataset: datasetFor(c.slug), pipelines_dir: pipelinesDir(), verbose: opts.verbose },
         { ...secretEnv(source), ...destEnv },
         opts,
       )
@@ -329,16 +340,181 @@ export async function syncSources(slugs: string[] | undefined, opts: { verbose?:
   return results
 }
 
+export type SchemaColumn = { schema: string; table: string; column: string; type: string; nullable?: boolean; personal: boolean; freeText: boolean }
+
+/** Adds what the rule list says about each column: personal, free text, or neither. */
+export function markColumns<T extends { schema: string; table: string; column: string; type: string }>(cols: T[]): (T & { personal: boolean; freeText: boolean; kind: FieldClass })[] {
+  return cols.map((c) => {
+    const kind = classifyColumn({ source: sourceOfSchema(c.schema), table: c.table, column: c.column, type: c.type })
+    return { ...c, kind, personal: kind === 'personal', freeText: kind === 'free_text' }
+  })
+}
+
+type RawColumn = { schema: string; table: string; column: string; type: string; nullable?: boolean }
+
 // Local warehouses are DuckDB files, read through the runner. Postgres warehouses are read by the caller.
-export async function duckSchema(slug?: string) {
-  const r = await runRunner({ action: 'schema', destination: { kind: 'duckdb', path: warehouseDuckPath() }, dataset: slug ? datasetFor(slug) : undefined }, {})
+async function duckColumns(slug: string | undefined, everything: boolean): Promise<RawColumn[]> {
+  const r = await runRunner({ action: 'schema', destination: { kind: 'duckdb', path: warehouseDuckPath() }, dataset: slug ? datasetFor(slug) : undefined, everything }, {})
   if (!r.ok) throw new CliError(r.error, 'lifecycle warehouse sync', 'query_failed')
-  return r.columns as { schema: string; table: string; column: string; type: string }[]
+  return r.columns as RawColumn[]
+}
+
+export async function duckSchema(slug?: string): Promise<SchemaColumn[]> {
+  return markColumns(await duckColumns(slug, false)).map(({ kind: _kind, ...c }) => c)
 }
 
 export async function duckQuery(sql: string, limit = 1000) {
   const body = assertReadOnlySql(sql)
+  // The list of columns comes first. If it cannot be read, the query does not run.
+  if (existsSync(warehouseDuckPath())) assertNoPersonalColumns(body, markCatalog(await duckColumns(undefined, true), sourceOfSchema))
   const r = await runRunner({ action: 'query', sql: body, limit, destination: { kind: 'duckdb', path: warehouseDuckPath() } }, {})
   if (!r.ok) throw new CliError(r.error, 'lifecycle warehouse schema', 'query_failed')
   return { columns: r.columns as string[], rows: r.rows as Record<string, unknown>[] }
+}
+
+// ---- warehouse scrub: empty the personal columns an older version stored ----
+
+export type ScrubAction = 'null' | 'replace' | 'rewrite'
+export type ScrubStep = { schema: string; table: string; column: string; action: ScrubAction | 'blocked'; why: 'personal' | 'free_text'; rows: number; status: 'planned' | 'done' | 'failed' | 'blocked' }
+export type ScrubReport = {
+  applied: boolean
+  database: 'local' | 'postgres'
+  freeText: FreeTextMode
+  tables: { table: string; columns: { column: string; why: 'personal' | 'free_text'; action: ScrubStep['action']; rows: number; status: ScrubStep['status'] }[]; rows: number }[]
+  totals: { tables: number; columns: number; values: number; blocked: number; failed: number }
+  // Files of finished loads in the loader's working folder. Older versions kept a copy of every loaded row there.
+  loaderFiles: { files: number; removed: boolean }
+  // Local only: true when the database file was rebuilt, so the old values are gone from its bytes too.
+  rebuilt: boolean | null
+  note: string
+  next: string
+}
+
+const TEXT = /char|text|string/i
+
+/**
+ * What a scrub does to each column of the warehouse schemas (src_*, and dlt's _staging copies):
+ *   personal column                         null it. One that may not be empty gets a placeholder unique to the row.
+ *   free text column, warehouse.free_text drop   null it
+ *   free text column, warehouse.free_text keep   replace email addresses and phone numbers inside it
+ */
+export function scrubPlan(cols: RawColumn[], mode: FreeTextMode): Omit<ScrubStep, 'rows' | 'status'>[] {
+  const hasRowId = new Set(cols.filter((c) => c.column === '_dlt_id').map((c) => `${c.schema}.${c.table}`))
+  const plan: Omit<ScrubStep, 'rows' | 'status'>[] = []
+  for (const c of markColumns(cols.filter((x) => isWarehouseSchema(x.schema) && !x.table.startsWith('_dlt') && !x.column.startsWith('_dlt')))) {
+    if (c.kind === 'keep') continue
+    const base = { schema: c.schema, table: c.table, column: c.column, why: c.kind }
+    const text = TEXT.test(c.type)
+    if (c.kind === 'free_text' && mode === 'keep') {
+      if (text) plan.push({ ...base, action: 'rewrite' })
+      continue
+    }
+    if (c.nullable !== false) plan.push({ ...base, action: 'null' })
+    else if (text && hasRowId.has(`${c.schema}.${c.table}`)) plan.push({ ...base, action: 'replace' })
+    else plan.push({ ...base, action: 'blocked' })
+  }
+  return plan
+}
+
+const LOADER_DATA_DIRS = [['load', 'loaded'], ['load', 'normalized'], ['load', 'new'], ['normalize', 'extracted']]
+
+/**
+ * The loader's working folder keeps load packages. Before 0.13.2 each finished one held a copy of every
+ * row it loaded, so a name stored then is still there. They are history only: removing them changes no
+ * table. Returns how many files hold row data, and removes the packages when `apply` is set.
+ */
+export function loaderLeftovers(apply: boolean, dir = pipelinesDir()): { files: number; removed: boolean } {
+  let files = 0
+  const count = (path: string) => {
+    for (const name of readdirSync(path)) {
+      const p = join(path, name)
+      if (statSync(p).isDirectory()) count(p)
+      else files++
+    }
+  }
+  if (!existsSync(dir)) return { files: 0, removed: false }
+  const packages: string[] = []
+  for (const pipeline of readdirSync(dir)) {
+    for (const parts of LOADER_DATA_DIRS) {
+      const base = join(dir, pipeline, ...parts)
+      if (!existsSync(base) || !statSync(base).isDirectory()) continue
+      for (const name of readdirSync(base)) {
+        const p = join(base, name)
+        if (statSync(p).isDirectory()) packages.push(p)
+      }
+    }
+  }
+  for (const p of packages) count(p)
+  if (apply) for (const p of packages) rmSync(p, { recursive: true, force: true })
+  return { files, removed: apply && packages.length > 0 }
+}
+
+function scrubReport(steps: ScrubStep[], applied: boolean, database: 'local' | 'postgres', mode: FreeTextMode, extra: { loaderFiles: { files: number; removed: boolean }; rebuilt: boolean | null }): ScrubReport {
+  const byTable = new Map<string, ScrubStep[]>()
+  for (const s of steps) byTable.set(`${s.schema}.${s.table}`, [...(byTable.get(`${s.schema}.${s.table}`) ?? []), s])
+  const tables = [...byTable].map(([table, list]) => ({ table, columns: list.map((s) => ({ column: s.column, why: s.why, action: s.action, rows: s.rows, status: s.status })), rows: list.reduce((n, s) => n + s.rows, 0) }))
+  const blocked = steps.filter((s) => s.status === 'blocked').length
+  const failed = steps.filter((s) => s.status === 'failed').length
+  const values = steps.reduce((n, s) => n + s.rows, 0)
+  const files = extra.loaderFiles.files
+  return {
+    applied,
+    database,
+    freeText: mode,
+    tables,
+    totals: { tables: tables.length, columns: steps.length, values, blocked, failed },
+    loaderFiles: extra.loaderFiles,
+    rebuilt: extra.rebuilt,
+    note: [
+      applied ? `Emptied or rewrote ${values} stored values.` : `Dry run: nothing was changed. ${values} stored values would be emptied or rewritten.`,
+      files ? (applied ? `Removed ${files} file(s) of finished loads from the loader's folder, where copies of loaded rows were kept.` : `${files} file(s) of finished loads are in the loader's folder, where copies of loaded rows were kept. They would be removed.`) : '',
+      blocked ? `${blocked} column(s) may not be empty and have no row id to stand in, so they were left alone.` : '',
+      applied && extra.rebuilt === true ? 'The database file was rebuilt, so the old values are gone from the file as well.' : '',
+      applied && extra.rebuilt === false ? 'Queries no longer return the old values, but the database file could not be rebuilt and can still hold old bytes.' : '',
+      applied && database === 'postgres' && values ? 'Queries no longer return the old values. Postgres keeps old row versions until it vacuums the table.' : '',
+    ].filter(Boolean).join(' '),
+    next: applied ? (blocked || failed ? 'For a column that could not be emptied: lifecycle warehouse disconnect SLUG, then drop its schema.' : 'lifecycle warehouse schema --format json') : 'lifecycle warehouse scrub --confirm',
+  }
+}
+
+const q = (name: string) => `"${name.replace(/"/g, '""')}"`
+
+/** Nulls stored personal columns. Counts rows per column, never reads a value into the report. */
+export async function scrubWarehouse(opts: { confirm?: boolean; db?: Db | null } = {}): Promise<ScrubReport> {
+  const config = readConfig()
+  const mode = freeTextMode(config)
+  const apply = Boolean(opts.confirm)
+  if (config.database.kind === 'local') {
+    if (!existsSync(warehouseDuckPath())) return scrubReport([], apply, 'local', mode, { loaderFiles: loaderLeftovers(apply), rebuilt: null })
+    const plan = scrubPlan(await duckColumns(undefined, true), mode)
+    const todo = plan.filter((p) => p.action !== 'blocked')
+    const r = await runRunner({ action: 'scrub', plan: todo, apply, destination: { kind: 'duckdb', path: warehouseDuckPath() } }, {})
+    if (!r.ok) throw new CliError(r.error, 'lifecycle warehouse schema', 'scrub_failed')
+    const done = r.steps as ScrubStep[]
+    return scrubReport([...done, ...plan.filter((p) => p.action === 'blocked').map((p) => ({ ...p, rows: 0, status: 'blocked' as const }))], apply, 'local', mode, { loaderFiles: loaderLeftovers(apply), rebuilt: typeof r.rebuilt === 'boolean' ? r.rebuilt : null })
+  }
+  const db = opts.db
+  if (!db) throw new CliError('The database could not be opened.', 'lifecycle doctor', 'no_database')
+  const rows = await db.query(`SELECT table_schema, table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema LIKE 'src\\_%' ORDER BY 1, 2, ordinal_position`)
+  const plan = scrubPlan(rows.map((r) => ({ schema: String(r.table_schema), table: String(r.table_name), column: String(r.column_name), type: String(r.data_type), nullable: String(r.is_nullable) !== 'NO' })), mode)
+  const steps: ScrubStep[] = []
+  const rewrite = (col: string) => `regexp_replace(regexp_replace(${col}::text, '${EMAIL_PATTERN}', '${REMOVED}', 'g'), '${PHONE_PATTERN}', '${REMOVED}', 'g')`
+  for (const p of plan) {
+    if (p.action === 'blocked') {
+      steps.push({ ...p, rows: 0, status: 'blocked' })
+      continue
+    }
+    const target = `${q(p.schema)}.${q(p.table)}`
+    const col = q(p.column)
+    const cond = p.action === 'rewrite' ? `${col} IS NOT NULL AND ${rewrite(col)} IS DISTINCT FROM ${col}::text` : p.action === 'replace' ? `${col} IS NOT NULL AND ${col}::text NOT LIKE 'removed-%'` : `${col} IS NOT NULL`
+    const set = p.action === 'rewrite' ? rewrite(col) : p.action === 'replace' ? `'removed-' || "_dlt_id"` : 'NULL'
+    try {
+      const n = Number((await db.query(`SELECT count(*) AS n FROM ${target} WHERE ${cond}`))[0]?.n ?? 0)
+      if (apply && n) await db.query(`UPDATE ${target} SET ${col} = ${set} WHERE ${cond}`)
+      steps.push({ ...p, rows: n, status: apply ? 'done' : 'planned' })
+    } catch {
+      steps.push({ ...p, rows: 0, status: 'failed' })
+    }
+  }
+  return scrubReport(steps, apply, 'postgres', mode, { loaderFiles: loaderLeftovers(apply), rebuilt: null })
 }

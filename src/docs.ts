@@ -227,7 +227,7 @@ lifecycle config list|get|set|unset KEY [VALUE]
 lifecycle secrets list|set NAME --from-env VAR|delete NAME
 lifecycle mcp
 lifecycle doctor
-lifecycle warehouse show|connect|sync|schema|query|list|disconnect|add-api
+lifecycle warehouse show|connect|sync|schema|query|scrub [--confirm]|list|disconnect|add-api
 lifecycle docs quickstart|setup|agents|kits|commands|tools|cloud|warehouse|troubleshooting
 
 Add --format json to any command.`,
@@ -398,14 +398,58 @@ Readiness, said plainly:
            has no connector code for either yet.
 
 Personal data:
-  Removed before anything is written: any field named for an email, phone,
-  address, birthday, IP, or a person's name (customer_name, first_name ...),
-  and email addresses inside text. A plain "name" field is kept, because it
-  is usually a product or campaign, unless it sits inside a person's object
-  (reviewer.name, customer.name, sender.name), where name, nickname, username and
-  street lines are removed too. City is kept. A spec can list more keys under "stripFields".
-  To keep everything:
+  Customer names, emails, phone numbers and street addresses never enter the
+  warehouse. One rule list decides (src/personal.ts, docs/PERSONAL-DATA.md),
+  and the loader, schema, query and scrub all read it:
+    Removed everywhere   email, phone, mobile, fax, street address, postal code,
+                         birthday, IP address, coordinates, passwords, tokens,
+                         and a person's name: first, last, full, given, family,
+                         display, nick, user, reviewer, author, requester,
+                         assignee, customer, recipient, sender.
+    Removed in people    In a table of people (users, customers, contacts,
+                         members, subscribers ...) and inside a person object
+                         (customer, reviewer, ship_to ...): name, alias, handle,
+                         initials, avatar, photo, signature, social handles,
+                         street lines. Also text stored directly under author,
+                         reviewer, customer or recipient, and a review's own
+                         name field.
+    Kept                 ids, counts, amounts, timestamps, statuses, product
+                         and campaign names, country, state or province,
+                         region, city, time zone, locale, language, currency.
+    Per source           Fields a vendor names in its own way are listed per
+                         source and table in the same file.
+  A spec can list more keys under "stripFields".
+
+  Free text (ticket subjects, message bodies, review text, notes) can hold
+  anything a customer typed, including a name. It is a known risk:
+    lifecycle config set warehouse.free_text keep   the default. Free text is
+        loaded with email addresses and phone numbers replaced by [removed].
+        A name inside the text stays.
+    lifecycle config set warehouse.free_text drop   free text is not loaded.
+  Text the store wrote itself (campaigns, flows, segments) is not free text.
+
+  lifecycle schema and lifecycle warehouse schema mark every column:
+    { "column": "name", "type": "VARCHAR", "personal": true, "freeText": false }
+  lifecycle query and lifecycle warehouse query refuse SQL that could return a
+  column marked personal, with code personal_column. That covers an alias, a
+  star, a subquery, a CTE, a cast, and a whole row such as row_to_json(u).
+  While a table still has a personal column: name the columns you need, put
+  each table right after FROM or JOIN, and use count(*) as the only star.
+
+  A warehouse filled before 0.13.2 can hold a name the old rules missed:
+    lifecycle warehouse scrub             counts per table, changes nothing
+    lifecycle warehouse scrub --confirm   empties those columns
+  It never prints a stored value. With warehouse.free_text drop it empties
+  free text too; with keep it replaces emails and phone numbers inside it.
+  It also removes the copies of loaded rows that older versions left in the
+  loader's folder (~/.lifecycle/dlt), and rebuilds the local database file so
+  the old values are gone from its bytes, not only from queries. On Postgres
+  the old row versions stay until the database vacuums the table.
+
+  To load everything, by your own choice:
   lifecycle warehouse connect SLUG ... --keep-personal-data
+  Those columns are still marked personal, and query still refuses them. Read
+  them with your own database client.
 
 Any other tool with a REST API:
   Write a spec, then lifecycle warehouse add-api my-tool --spec spec.json
@@ -494,6 +538,8 @@ Error codes (the "code" field with --format json, and in lifecycle logs):
   busy             Another lifecycle command is writing to this store, or Cosmic Cloud is changing it. Wait, then run it again.
   missing_uv       Warehouse sources need uv. Update the app, install uv, or set LIFECYCLE_UV_PATH.
   loader_failed    A warehouse source's loader stopped before it finished. Run lifecycle warehouse sync SLUG --verbose to see why.
+  personal_column  The SQL could return a column marked personal. Run lifecycle schema --format json, leave those columns out, and name the rest one by one.
+  scrub_failed     lifecycle warehouse scrub could not read or change the warehouse. Nothing is half done per column: run it again.
   reserved_name    metrics save or delete named a built-in metric. Pick another name.
   bad_metric       A saved metric must be one SELECT that returns one row with one number.
   bad_schema       LIFECYCLE_DB_SCHEMA is not a plain schema name.

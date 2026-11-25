@@ -252,6 +252,7 @@ This is an early release. Here is what has and has not been tested.
 - Meta Ads on any real ad account. The connector was written from the Ads Insights API docs and is covered by unit tests against recorded answers only.
 - Stripe on a live account. Refunds, several currencies and tiered prices are covered by unit tests only.
 - `deploy` running for days on end.
+- The personal data rules on a real account. They were written from the vendors' API docs and are tested against made-up rows in each vendor's documented shape (`docs/PERSONAL-DATA.md`).
 - Any of the 25 warehouse connectors on a real account. All were written from the vendors' API docs. The five added in 0.12.0 (Brevo, Privy, Okendo, Loox, Fairing) load in dlt and strip personal data from recorded responses, and that is all. Okendo's paging was run against a local stand-in, never Okendo.
 - `LIFECYCLE_DB_SCHEMA` on Cosmic Cloud's hosted database, or behind a connection pooler.
 - A bundled uv set with `LIFECYCLE_UV_PATH` inside the packaged Mac app. Here it was run with a stand-in binary and with Homebrew's uv.

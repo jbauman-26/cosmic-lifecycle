@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { CliError } from './errors.js';
 import { MIGRATIONS } from './schema.js';
 import { settingValue } from './config.js';
+import { assertNoPersonalColumns, markCatalog } from './sql-guard.js';
+import { sourceOfSchema } from './warehouse-names.js';
 // The default. lifecycle config set query.row_cap changes it.
 export const ROW_CAP = 1000;
 export const rowCap = () => settingValue('query.row_cap');
@@ -18,8 +20,25 @@ export function assertReadOnlySql(sql) {
     }
     return body;
 }
+// Every column this database holds, marked by the personal data rule list (src/personal.ts).
+export async function pgCatalog(db) {
+    const rows = await db.query(`SELECT table_schema, table_name, column_name, data_type FROM information_schema.columns WHERE table_schema NOT IN ('pg_catalog', 'information_schema')`);
+    return markCatalog(rows.map((r) => ({ schema: String(r.table_schema), table: String(r.table_name), column: String(r.column_name), type: String(r.data_type) })), sourceOfSchema);
+}
+// Refuses SQL that could return a personal column. If the list of columns cannot be read, nothing runs.
+export async function assertNoPersonal(db, body) {
+    let catalog;
+    try {
+        catalog = await pgCatalog(db);
+    }
+    catch (e) {
+        throw new CliError(`The database's columns could not be listed, so the query was not run: ${e instanceof Error ? e.message : e}`, 'lifecycle doctor', 'query_failed');
+    }
+    assertNoPersonalColumns(body, catalog);
+}
 export async function runQuery(db, sql, cap = rowCap()) {
     const body = assertReadOnlySql(sql);
+    await assertNoPersonal(db, body);
     let rows;
     try {
         rows = await db.readOnly(`SELECT * FROM (${body}) AS q LIMIT ${cap + 1}`);

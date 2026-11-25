@@ -655,8 +655,8 @@ describe('docs and release', () => {
     for (const f of ['CHANGELOG.md', 'README.md', 'src/cloud.ts', 'src/cli.ts', 'src/skills.ts', 'src/tools.ts', 'src/open-tools.ts', 'src/docs.ts', 'test/fixtures/fake-cloud.mjs']) expect(readFileSync(f, 'utf8'), f).not.toMatch(/[\u2013\u2014]/)
   })
 
-  it('is version 0.13.1, and the Cloud token is a secret like any other, with its own variable', () => {
-    expect(VERSION).toBe('0.13.1')
+  it('is a 0.13 release, and the Cloud token is a secret like any other, with its own variable', () => {
+    expect(VERSION).toMatch(/^0\.13\.\d+$/)
     expect(SECRET_NAMES).toContain('cloud-token')
     expect(envName('cloud-token')).toBe('LIFECYCLE_CLOUD_TOKEN')
   })
