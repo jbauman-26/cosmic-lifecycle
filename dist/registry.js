@@ -22,12 +22,19 @@ export const KitManifest = z.object({
     title: z.string().min(1),
     summary: z.string().min(1),
     keywords: z.array(z.string()).default([]),
-    needs: z.array(z.enum(['klaviyo', 'shopify', 'ga4', 'stripe', 'meta'])),
+    needs: z.array(z.enum(['klaviyo', 'shopify', 'ga4', 'stripe', 'meta', 'hubspot'])),
+    // 0.14.0. Sources added after 0.13 (hubspot) go here, not in needs, so a CLI before 0.14.0 can
+    // still read every kit in the registry. Such a kit also sets requires_cli to 0.14.0.
+    extra_needs: z.array(z.enum(['hubspot'])).default([]),
+    // 0.14.0. The workspace types a kit fits. Left out, a kit is for Shopify stores, as every kit was.
+    types: z.array(z.enum(['shopify', 'ecommerce', 'saas', 'b2b', 'agency', 'creator'])).optional(),
     requires_cli: z.string().regex(/^\d+\.\d+\.\d+$/).optional(),
     writes: z.string().min(1),
     secrets: z.array(Secret).default([]),
     files: z.array(z.string()).default([]),
 });
+// What a kit is for: its types, or a Shopify store when it names none.
+export const kitTypes = (k) => k.types ?? ['shopify'];
 function readUserRegistryUri() {
     const p = join(appHome(), 'config.json');
     if (!existsSync(p))
@@ -121,8 +128,10 @@ export function readIndex(reg) {
     const raw = JSON.parse(readFileSync(join(reg.dir, 'index.json'), 'utf8'));
     return (raw.kits ?? []);
 }
-export function listKits(reg) {
-    return readIndex(reg).map(({ name, version, title, summary, needs, writes }) => ({ name, version, title, summary, needs, writes }));
+export function listKits(reg, type) {
+    return readIndex(reg)
+        .filter((k) => !type || kitTypes(k).includes(type))
+        .map(({ name, version, title, summary, needs, writes, types }) => ({ name, version, title, summary, needs, writes, types: kitTypes({ types }) }));
 }
 export function searchKits(reg, query) {
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -188,7 +197,7 @@ export function addKit(reg, name, opts = {}) {
         path: target,
         runbook: join(target, 'AGENT.md'),
         secrets: manifest.secrets.filter((s) => s.required).map((s) => s.name),
-        needs: manifest.needs,
+        needs: [...manifest.needs, ...manifest.extra_needs],
         writes: manifest.writes,
     };
 }
@@ -231,7 +240,8 @@ export function validateRegistry(dir, opts = {}) {
         }
         if (/[\u2013\u2014]/.test(agent + readFileSync(join(kitDir, 'kit.yaml'), 'utf8')))
             problems.push({ kit: name, problem: 'Contains an em or en dash.' });
-        built.push({ name: m.name, version: m.version, path: `kits/${name}`, title: m.title, summary: m.summary, keywords: m.keywords, needs: m.needs, writes: m.writes });
+        // types is written only when a kit names them, so an index of kits without types reads as in 0.13.
+        built.push({ name: m.name, version: m.version, path: `kits/${name}`, title: m.title, summary: m.summary, keywords: m.keywords, needs: [...m.needs, ...m.extra_needs], writes: m.writes, ...(m.types ? { types: m.types } : {}) });
     }
     if (opts.writeIndex) {
         writeFileSync(join(dir, 'index.json'), JSON.stringify({ version: 1, kits: built }, null, 2) + '\n');

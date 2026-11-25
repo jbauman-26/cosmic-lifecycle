@@ -184,7 +184,7 @@ describe('wiring', () => {
     expect(NATIVE_TABLES['google-ads']).toEqual(['fact_google_ads_campaign_daily', 'fact_google_ads_ad_group_daily'])
   })
   it('puts both Google Ads secrets in the daily workflow only when connected', () => {
-    const y = workflowYaml(false, false, [], false, false, true)
+    const y = workflowYaml(false, false, [], false, false, false, true)
     expect(y).toContain('LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET: ${{ secrets.LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET }}')
     expect(y).toContain('LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN }}')
     expect(workflowYaml(false)).not.toContain('GOOGLE_ADS')

@@ -1,0 +1,35 @@
+{
+  "slug": "pipedrive",
+  "name": "Pipedrive",
+  "docs": "https://developers.pipedrive.com/docs/api/v1",
+  "credentials": [
+    {
+      "name": "api_token",
+      "label": "Personal API token",
+      "help": "In Pipedrive open your profile menu, Personal preferences, API, and copy your personal API token. Pipedrive tokens cannot be made read-only and see what your user sees, so use a user with only the access you want loaded. This connector only sends GET requests."
+    }
+  ],
+  "params": [
+    { "name": "company_domain", "label": "Company domain (the part before .pipedrive.com)", "example": "acme" }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://{param:company_domain}.pipedrive.com/api/v1/",
+      "auth": { "type": "api_key", "name": "x-api-token", "api_key": "{secret:api_token}", "location": "header" },
+      "paginator": { "type": "offset", "limit": 500, "offset": 0, "offset_param": "start", "limit_param": "limit", "total_path": null, "has_more_path": "additional_data.pagination.more_items_in_collection" }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge",
+      "endpoint": { "data_selector": "data" }
+    },
+    "resources": [
+      { "name": "deals", "endpoint": { "path": "deals", "params": { "status": "all_not_deleted" } } },
+      { "name": "leads", "endpoint": { "path": "leads" } },
+      { "name": "pipelines", "endpoint": { "path": "pipelines", "paginator": { "type": "single_page" } } },
+      { "name": "stages", "endpoint": { "path": "stages", "paginator": { "type": "single_page" } } }
+    ]
+  },
+  "strip_fields": ["person_name", "org_name", "owner_name", "cc_email", "title", "first_char", "org_id", "organization_id", "label_ids", "visible_to"],
+  "notes": "Deals and leads keep their ids, stage, pipeline, value, currency, status, dates, origin and source channel. Person and organization names, deal and lead titles (which often hold a name) and the CC address are removed before loading; person_id keeps only its numeric value. Persons, organizations, notes and activities are not loaded. Pages of up to 500 by start and limit, stopping when Pipedrive says there are no more items. Full refresh merged on id."
+}

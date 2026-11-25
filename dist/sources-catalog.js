@@ -1,3 +1,4 @@
+import { noun, readWorkspace } from './workspace.js';
 export const CATALOG = [
     {
         slug: 'klaviyo',
@@ -54,6 +55,18 @@ export const CATALOG = [
         tested: 'Written from the Google Ads API docs (v26) and tested against recorded answers. Not yet run on a live or test account.',
     },
 ];
+// Built in from 0.14.0. Kept out of CATALOG, the list Shopify stores have always seen first,
+// and shown after it everywhere: sources catalog, sources list, the MCP catalog.
+export const HUBSPOT = {
+    slug: 'hubspot',
+    name: 'HubSpot',
+    syncs: 'Daily deals created, won and lost with amounts, open pipeline by stage, and new contacts by original source and lifecycle stage. Counts only: no contact, company or deal record, and no name, email or phone is ever requested.',
+    credential: 'Private app access token with crm.objects.deals.read and crm.objects.contacts.read. Nothing else.',
+    setupMinutes: 5,
+    connect: 'lifecycle connect hubspot --token-env HUBSPOT_TOKEN',
+    tested: 'Written from the HubSpot CRM API v3 docs and tested against recorded answers. Not yet run on a real portal.',
+};
+export const ALL_NATIVE = [...CATALOG, HUBSPOT];
 // Connected means configured with a key present. lastSync comes from the database when it is reachable.
 export async function sourceStatus(config, hasKey, db) {
     const last = new Map();
@@ -67,7 +80,9 @@ export async function sourceStatus(config, hasKey, db) {
             // No sync table yet: nothing has synced.
         }
     }
-    const native = CATALOG.map((s) => {
+    // A store sees the 0.13 list until it connects HubSpot.
+    const list = readWorkspace().type === 'shopify' && !config?.hubspot ? CATALOG : ALL_NATIVE;
+    const native = list.map((s) => {
         const configured = Boolean(config?.[s.slug]);
         const connected = configured && hasKey(s.slug);
         const l = last.get(s.slug);
@@ -94,7 +109,7 @@ export const QUICKSTART_COMMAND = 'lifecycle docs quickstart';
 // The text a person pastes into Claude Code, Cursor or Codex to have their agent run a kit.
 export function kitPrompt(kit) {
     return [
-        `Run the Cosmic Lifecycle "${kit.title}" kit for my store.`,
+        `Run the Cosmic Lifecycle "${kit.title}" kit for my ${noun()}.`,
         `If \`lifecycle\` is not set up yet, follow the output of \`${QUICKSTART_COMMAND}\` first, connecting ${kit.needs.join(' and ')}. The CLI ships inside the Cosmic AI app and Cosmic Cloud.`,
         `Then run \`lifecycle kits add ${kit.name}\` and follow lifecycle-kits/${kit.name}/AGENT.md in order, including the Verify checklist.`,
         'Never ask me to paste a key into this chat. Use environment variables.',

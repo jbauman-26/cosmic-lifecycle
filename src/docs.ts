@@ -1,6 +1,12 @@
 export const DOCS: Record<string, string> = {
   setup: `# Set up in order
 
+First say what kind of business this is. It picks the source the numbers are
+checked against and the metrics you see first (lifecycle docs workspaces):
+  lifecycle init --type shopify     (or ecommerce, saas, b2b, agency, creator)
+A Shopify store follows the steps below in order. Any other type starts with its
+source of truth: Stripe for ecommerce, SaaS and creator, HubSpot for B2B.
+
 Klaviyo, about 2 minutes:
 1. In Klaviyo open Settings, API keys, Create Private API Key.
 2. Choose Read-Only Key and copy it.
@@ -32,6 +38,16 @@ Meta Ads, about 10 minutes (optional, for ad spend next to revenue):
 6. lifecycle connect meta --account 1234567890 --token-env META_ADS_TOKEN
 Meta's menu names change. If a step is not where this says, search Meta's help for "system user access token".
 
+HubSpot, about 5 minutes (the source of truth for a B2B workspace):
+1. In HubSpot open Settings, Integrations, Private Apps, Create a private app.
+2. Under Scopes tick crm.objects.deals.read and crm.objects.contacts.read. Nothing else.
+3. Create it and copy the access token.
+4. export HUBSPOT_TOKEN=pat-...
+5. lifecycle connect hubspot --token-env HUBSPOT_TOKEN
+It keeps daily counts and amounts only. No name, email, phone or company is asked for.
+Row-level deals and contacts (ids, stages, sources, dates, amounts) load with
+  lifecycle warehouse connect hubspot-records --secret access_token=HUBSPOT_TOKEN
+
 Google Ads, about 10 minutes (optional, for ad spend next to revenue):
 1. You need an OAuth client id and secret from a Google Cloud project with the Google Ads API on.
    The Cosmic AI app does this sign-in for you. These steps are for doing it by hand.
@@ -45,7 +61,8 @@ Only read calls are made, even though Google's scope is named for full access.
 Then:
   lifecycle sync
   lifecycle reconcile
-  lifecycle audit flows --html audit.html
+  lifecycle audit flows --html audit.html    (a store with Klaviyo)
+  lifecycle metrics list                     (the metrics for this workspace type)
 
 Run it every day from your own GitHub:
 1. Create a free Postgres database in your own Neon account:
@@ -66,9 +83,10 @@ Follow this playbook in order, then stop and report what is live. Do not invent 
 
 ## What it is
 
-A free CLI that gives an agent a clean view of a Shopify brand's
-Klaviyo results. It syncs totals into a database the user owns, checks that the
-sources agree, and finds what to fix. It never sends a message, stores no
+A free CLI that gives an agent marketing numbers it can trust, for a Shopify
+store, another kind of store, a SaaS product, a B2B pipeline, an agency client or
+a creator business. It syncs totals into a database the user owns, checks them
+against the business's source of truth, and finds what to fix. It never sends a message, stores no
 customer records, and has no account or server of ours in the path.
 
 ## Before you start
@@ -87,9 +105,11 @@ customer records, and has no account or server of ours in the path.
      npm install -g ./cosmic-lifecycle.tgz
 2. Show it working with no keys, on labeled sample data:
      lifecycle demo
-3. Set up the local database:
-     lifecycle init
-4. Connect ONE source first. Klaviyo takes about 2 minutes:
+3. Set up the local database, saying what kind of business this is:
+     lifecycle init --type shopify    (or ecommerce, saas, b2b, agency, creator)
+   Not a Shopify store? Run lifecycle docs workspaces, connect the source of truth
+   it names (Stripe or HubSpot), and skip the Klaviyo and Shopify steps below.
+4. Connect ONE source first. For a store, Klaviyo takes about 2 minutes:
      lifecycle sources catalog
      lifecycle docs setup
      lifecycle connect klaviyo --key-env KLAVIYO_READ_KEY
@@ -129,8 +149,8 @@ Read this before working with Lifecycle.
 
 If the tool is not set up yet, follow \`lifecycle docs quickstart\` instead.
 
-1. Run \`lifecycle status --format json\` first, then \`lifecycle doctor --format json\` if anything looks wrong.
-2. Run \`lifecycle reconcile\` before quoting any number. If a check failed, say so first.
+1. Run \`lifecycle status --format json\` first, then \`lifecycle doctor --format json\` if anything looks wrong. \`lifecycle workspace show --format json\` says what kind of business this is and which source its numbers are checked against.
+2. Run \`lifecycle reconcile\` before quoting any number. If a check failed, say so first. If the trust line status is \`unreferenced\`, the numbers were not checked against a source of truth: say that first, in the line's own words.
 3. For a standard number, use a verified metric: \`lifecycle metrics list\`, then \`lifecycle metrics run NAME --format json\`. The same metric always runs the same SQL, so answers stay comparable over time. Quote the metric name with the number. The list ends with any numbers the owner saved (\`saved: true\`). Those run the owner's own SQL through the same read-only path and carry the same trust line, but Cosmic has not reviewed them: say "saved by the owner" when you quote one. Save one only when the owner asks: \`lifecycle metrics save NAME --sql 'SELECT ...'\`.
 4. Write your own SQL only when no metric fits. Run \`lifecycle schema --format json\` first and never guess column names. Query with \`lifecycle query "SELECT ..." --format json\`. Queries are read-only and capped at 1,000 rows unless \`query.row_cap\` is set. Tell the user the number came from custom SQL, and show it.
 5. Report the sync warnings. Do not hide them from the user.
@@ -141,11 +161,113 @@ If the tool is not set up yet, follow \`lifecycle docs quickstart\` instead.
 Rules:
 - The database holds totals only. It has no customer names, emails, phones or addresses.
 - Revenue in fact_flow_daily is Klaviyo attributed revenue. Say so, and never present it as proof of causation.
+- fact_crm_* tables hold HubSpot counts and amounts by day, pipeline, stage and original source. There are no contact, company or deal records.
 - Purchases and purchase value in fact_meta_ads_daily are what Meta attributes to its own ads. They are a claim, not orders. Never add them to Shopify revenue or to email revenue. For a number with no attribution in it, use the marketing_efficiency_ratio metric.
 - Conversions and conversions_value in fact_google_ads_campaign_daily and fact_google_ads_ad_group_daily are what Google attributes to its own ads. They are a claim, not orders, and they overlap with Meta's claims. Never add them to Shopify revenue, to email revenue or to Meta's purchases. cost is in the account currency.
 - Nothing in this tool sends a message, and nothing changes an ad account. Meta Ads and Google Ads are read only.
 - If a command fails with code \`busy\`, another lifecycle command is writing to the store. Wait and run it again. Do not delete files to get past it.
 - \`--cloud\` on a read command asks Cosmic Cloud instead of this machine. Use it only when the user is logged in (\`lifecycle cloud status --format json\`). Code \`not_built\` means Cloud does not have that route yet: run the command without \`--cloud\`, and do not retry. See \`lifecycle docs cloud\`.
+`,
+  workspaces: `# Workspace types
+
+A workspace is one business. Its type decides the source of truth the trust gate
+checks against, the metrics \`lifecycle metrics list\` shows, and the demo.
+
+  lifecycle init --type TYPE           set it (asked in a terminal when not given)
+  lifecycle workspace show             what this workspace is checked against
+  lifecycle metrics list --pack TYPE   any type's metrics; --pack all for every one
+  lifecycle demo --type saas           the demo for a type (shopify, saas, b2b)
+
+| Type | For | Source of truth | Usual sources |
+|---|---|---|---|
+| shopify | A store on Shopify | Shopify orders | shopify, klaviyo, ga4, meta, stripe |
+| ecommerce | WooCommerce, BigCommerce or a Stripe checkout | Stripe charges | stripe, ga4, meta, woocommerce, klaviyo |
+| saas | Software or memberships billed in Stripe | Stripe | stripe, ga4, meta, hubspot, posthog |
+| b2b | Revenue through a CRM pipeline | HubSpot | hubspot, ga4, meta, pipedrive, stripe |
+| agency | One workspace per client | Set per client | ga4, meta, stripe, hubspot, shopify |
+| creator | Memberships, products, sponsorships | Stripe | stripe, ga4, meta, mailchimp, klaviyo |
+
+An install made before 0.14.0 has no type and is a Shopify store. Nothing about
+it changes.
+
+## The trust line
+
+Every metric and report carries one. For a store it reads as it always has. For
+any other type it names the source of truth:
+
+- passed: "Numbers passed reconciliation against Stripe."
+- failed: "DO NOT TRUST THESE NUMBERS YET. Failed checks: ..."
+- unreferenced: the numbers were not checked against a source of truth, because
+  none is set or it has not synced, or the only one is GA4. The line says which,
+  in plain words. This is not a failure: each number is still its tool's own count.
+- unchecked: reconcile has not run.
+
+Change the source of truth with:
+  lifecycle config set workspace.reference stripe   (or hubspot, shopify, ga4, none)
+
+## Checks by source of truth
+
+Stripe: stripe_daily_complete (the daily table holds every charge the pull saw),
+subscriptions_balance (starts minus ends equals subscriptions open now, so churn
+adds up), ga4_vs_reference (GA4 purchases against Stripe charges, when GA4 records
+purchases), ad_claims (Meta's claimed purchases against new paying customers, or
+charges for a store; a warning above reconcile.ad_claim_flag percent, never a
+failure), freshness.
+
+HubSpot: deals_complete and contacts_complete (pulled against HubSpot's own
+count), deals_daily_vs_pulled, freshness.
+
+Shopify: the store checks. GA4: freshness only, and the line says GA4 is a
+tracking tool. None: freshness only.
+
+## Contribution margin for a store
+
+Costs live in costs.json in the workspace folder, the same file the Cosmic AI app
+writes under Settings, Costs. From the terminal:
+  lifecycle costs set currency USD
+  lifecycle costs set cogs shopify              (or percent:35)
+  lifecycle costs products costs.csv --fallback 30   (sku,unit_cost; a cost per product)
+  lifecycle costs set shipping per_order:6.50   (or percent:4, or none)
+  lifecycle costs set payment_fee_percent 2.9
+  lifecycle costs set payment_fee_per_order 0.30
+  lifecycle costs set ad_spend meta             (or none)
+  lifecycle costs sync                          reads product costs and SKUs from Shopify
+  lifecycle metrics run contribution_margin
+
+cm1 = revenue - cogs, cm2 = cm1 - shipping - payment fees, cm3 = cm2 - ad spend.
+Revenue is Shopify net revenue, tax included. The answer lists what went in and
+what was counted as zero. Metrics: cogs, gross_margin, contribution_margin_before_ads,
+contribution_margin, contribution_margin_percent, cost_coverage.
+
+## One total across stores
+
+Each store is a workspace on this machine with its currency in costs.json, then:
+  lifecycle metrics run shopify_net_revenue --all-stores --currency USD --rate-date 2026-11-20
+Rates: European Central Bank reference rates, via Frankfurter, the same as the app.
+A store's amount is divided by the rate. Every total names the rate day. A store
+with no currency or no rate is listed and left out. --rate EUR=0.91 sets one by hand.
+
+## Agencies: one workspace per client
+
+  lifecycle --workspace acme-co init --type agency --reference stripe
+  lifecycle --workspace acme-co connect stripe --key-env ACME_STRIPE_KEY
+  lifecycle --workspace acme-co sync
+  lifecycle workspace list
+
+Each named workspace has its own config, database, files and keychain entries
+under ~/.lifecycle/workspaces/NAME. LIFECYCLE_WORKSPACE does the same as the flag.
+Without either, the workspace is ~/.lifecycle, as before 0.14.0.
+
+## Sources for each type
+
+Built in, with reconcile checks: shopify, klaviyo, ga4, stripe, meta, hubspot.
+Built in, read only, not yet run on a live account: google-ads.
+Warehouse connectors written from the vendor docs and not yet run on a real
+account: hubspot-records, pipedrive, woocommerce, bigcommerce, customer-io.
+Planned: salesforce, linkedin-ads, google-search-console, posthog, mixpanel.
+For anything planned, bring daily totals in with
+  lifecycle sources import NAME --csv FILE
+See them with: lifecycle sources catalog --type TYPE
 `,
   kits: `# Kits
 
@@ -191,22 +313,27 @@ Writing a kit:
   lifecycle kits validate . --write-index
   The same check runs in the registry's CI.
 `,
-  commands: `lifecycle demo
-lifecycle init [--database-url-env NAME]
+  commands: `lifecycle demo [--type shopify|saas|b2b]
+lifecycle init [--type shopify|ecommerce|saas|b2b|agency|creator] [--reference SOURCE] [--database-url-env NAME]
+lifecycle workspace show|list
+lifecycle --workspace NAME COMMAND    (or LIFECYCLE_WORKSPACE=NAME)
 lifecycle connect klaviyo --key-env NAME
-lifecycle connect shopify --store STORE --client-id ID --secret-env NAME
+lifecycle connect shopify --shop NAME.myshopify.com --client-id ID --secret-env NAME   (--store still works)
 lifecycle connect ga4 --property ID --client-id ID --secret-env NAME --refresh-token-env NAME
 lifecycle connect stripe --key-env NAME
 lifecycle connect meta --account ID --token-env NAME
+lifecycle connect hubspot --token-env NAME
 lifecycle connect google-ads --customer ID --client-id ID --secret-env NAME --refresh-token-env NAME [--login-customer ID]
 lifecycle sync [--since DATE] [--only SOURCE[,SOURCE]] [--cloud]
 lifecycle disconnect SOURCE [--delete-data]
 lifecycle schema [TABLE] [--cloud]
 lifecycle query "SELECT ..." [--cloud]
-lifecycle metrics list [--cloud]|show NAME|run NAME... [--days N] [--cloud]|candidates
+lifecycle metrics list [--pack TYPE|all] [--cloud]|show NAME|run NAME... [--days N] [--cloud]|candidates
 lifecycle metrics save NAME --sql 'SELECT ...' [--title TEXT] [--unit count|usd|percent|usd_per_recipient|ratio]
 lifecycle metrics delete NAME
-lifecycle sources list [--cloud]|catalog|import NAME --csv FILE [--date-column NAME]
+lifecycle metrics run NAME... --all-stores|--stores A,B --currency USD [--rate-date DATE] [--rate EUR=0.91]
+lifecycle costs show|set KEY VALUE|products CSV [--fallback PCT]|sync
+lifecycle sources list [--cloud]|catalog [--type TYPE]|import NAME --csv FILE [--date-column NAME]
 lifecycle tools catalog [--query TEXT]|providers|run TOOL [--input JSON] [--wait] [--timeout SECONDS] [--out FILE]|get RUN [--out FILE]|abort RUN|runs
 lifecycle exec -- COMMAND [ARGS]
 lifecycle serve [--port N]
@@ -217,7 +344,7 @@ lifecycle report revenue-per-flow [--html FILE]
 lifecycle audit flows [--html FILE]
 lifecycle segments propose winback
 lifecycle segments apply PLAN_FILE --confirm
-lifecycle kits list|search QUERY|show NAME|prompt NAME|add NAME [--into DIR]
+lifecycle kits list [--type TYPE]|search QUERY|show NAME|prompt NAME|add NAME [--into DIR]
 lifecycle kits validate [DIR] [--write-index]
 lifecycle skills sync|status|uninstall [--target claude|cursor|all]
 lifecycle skills push DIRECTORY [--slug NAME]
@@ -236,11 +363,13 @@ lifecycle config list|get|set|unset KEY [VALUE]
         reconcile.tolerance.klaviyo_orders (3), reconcile.tolerance.ga4_purchases (15),
         reconcile.attributed_share_flag (60), reconcile.freshness_days (2),
         query.row_cap (1000), metrics.default_days (90)
+  outside a Shopify workspace also: workspace.reference, reconcile.ad_claim_flag (100)
+  for a roll-up across stores: workspace.currency, rollup.currency
 lifecycle secrets list|set NAME --from-env VAR|delete NAME
 lifecycle mcp
 lifecycle doctor
 lifecycle warehouse show|connect|sync|schema|query|scrub [--confirm]|list|disconnect|add-api
-lifecycle docs quickstart|setup|agents|kits|commands|tools|cloud|warehouse|troubleshooting
+lifecycle docs quickstart|setup|workspaces|agents|kits|commands|tools|cloud|warehouse|troubleshooting
 
 Add --format json to any command.`,
   cloud: `# Cosmic Cloud

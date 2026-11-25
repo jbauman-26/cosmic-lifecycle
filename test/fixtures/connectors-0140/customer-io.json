@@ -1,0 +1,9 @@
+{
+  "source": "https://docs.customer.io/api/app/#operation/listCampaigns",
+  "resources": {
+    "campaigns": { "response": { "campaigns": [ { "id": 5, "name": "Trial day 3 nudge", "type": "segment", "state": "running", "active": true, "created": 1730000000, "updated": 1731000000, "tags": ["onboarding"], "created_by": "Lena Brook", "updated_by": "lena.brook@acme.example" } ] } },
+    "newsletters": { "response": { "newsletters": [ { "id": 40, "name": "November product update", "sent_at": 1731500000, "type": "email", "tags": [], "created_by": "Lena Brook" } ], "next": "" } }
+  },
+  "personal": ["Lena Brook", "lena.brook@acme.example"],
+  "kept": ["Trial day 3 nudge", "November product update", "running"]
+}

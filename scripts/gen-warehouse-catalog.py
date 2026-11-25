@@ -61,6 +61,57 @@ EXTRA = [
         "docs": "https://developers.google.com/webmaster-tools/v1/api_reference_index",
         "notes": "Planned as a built-in source, not a warehouse connector. Needs Google sign-in: the owner signs in with Google in the Cosmic AI app and picks a site. The CLI has no connector code for it yet. CSV import of daily clicks and impressions meanwhile.",
     },
+    # 0.14.0: sources for workspaces that are not Shopify stores. Each "why" cites what marketers
+    # said they connect; docs/WORKSPACES.md has the research behind the list.
+    {
+        "slug": "hubspot-records", "name": "HubSpot records (deals and contacts)", "category": "crm",
+        "why": "Added in 0.14.0 for B2B workspaces: the CRM is where lead source and pipeline live, and B2B marketers say lead source reporting breaks there first. Source: https://www.reddit.com/r/b2bmarketing/comments/1xxn4g9/our_crm_says_most_of_our_leads_come_from_other/",
+        "docs": "https://developers.hubspot.com/docs/api/crm/deals",
+    },
+    {
+        "slug": "pipedrive", "name": "Pipedrive", "category": "crm",
+        "why": "Added in 0.14.0 for B2B workspaces: a CRM dlt lists as a verified source (https://dlthub.com/docs/dlt-ecosystem/verified-sources/pipedrive). Agencies treat the CRM's lead source as the record. Source: https://www.reddit.com/r/PPC/comments/1oc0fu7/agencies_how_do_you_track_conversions/",
+        "docs": "https://developers.pipedrive.com/docs/api/v1",
+    },
+    {
+        "slug": "woocommerce", "name": "WooCommerce", "category": "store",
+        "why": "Added in 0.14.0 for stores not on Shopify. Store owners on WooCommerce report GA4 purchases that do not match their orders. Source: https://www.reddit.com/r/GoogleAnalytics/comments/1voaecy/need_help_with_ga4_tracking_and_woocommerce/",
+        "docs": "https://woocommerce.github.io/woocommerce-rest-api-docs/",
+    },
+    {
+        "slug": "bigcommerce", "name": "BigCommerce", "category": "store",
+        "why": "Added in 0.14.0 for stores not on Shopify. No usage count on file.",
+        "docs": "https://developer.bigcommerce.com/docs/rest-management/orders",
+    },
+    {
+        "slug": "customer-io", "name": "Customer.io", "category": "email-sms",
+        "why": "Added in 0.14.0 for SaaS workspaces, as the lifecycle email tool many of them use instead of Klaviyo. No usage count on file.",
+        "docs": "https://docs.customer.io/api/app/",
+    },
+    {
+        "slug": "salesforce", "name": "Salesforce", "category": "crm",
+        "why": "Added in 0.14.0 for B2B workspaces. dlt lists it as a verified source (https://dlthub.com/docs/dlt-ecosystem/verified-sources/salesforce).",
+        "docs": "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/",
+        "notes": "Planned. Salesforce needs an OAuth connected app and SOQL queries, not a REST list spec, so it waits for the sign-in flow in the Cosmic AI app. CSV import of daily pipeline totals meanwhile.",
+    },
+    {
+        "slug": "linkedin-ads", "name": "LinkedIn Ads", "category": "ads",
+        "why": "Added in 0.14.0 for B2B workspaces, where LinkedIn is a common paid channel. No usage count on file.",
+        "docs": "https://learn.microsoft.com/en-us/linkedin/marketing/",
+        "notes": "Planned. The Marketing API needs an OAuth app that LinkedIn approves for advertising access, and Cosmic has not applied. CSV import of daily spend and clicks meanwhile.",
+    },
+    {
+        "slug": "posthog", "name": "PostHog", "category": "product-analytics",
+        "why": "Added in 0.14.0 for SaaS workspaces that track signups in product analytics. No usage count on file.",
+        "docs": "https://posthog.com/docs/api",
+        "notes": "Planned. Daily event counts come from PostHog's query endpoint as rows of arrays, which needs a small runner change; the events and persons lists carry person properties. CSV import of daily signups meanwhile.",
+    },
+    {
+        "slug": "mixpanel", "name": "Mixpanel", "category": "product-analytics",
+        "why": "Added in 0.14.0 for SaaS workspaces that track signups in product analytics. No usage count on file.",
+        "docs": "https://developer.mixpanel.com/reference/overview",
+        "notes": "Planned. Mixpanel's raw export streams one event per line, not a JSON list, and carries person properties. Its segmentation query fits better and needs a runner change. CSV import of daily signups meanwhile.",
+    },
 ]
 
 entries = []

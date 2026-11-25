@@ -1,0 +1,8 @@
+{
+  "source": "https://woocommerce.github.io/woocommerce-rest-api-docs/#list-all-orders",
+  "resources": {
+    "orders": { "response": [ { "id": 727, "number": "727", "status": "processing", "currency": "USD", "date_created_gmt": "2026-11-02T14:00:00", "discount_total": "0.00", "shipping_total": "10.00", "total": "29.35", "total_tax": "1.35", "customer_id": 26, "customer_note": "Leave it with Agnes Holm next door", "customer_ip_address": "203.0.113.44", "customer_user_agent": "Mozilla/5.0", "payment_method": "stripe", "billing": { "first_name": "Agnes", "last_name": "Holm", "company": "Holm Ceramics", "address_1": "18 Kiln Street", "city": "Portland", "postcode": "97205", "country": "US", "email": "agnes.holm@example.net", "phone": "(503) 555-0187" }, "shipping": { "first_name": "Agnes", "last_name": "Holm", "address_1": "18 Kiln Street", "city": "Portland", "postcode": "97205", "country": "US" }, "meta_data": [ { "id": 13106, "key": "_billing_phone_copy", "value": "(503) 555-0187" }, { "id": 13107, "key": "_gift_to", "value": "Rosa Lindqvist" } ], "line_items": [ { "id": 315, "name": "Stoneware Mug", "product_id": 93, "quantity": 2, "total": "18.00" } ], "refunds": [ { "id": 730, "reason": "Agnes changed her mind", "total": "-5.00" } ] } ] }
+  },
+  "personal": ["Agnes", "Holm", "Holm Ceramics", "18 Kiln Street", "97205", "agnes.holm@example.net", "(503) 555-0187", "203.0.113.44", "Rosa Lindqvist", "Leave it with"],
+  "kept": ["\"total\": \"29.35\"", "Stoneware Mug", "\"customer_id\": 26", "processing", "\"total\": \"-5.00\""]
+}

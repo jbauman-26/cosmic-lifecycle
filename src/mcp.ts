@@ -13,7 +13,11 @@ import { listFiles, readFile } from './files.js'
 import { DOCS } from './docs.js'
 import { listAllMetrics, metricCandidates, runMetric } from './metrics.js'
 import { tryWriteLock, withWriteLock } from './lock.js'
-import { CATALOG } from './sources-catalog.js'
+import { ALL_NATIVE, CATALOG } from './sources-catalog.js'
+import { readWorkspace, REFERENCE_NAME, TYPES, WORKSPACE_TYPES } from './workspace.js'
+import { assertPack, defaultDays } from './metrics.js'
+import { rollupMetric } from './rollup.js'
+import { workspaceName } from './paths.js'
 
 const text = (data: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] })
 
@@ -44,13 +48,29 @@ export async function startMcp() {
 export function buildMcpServer(db: Db) {
   const server = new McpServer({ name: 'cosmic-lifecycle', version: VERSION }, { instructions: DOCS.agents })
   const readOnly = { readOnlyHint: true, openWorldHint: false }
-  server.registerTool('list_metrics', { description: 'List verified metrics, plus any numbers the owner saved (saved: true). Prefer these to writing SQL: the same metric always runs the same SQL.', annotations: readOnly }, async () => text(await listAllMetrics(db)))
+  server.registerTool('list_metrics', {
+    description: 'List the verified metrics for this workspace type, plus any numbers the owner saved (saved: true). Prefer these to writing SQL: the same metric always runs the same SQL.',
+    inputSchema: { pack: z.enum([...WORKSPACE_TYPES, 'all'] as [string, ...string[]]).optional().describe('a metric pack; defaults to this workspace\'s type. all lists every built-in metric') },
+    annotations: readOnly,
+  }, async ({ pack }) => text(await listAllMetrics(db, pack ? assertPack(pack) : undefined)))
+  server.registerTool('workspace', { description: 'What kind of business this workspace is, the source of truth its numbers are checked against, and the sources it usually connects. Read this first.', annotations: readOnly }, async () => {
+    const w = readWorkspace()
+    return text({ type: w.type, title: TYPES[w.type].title, reference: w.reference, referenceName: REFERENCE_NAME[w.reference], referenceWhy: TYPES[w.type].referenceWhy, sources: TYPES[w.type].sources })
+  })
   server.registerTool('metric', {
     description: 'Run one metric over a window: a verified one, or a number the owner saved (the result says saved: true, and its SQL is the owner\'s, not reviewed). Returns the value, its inputs, the exact SQL and the trust line. Names come from list_metrics.',
-    inputSchema: { name: z.string().regex(/^[a-z][a-z0-9_]{2,63}$/).describe('a name from list_metrics'), days: z.number().int().min(1).max(730).optional().describe('window in days; defaults to metrics.default_days, 90 unless changed') },
+    inputSchema: {
+      name: z.string().regex(/^[a-z][a-z0-9_]{2,63}$/).describe('a name from list_metrics'),
+      days: z.number().int().min(1).max(730).optional().describe('window in days; defaults to metrics.default_days, 90 unless changed'),
+      stores: z.union([z.literal('all'), z.array(z.string().regex(/^(default|[a-z0-9][a-z0-9-]{0,39})$/))]).optional().describe('add the metric up across stores (workspaces on this machine): all, or a list. Needs currency'),
+      currency: z.string().regex(/^[A-Za-z]{3}$/).optional().describe('reporting currency for stores, such as USD'),
+      rate_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('exchange rate date; defaults to the latest'),
+    },
     annotations: readOnly,
-  }, async ({ name, days }) => text(await runMetric(db, name, days)))
-  server.registerTool('list_source_catalog', { description: 'Sources this CLI can connect, what each syncs, and the command to connect it.', annotations: readOnly }, async () => text(CATALOG))
+  }, async ({ name, days, stores, currency, rate_date }) => text(stores
+    ? await rollupMetric(name, { stores, currency, days: days ?? defaultDays(), rateDate: rate_date, open: { store: workspaceName() ?? 'default', db } })
+    : await runMetric(db, name, days)))
+  server.registerTool('list_source_catalog', { description: 'Sources this CLI can connect, what each syncs, and the command to connect it.', annotations: readOnly }, async () => text(readWorkspace().type === 'shopify' ? CATALOG : ALL_NATIVE))
   server.registerTool('list_tool_catalog', { description: 'Read-only Klaviyo and Shopify API tools that run on the user\'s own keys.', annotations: readOnly }, async () => text(toolCatalog()))
   server.registerTool('run_tool', {
     description: 'Run one read-only Klaviyo or Shopify tool on the user\'s own keys. Returns no personal data. The run is saved locally.',

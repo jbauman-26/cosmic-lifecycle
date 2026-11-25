@@ -1,8 +1,15 @@
 import { spawnSync } from 'node:child_process'
 import { CliError } from './errors.js'
 
-const SERVICE = 'lifecycle-cli'
-export type SecretName = 'klaviyo-read-key' | 'shopify-client-secret' | 'database-url' | 'klaviyo-write-key' | 'ga4-client-secret' | 'ga4-refresh-token' | 'stripe-read-key' | 'meta-ads-token' | 'google-ads-client-secret' | 'google-ads-refresh-token' | 'kie-api-key' | 'fal-key' | 'apify-token' | 'scrapecreators-key' | 'cloud-token'
+import { workspaceName } from './paths.js'
+
+// One keychain service per named workspace, so two agency clients never share a key.
+// The default workspace keeps the service every release before 0.14.0 used.
+const service = () => {
+  const ws = workspaceName()
+  return ws ? `lifecycle-cli:${ws}` : 'lifecycle-cli'
+}
+export type SecretName = 'hubspot-token' | 'klaviyo-read-key' | 'shopify-client-secret' | 'database-url' | 'klaviyo-write-key' | 'ga4-client-secret' | 'ga4-refresh-token' | 'stripe-read-key' | 'meta-ads-token' | 'google-ads-client-secret' | 'google-ads-refresh-token' | 'kie-api-key' | 'fal-key' | 'apify-token' | 'scrapecreators-key' | 'cloud-token'
 
 const ENV: Record<SecretName, string> = {
   'klaviyo-read-key': 'LIFECYCLE_KLAVIYO_READ_KEY',
@@ -13,6 +20,7 @@ const ENV: Record<SecretName, string> = {
   'ga4-refresh-token': 'LIFECYCLE_GA4_REFRESH_TOKEN',
   'stripe-read-key': 'LIFECYCLE_STRIPE_READ_KEY',
   'meta-ads-token': 'LIFECYCLE_META_ADS_TOKEN',
+  'hubspot-token': 'LIFECYCLE_HUBSPOT_TOKEN',
   'google-ads-client-secret': 'LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET',
   'google-ads-refresh-token': 'LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN',
   'kie-api-key': 'LIFECYCLE_KIE_API_KEY',
@@ -33,7 +41,7 @@ export function setSecret(name: SecretName, value: string) {
   }
   if (/["\\\n]/.test(value)) throw new CliError('That value has characters a key should not contain.', 'Check the value and try again.')
   const res = spawnSync('security', ['-i'], {
-    input: `add-generic-password -U -s ${SERVICE} -a ${name} -w "${value}"\n`,
+    input: `add-generic-password -U -s ${service()} -a ${name} -w "${value}"\n`,
     encoding: 'utf8',
   })
   if (res.status !== 0) throw new CliError('Could not save to the macOS keychain.', 'Unlock your keychain and run the command again.')
@@ -44,7 +52,7 @@ export const envName = (name: SecretName) => ENV[name]
 
 export function deleteSecret(name: SecretName) {
   if (!useKeychain()) return { name, removed: false, note: `No keychain here. Unset ${ENV[name]} in your environment.` }
-  const res = spawnSync('security', ['delete-generic-password', '-s', SERVICE, '-a', name], { encoding: 'utf8' })
+  const res = spawnSync('security', ['delete-generic-password', '-s', service(), '-a', name], { encoding: 'utf8' })
   return { name, removed: res.status === 0, note: res.status === 0 ? 'Removed from the keychain.' : 'It was not in the keychain.' }
 }
 
@@ -52,7 +60,7 @@ export function deleteSecret(name: SecretName) {
 export function secretStatus() {
   return SECRET_NAMES.map((name) => {
     const fromEnv = Boolean(process.env[ENV[name]])
-    const inKeychain = !fromEnv && useKeychain() && spawnSync('security', ['find-generic-password', '-s', SERVICE, '-a', name], { encoding: 'utf8' }).status === 0
+    const inKeychain = !fromEnv && useKeychain() && spawnSync('security', ['find-generic-password', '-s', service(), '-a', name], { encoding: 'utf8' }).status === 0
     return { name, env: ENV[name], source: fromEnv ? ('env' as const) : inKeychain ? ('keychain' as const) : ('missing' as const) }
   })
 }
@@ -61,7 +69,7 @@ export function getSecret(name: SecretName): string | undefined {
   const fromEnv = process.env[ENV[name]]
   if (fromEnv) return fromEnv
   if (!useKeychain()) return undefined
-  const res = spawnSync('security', ['find-generic-password', '-s', SERVICE, '-a', name, '-w'], { encoding: 'utf8' })
+  const res = spawnSync('security', ['find-generic-password', '-s', service(), '-a', name, '-w'], { encoding: 'utf8' })
   return res.status === 0 ? res.stdout.trim() : undefined
 }
 
@@ -78,7 +86,7 @@ export function setSourceSecret(slug: string, field: string, value: string) {
   }
   if (/["\\\n]/.test(value)) throw new CliError('That value has characters a key should not contain.', 'Check the value and try again.')
   const res = spawnSync('security', ['-i'], {
-    input: `add-generic-password -U -s ${SERVICE} -a src:${slug}:${field} -w "${value}"\n`,
+    input: `add-generic-password -U -s ${service()} -a src:${slug}:${field} -w "${value}"\n`,
     encoding: 'utf8',
   })
   if (res.status !== 0) throw new CliError('Could not save to the macOS keychain.', 'Unlock your keychain and run the command again.')
@@ -88,11 +96,11 @@ export function getSourceSecret(slug: string, field: string): string | undefined
   const fromEnv = process.env[sourceSecretEnv(slug, field)]
   if (fromEnv) return fromEnv
   if (!useKeychain()) return undefined
-  const res = spawnSync('security', ['find-generic-password', '-s', SERVICE, '-a', `src:${slug}:${field}`, '-w'], { encoding: 'utf8' })
+  const res = spawnSync('security', ['find-generic-password', '-s', service(), '-a', `src:${slug}:${field}`, '-w'], { encoding: 'utf8' })
   return res.status === 0 ? res.stdout.trim() : undefined
 }
 
 export function deleteSourceSecret(slug: string, field: string) {
   if (!useKeychain()) return false
-  return spawnSync('security', ['delete-generic-password', '-s', SERVICE, '-a', `src:${slug}:${field}`], { encoding: 'utf8' }).status === 0
+  return spawnSync('security', ['delete-generic-password', '-s', service(), '-a', `src:${slug}:${field}`], { encoding: 'utf8' }).status === 0
 }

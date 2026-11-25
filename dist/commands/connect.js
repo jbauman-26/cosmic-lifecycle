@@ -6,6 +6,7 @@ import { shopifyToken } from '../sources/shopify.js';
 import { ga4AccessToken, fetchGa4Daily } from '../sources/ga4.js';
 import { Stripe, isRestrictedKey, stripeMode } from '../sources/stripe.js';
 import { MetaAds, normalizeAccountId } from '../sources/meta.js';
+import { HubSpot } from '../sources/hubspot.js';
 import { GoogleAds, googleAdsAccessToken, normalizeCustomerId } from '../sources/google-ads.js';
 const fromEnv = (name) => {
     const value = name ? process.env[name] : undefined;
@@ -103,6 +104,17 @@ export async function connectMeta(opts) {
     const kept = opts.tokenEnv ? keepKeys([['meta-ads-token', token]]) : NO_KEYS;
     writeConfig({ ...readConfig(), meta: { account: a.id, name: a.name, currency: a.currency, timezone: a.timezone } });
     return { connected: true, account: a.id, name: a.name, currency: a.currency, timezone: a.timezone, ...kept };
+}
+export async function connectHubspot(opts) {
+    const token = opts.tokenEnv ? fromEnv(opts.tokenEnv) : getSecret('hubspot-token');
+    if (!token)
+        throw new CliError('No HubSpot token given.', 'lifecycle connect hubspot --token-env HUBSPOT_TOKEN', 'missing_secret');
+    if (/\s/.test(token))
+        throw new CliError('That token has spaces or line breaks in it.', 'Copy the access token from the private app again.', 'bad_token');
+    const a = await new HubSpot(token).check();
+    const kept = opts.tokenEnv ? keepKeys([['hubspot-token', token]]) : NO_KEYS;
+    writeConfig({ ...readConfig(), hubspot: { portal: a.portal, currency: a.currency } });
+    return { connected: true, portal: a.portal, currency: a.currency, ...kept };
 }
 const GOOGLE_ADS_NEXT = 'lifecycle connect google-ads --customer 123-456-7890 --client-id ID --secret-env NAME --refresh-token-env NAME';
 // Read only: the refresh token is for the adwords scope, but this CLI only ever calls GoogleAdsService.Search.

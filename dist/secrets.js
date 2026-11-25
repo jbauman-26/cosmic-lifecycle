@@ -1,6 +1,12 @@
 import { spawnSync } from 'node:child_process';
 import { CliError } from './errors.js';
-const SERVICE = 'lifecycle-cli';
+import { workspaceName } from './paths.js';
+// One keychain service per named workspace, so two agency clients never share a key.
+// The default workspace keeps the service every release before 0.14.0 used.
+const service = () => {
+    const ws = workspaceName();
+    return ws ? `lifecycle-cli:${ws}` : 'lifecycle-cli';
+};
 const ENV = {
     'klaviyo-read-key': 'LIFECYCLE_KLAVIYO_READ_KEY',
     'klaviyo-write-key': 'LIFECYCLE_KLAVIYO_WRITE_KEY',
@@ -10,6 +16,7 @@ const ENV = {
     'ga4-refresh-token': 'LIFECYCLE_GA4_REFRESH_TOKEN',
     'stripe-read-key': 'LIFECYCLE_STRIPE_READ_KEY',
     'meta-ads-token': 'LIFECYCLE_META_ADS_TOKEN',
+    'hubspot-token': 'LIFECYCLE_HUBSPOT_TOKEN',
     'google-ads-client-secret': 'LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET',
     'google-ads-refresh-token': 'LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN',
     'kie-api-key': 'LIFECYCLE_KIE_API_KEY',
@@ -29,7 +36,7 @@ export function setSecret(name, value) {
     if (/["\\\n]/.test(value))
         throw new CliError('That value has characters a key should not contain.', 'Check the value and try again.');
     const res = spawnSync('security', ['-i'], {
-        input: `add-generic-password -U -s ${SERVICE} -a ${name} -w "${value}"\n`,
+        input: `add-generic-password -U -s ${service()} -a ${name} -w "${value}"\n`,
         encoding: 'utf8',
     });
     if (res.status !== 0)
@@ -40,14 +47,14 @@ export const envName = (name) => ENV[name];
 export function deleteSecret(name) {
     if (!useKeychain())
         return { name, removed: false, note: `No keychain here. Unset ${ENV[name]} in your environment.` };
-    const res = spawnSync('security', ['delete-generic-password', '-s', SERVICE, '-a', name], { encoding: 'utf8' });
+    const res = spawnSync('security', ['delete-generic-password', '-s', service(), '-a', name], { encoding: 'utf8' });
     return { name, removed: res.status === 0, note: res.status === 0 ? 'Removed from the keychain.' : 'It was not in the keychain.' };
 }
 // Where each secret comes from. Never returns a value.
 export function secretStatus() {
     return SECRET_NAMES.map((name) => {
         const fromEnv = Boolean(process.env[ENV[name]]);
-        const inKeychain = !fromEnv && useKeychain() && spawnSync('security', ['find-generic-password', '-s', SERVICE, '-a', name], { encoding: 'utf8' }).status === 0;
+        const inKeychain = !fromEnv && useKeychain() && spawnSync('security', ['find-generic-password', '-s', service(), '-a', name], { encoding: 'utf8' }).status === 0;
         return { name, env: ENV[name], source: fromEnv ? 'env' : inKeychain ? 'keychain' : 'missing' };
     });
 }
@@ -57,7 +64,7 @@ export function getSecret(name) {
         return fromEnv;
     if (!useKeychain())
         return undefined;
-    const res = spawnSync('security', ['find-generic-password', '-s', SERVICE, '-a', name, '-w'], { encoding: 'utf8' });
+    const res = spawnSync('security', ['find-generic-password', '-s', service(), '-a', name, '-w'], { encoding: 'utf8' });
     return res.status === 0 ? res.stdout.trim() : undefined;
 }
 // Warehouse sources keep one keychain entry per credential field, named
@@ -72,7 +79,7 @@ export function setSourceSecret(slug, field, value) {
     if (/["\\\n]/.test(value))
         throw new CliError('That value has characters a key should not contain.', 'Check the value and try again.');
     const res = spawnSync('security', ['-i'], {
-        input: `add-generic-password -U -s ${SERVICE} -a src:${slug}:${field} -w "${value}"\n`,
+        input: `add-generic-password -U -s ${service()} -a src:${slug}:${field} -w "${value}"\n`,
         encoding: 'utf8',
     });
     if (res.status !== 0)
@@ -84,11 +91,11 @@ export function getSourceSecret(slug, field) {
         return fromEnv;
     if (!useKeychain())
         return undefined;
-    const res = spawnSync('security', ['find-generic-password', '-s', SERVICE, '-a', `src:${slug}:${field}`, '-w'], { encoding: 'utf8' });
+    const res = spawnSync('security', ['find-generic-password', '-s', service(), '-a', `src:${slug}:${field}`, '-w'], { encoding: 'utf8' });
     return res.status === 0 ? res.stdout.trim() : undefined;
 }
 export function deleteSourceSecret(slug, field) {
     if (!useKeychain())
         return false;
-    return spawnSync('security', ['delete-generic-password', '-s', SERVICE, '-a', `src:${slug}:${field}`], { encoding: 'utf8' }).status === 0;
+    return spawnSync('security', ['delete-generic-password', '-s', service(), '-a', `src:${slug}:${field}`], { encoding: 'utf8' }).status === 0;
 }
