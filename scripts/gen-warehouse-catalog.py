@@ -14,7 +14,7 @@ research = json.loads((ROOT / "connectors/research-2026-11-07.json").read_text()
 specs = {p.stem: json.loads(p.read_text()) for p in sorted((ROOT / "connectors/specs").glob("*.json"))}
 
 # Built into the CLI already, with reconcile checks.
-NATIVE = {"klaviyo", "google-analytics-4", "stripe", "meta-ads-facebook-and-instagram", "google-ads"}
+NATIVE = {"klaviyo", "google-analytics-4", "stripe", "meta-ads-facebook-and-instagram", "google-ads", "microsoft-advertising-bing-ads"}
 SHORT = {
     "meta-ads-facebook-and-instagram": "meta-ads",
     "amazon-seller-central-sp-api": "amazon-seller-central",
@@ -94,12 +94,7 @@ EXTRA = [
         "docs": "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/",
         "notes": "Planned. Salesforce needs an OAuth connected app and SOQL queries, not a REST list spec, so it waits for the sign-in flow in the Cosmic AI app. CSV import of daily pipeline totals meanwhile.",
     },
-    {
-        "slug": "linkedin-ads", "name": "LinkedIn Ads", "category": "ads",
-        "why": "Added in 0.14.0 for B2B workspaces, where LinkedIn is a common paid channel. No usage count on file.",
-        "docs": "https://learn.microsoft.com/en-us/linkedin/marketing/",
-        "notes": "Planned. The Marketing API needs an OAuth app that LinkedIn approves for advertising access, and Cosmic has not applied. CSV import of daily spend and clicks meanwhile.",
-    },
+    # LinkedIn Ads (added here in 0.14.0) is now a built-in source: lifecycle connect linkedin-ads.
     {
         "slug": "posthog", "name": "PostHog", "category": "product-analytics",
         "why": "Added in 0.14.0 for SaaS workspaces that track signups in product analytics. No usage count on file.",

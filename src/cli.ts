@@ -2,7 +2,7 @@
 import { Command } from 'commander'
 import { emit, emitError, type Format } from './output.js'
 import { init } from './commands/init.js'
-import { connectGa4, connectGoogleAds, connectHubspot, connectKlaviyo, connectMeta, connectShopify, connectStripe } from './commands/connect.js'
+import { connectGa4, connectGoogleAds, connectHubspot, connectKlaviyo, connectLinkedinAds, connectMeta, connectMicrosoftAds, connectShopify, connectStripe, keepRotatedToken } from './commands/connect.js'
 import { doctor } from './commands/doctor.js'
 import { openDb, migrate, type Db } from './db.js'
 import { readConfig, settingValue, writeConfig } from './config.js'
@@ -16,8 +16,10 @@ import { Klaviyo } from './sources/klaviyo.js'
 import { Stripe } from './sources/stripe.js'
 import { MetaAds } from './sources/meta.js'
 import { GoogleAds, googleAdsAccessToken } from './sources/google-ads.js'
+import { MicrosoftAds, microsoftAdsAccessToken } from './sources/microsoft-ads.js'
+import { LinkedinAds, linkedinAccessToken } from './sources/linkedin-ads.js'
 import { HubSpot } from './sources/hubspot.js'
-import { exportProgress, syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncMeta, syncShopify, syncShopifyBulk, syncShopifyChanges, syncStripe, type SourceResult } from './sync.js'
+import { exportProgress, syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncLinkedinAds, syncMeta, syncMicrosoftAds, syncShopify, syncShopifyBulk, syncShopifyChanges, syncStripe, type SourceResult } from './sync.js'
 import { shopifyGql } from './sources/shopify-bulk.js'
 import { runQuery } from './query.js'
 import { PUBLIC_TABLES } from './schema.js'
@@ -258,6 +260,26 @@ connect.command('google-ads').description('Read-only: daily cost and results by 
     const r = await connectGoogleAds(opts)
     emit(format(), r, () => `Connected to Google Ads account ${r.name || r.customer} (${r.currency}, ${r.timezone})${r.testAccount ? ', a test account' : ''}.${keyNote(r)}\nNext: lifecycle sync`)
   }))
+connect.command('microsoft-ads').description('Read-only: daily spend and results by campaign from Microsoft Advertising. No audiences, keywords, people or creative.')
+  .option('--account <id>', 'account id, the aid= number in the Microsoft Advertising address bar (not the account number)')
+  .option('--customer <id>', 'customer id (cid=) of the manager account you reach the ad account through. Defaults to the account\'s own customer')
+  .option('--client-id <id>', 'application (client) id of the Microsoft Entra app')
+  .option('--secret-env <name>', 'environment variable holding the app\'s client secret')
+  .option('--refresh-token-env <name>', 'environment variable holding a refresh token with the msads.manage scope')
+  .option('--developer-token-env <name>', 'environment variable holding the Microsoft Advertising developer token')
+  .action(write('connect microsoft-ads', async (opts) => {
+    const r = await connectMicrosoftAds(opts)
+    emit(format(), r, () => `Connected to Microsoft Advertising account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: lifecycle sync`)
+  }))
+connect.command('linkedin-ads').description('Read-only: daily spend and results by campaign from LinkedIn Campaign Manager. No audiences, creatives or member data.')
+  .option('--account <id>', 'ad account id, the number after accounts/ in the Campaign Manager address bar')
+  .option('--client-id <id>', 'client id of the LinkedIn developer app')
+  .option('--secret-env <name>', 'environment variable holding the app\'s client secret')
+  .option('--refresh-token-env <name>', 'environment variable holding a refresh token with r_ads and r_ads_reporting')
+  .action(write('connect linkedin-ads', async (opts) => {
+    const r = await connectLinkedinAds(opts)
+    emit(format(), r, () => `Connected to LinkedIn ad account ${r.name || r.account} (${r.currency}, days in UTC)${r.test ? ', a test account that LinkedIn reports no numbers for' : ''}.${keyNote(r)}\nNext: lifecycle sync`)
+  }))
 
 const collectList = (v: string, prev: string[] = []) => [...prev, v]
 
@@ -314,6 +336,11 @@ program.command('sync').description('Pull fresh totals from connected sources, t
   const hubspotToken = getSecret('hubspot-token')
   const gadsSecret = getSecret('google-ads-client-secret')
   const gadsRefresh = getSecret('google-ads-refresh-token')
+  const msSecret = getSecret('microsoft-ads-client-secret')
+  const msRefresh = getSecret('microsoft-ads-refresh-token')
+  const msDeveloper = getSecret('microsoft-ads-developer-token')
+  const liSecret = getSecret('linkedin-ads-client-secret')
+  const liRefresh = getSecret('linkedin-ads-refresh-token')
   const chosen = chooseSources(only, {
     shopify: Boolean(config.shopify && shopifySecret),
     klaviyo: Boolean(key),
@@ -322,6 +349,8 @@ program.command('sync').description('Pull fresh totals from connected sources, t
     meta: Boolean(config.meta && metaToken),
     hubspot: Boolean(config.hubspot && hubspotToken),
     'google-ads': Boolean(config['google-ads'] && gadsSecret && gadsRefresh),
+    'microsoft-ads': Boolean(config['microsoft-ads'] && msSecret && msRefresh && msDeveloper),
+    'linkedin-ads': Boolean(config['linkedin-ads'] && liSecret && liRefresh),
   })
   if (!chosen.length) throw new CliError('No sources connected.', readWorkspace().type === 'shopify' ? 'lifecycle connect klaviyo --key-env NAME' : `lifecycle connect ${TYPES[readWorkspace().type].sources[0]}`, 'not_connected')
   const db = await openDb()
@@ -392,6 +421,19 @@ program.command('sync').description('Pull fresh totals from connected sources, t
       } else if (source === 'meta') {
         const meta = new MetaAds(metaToken!, config.meta!.account)
         results.push(await syncMeta(db, (since, until) => meta.insights(since, until), { currency: config.meta!.currency, account: config.meta!.account }))
+      } else if (source === 'microsoft-ads') {
+        const m = config['microsoft-ads']!
+        const api = async () => {
+          const t = await microsoftAdsAccessToken(m.clientId, msSecret!, msRefresh!)
+          keepRotatedToken('microsoft-ads-refresh-token', t.refreshToken, msRefresh!)
+          return new MicrosoftAds(t.accessToken, msDeveloper!, m.account, m.customer)
+        }
+        results.push(await syncMicrosoftAds(db, async (s, u) => (await api()).campaigns(s, u), { account: m.account, currency: m.currency }))
+      } else if (source === 'linkedin-ads') {
+        const l = config['linkedin-ads']!
+        let li: LinkedinAds | undefined
+        const api = async () => (li ??= new LinkedinAds(await linkedinAccessToken(l.clientId, liSecret!, liRefresh!), l.account))
+        results.push(await syncLinkedinAds(db, { analytics: async (s, u) => (await api()).analytics(s, u), campaignNames: async () => (await api()).campaignNames() }, { account: l.account, currency: l.currency, test: l.test }))
       } else {
         const g = config['google-ads']!
         let ads: GoogleAds | undefined
@@ -889,7 +931,7 @@ program.command('deploy').description('Run the daily sync from your own GitHub a
     emit(format(), plan, () => [`This would create:`, ...plan.creates.map((c) => `  ${c}`), `Secrets to set: ${plan.secrets.join(', ')}`, `Cost: ${plan.expectedCost}`, `Nothing was created. Add --yes to go ahead.`].join('\n'))
     return
   }
-  const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_SHOPIFY_CUSTOMER_KEY: 'shopify-customer-key', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token', LIFECYCLE_HUBSPOT_TOKEN: 'hubspot-token', LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET: 'google-ads-client-secret', LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN: 'google-ads-refresh-token' } as const
+  const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_SHOPIFY_CUSTOMER_KEY: 'shopify-customer-key', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token', LIFECYCLE_HUBSPOT_TOKEN: 'hubspot-token', LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET: 'google-ads-client-secret', LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN: 'google-ads-refresh-token', LIFECYCLE_MICROSOFT_ADS_CLIENT_SECRET: 'microsoft-ads-client-secret', LIFECYCLE_MICROSOFT_ADS_REFRESH_TOKEN: 'microsoft-ads-refresh-token', LIFECYCLE_MICROSOFT_ADS_DEVELOPER_TOKEN: 'microsoft-ads-developer-token', LIFECYCLE_LINKEDIN_ADS_CLIENT_SECRET: 'linkedin-ads-client-secret', LIFECYCLE_LINKEDIN_ADS_REFRESH_TOKEN: 'linkedin-ads-refresh-token' } as const
   const secrets: Record<string, string> = {}
   // The daily sync in GitHub Actions uses the same store key as this machine, so both keep the same scrambled ids.
   if (plan.secrets.includes('LIFECYCLE_SHOPIFY_CUSTOMER_KEY')) storeKeyer()

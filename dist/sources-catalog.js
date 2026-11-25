@@ -54,6 +54,24 @@ export const CATALOG = [
         connect: 'lifecycle connect google-ads --customer 123-456-7890 --client-id ID --secret-env NAME --refresh-token-env NAME',
         tested: 'Written from the Google Ads API docs (v26) and tested against recorded answers. Not yet run on a live or test account.',
     },
+    {
+        slug: 'microsoft-ads',
+        name: 'Microsoft Advertising',
+        syncs: 'Daily spend, impressions, clicks, and the conversions and revenue Microsoft attributes to its ads, by campaign. No audiences, keywords, search terms, people or creative.',
+        credential: 'Microsoft Entra app client id and secret, a refresh token from Microsoft sign-in with msads.manage, and a Microsoft Advertising developer token. Only read calls are made.',
+        setupMinutes: 15,
+        connect: 'lifecycle connect microsoft-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME --developer-token-env NAME',
+        tested: 'Written from the Bing Ads API v13 REST docs and tested against recorded answers. Not yet run on a live account.',
+    },
+    {
+        slug: 'linkedin-ads',
+        name: 'LinkedIn Ads',
+        syncs: 'Daily spend, impressions, clicks, and the website conversions and conversion value LinkedIn attributes to its ads, by campaign. No audiences, creatives or member data.',
+        credential: 'LinkedIn developer app client id and secret, plus a refresh token from LinkedIn sign-in with r_ads and r_ads_reporting. Only read calls are made.',
+        setupMinutes: 10,
+        connect: 'lifecycle connect linkedin-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME',
+        tested: 'Written from the LinkedIn Marketing API docs (version 202611) and tested against recorded answers. Not yet run on a live ad account.',
+    },
 ];
 // Built in from 0.14.0. Kept out of CATALOG, the list Shopify stores have always seen first,
 // and shown after it everywhere: sources catalog, sources list, the MCP catalog.

@@ -1,0 +1,1 @@
+{ "TrackingId": "4f1c0d2e-0000-0000-0000-000000002035", "Type": "ApiFaultDetail", "BatchErrors": [], "OperationErrors": [ { "Code": 2035, "Details": "180012345", "ErrorCode": "ReportingServiceInvalidAccountIds", "Message": "One or more account identifiers are invalid." } ] }

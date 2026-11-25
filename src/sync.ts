@@ -8,6 +8,8 @@ import type { Ga4Day } from './sources/ga4.js'
 import { applyChanges, changedSince, clearState, readSyncState, replaceState, StateBuffer, stateRow, writeSyncState, type Keyer } from './shopify-state.js'
 import { toDaily, type RawInsight } from './sources/meta.js'
 import { toAdGroupDaily, toCampaignDaily, type RawAdGroupRow, type RawCampaignRow } from './sources/google-ads.js'
+import { toDaily as toMicrosoftDaily, type RawReportRow } from './sources/microsoft-ads.js'
+import { toDaily as toLinkedinDaily, type RawAnalytics } from './sources/linkedin-ads.js'
 import { aggregateCharges, aggregateSubscriptions, type RawCharge, type RawSubscription } from './sources/stripe.js'
 import { aggregateContacts, aggregateDeals, uniqueCount, type RawContact, type RawDeal } from './sources/hubspot.js'
 import { Klaviyo, isNoReportData, reportsVerified, type FlowDailyRow } from './sources/klaviyo.js'
@@ -527,5 +529,62 @@ export async function syncGoogleAds(
     await setTotal(db, 'google-ads', 'rows_pulled', campaigns.length + adGroups.length)
     const rows = campaignRows + adGroupRows
     return campaignRows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Google Ads returned no campaign activity from ${since} to ${until}.` }
+  })
+}
+
+const windowStart = (until: string, days: number) => new Date(Date.parse(`${until}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10)
+
+// Microsoft and LinkedIn restate recent days as late conversions come in, like Google, so each sync replaces the
+// whole window in one transaction and older days keep what the last sync that covered them saw. Rows from any
+// other account are removed, so switching accounts never mixes two accounts' history.
+type AdDaily = { date: string; campaignId: string; campaignName: string; spend: number; impressions: number; clicks: number; conversions: number; conversionValue: number; currency?: string }
+async function writeAdDaily(db: Db, table: 'fact_microsoft_ads_daily' | 'fact_linkedin_ads_daily', rows: AdDaily[], since: string, account: string, currency: string) {
+  const at = now()
+  await db.transaction(async (tx: Tx) => {
+    await tx.query(`DELETE FROM ${table} WHERE date >= $1 OR account_id <> $2`, [since, account])
+    for (const d of rows) {
+      await tx.query(
+        `INSERT INTO ${table} VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (date, account_id, campaign_id) DO NOTHING`,
+        [d.date, account, d.campaignId, d.campaignName, d.spend, d.impressions, d.clicks, d.conversions, d.conversionValue, d.currency || currency, at],
+      )
+    }
+  })
+  return rows.length
+}
+
+export async function writeMicrosoftAds(db: Db, raw: RawReportRow[], since: string, currency: string, account: string) {
+  return writeAdDaily(db, 'fact_microsoft_ads_daily', toMicrosoftDaily(raw, account, currency), since, account, currency)
+}
+
+export async function syncMicrosoftAds(db: Db, load: (since: string, until: string) => Promise<RawReportRow[]>, opts: { account: string; currency?: string; days?: number; today?: string }) {
+  return recordRun(db, 'microsoft-ads', async () => {
+    const until = opts.today ?? now().slice(0, 10)
+    const since = windowStart(until, opts.days ?? settingValue('metrics.default_days'))
+    const raw = await load(since, until)
+    const rows = await writeMicrosoftAds(db, raw, since, opts.currency ?? '', opts.account)
+    await setTotal(db, 'microsoft-ads', 'rows_pulled', raw.length)
+    return rows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Microsoft Advertising returned no campaign activity from ${since} to ${until}.` }
+  })
+}
+
+export async function writeLinkedinAds(db: Db, raw: RawAnalytics[], names: Map<string, string>, since: string, currency: string, account: string) {
+  return writeAdDaily(db, 'fact_linkedin_ads_daily', toLinkedinDaily(raw, names), since, account, currency)
+}
+
+export async function syncLinkedinAds(
+  db: Db,
+  load: { analytics: (since: string, until: string) => Promise<RawAnalytics[]>; campaignNames: () => Promise<Map<string, string>> },
+  opts: { account: string; currency?: string; test?: boolean; days?: number; today?: string },
+) {
+  return recordRun(db, 'linkedin-ads', async () => {
+    const until = opts.today ?? now().slice(0, 10)
+    const since = windowStart(until, opts.days ?? settingValue('metrics.default_days'))
+    const raw = await load.analytics(since, until)
+    const names = raw.length ? await load.campaignNames() : new Map<string, string>()
+    const rows = await writeLinkedinAds(db, raw, names, since, opts.currency ?? '', opts.account)
+    await setTotal(db, 'linkedin-ads', 'rows_pulled', raw.length)
+    if (rows) return { status: 'ok' as const, rows }
+    // LinkedIn serves no ads, and so reports nothing, for a test ad account.
+    return { status: 'warning' as const, rows, detail: opts.test ? 'This is a LinkedIn test ad account. LinkedIn reports no numbers for test accounts.' : `LinkedIn returned no campaign activity from ${since} to ${until}.` }
   })
 }

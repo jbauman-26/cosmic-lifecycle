@@ -1,0 +1,6 @@
+{
+  "elements": [
+    { "id": 145282384, "name": "Pipeline: Ops leaders", "account": "urn:li:sponsoredAccount:512345678", "status": "ACTIVE", "type": "SPONSORED_UPDATES", "campaignGroup": "urn:li:sponsoredCampaignGroup:603030884", "costType": "CPC", "test": false }
+  ],
+  "metadata": { "nextPageToken": "DgGerr1iVQreCJVjZDOW_grcp63nueBDipsS4DJpvJo" }
+}

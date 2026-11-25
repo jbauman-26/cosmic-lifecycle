@@ -1,0 +1,5 @@
+﻿"TimePeriod","AccountId","CampaignId","CampaignName","Spend","Impressions","Clicks","Conversions","Revenue","CurrencyCode"
+"2026-11-22","180012345","501","Brand, exact","25.12","900","40","3.50","412.35","USD"
+"2026-11-22","180012345","502","Shopping ""Holiday""","10.00","3100","12","0.00","0.00","USD"
+"2026-11-23","180012345","501","Brand, exact","1,026.00","950","44","4.00","500.00","USD"
+"2026-11-23","999999999","777","Other account","5.00","10","1","0","0","USD"

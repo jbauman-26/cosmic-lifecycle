@@ -1,0 +1,13 @@
+{
+  "test": false,
+  "changeAuditStamps": { "created": { "actor": "urn:li:person:fGcyYDdglZ", "time": 1449768717000 }, "lastModified": { "actor": "urn:li:unknown:0", "time": 1477941718075 } },
+  "currency": "USD",
+  "id": 512345678,
+  "name": "Northwind B2B",
+  "notifiedOnCampaignOptimization": true,
+  "reference": "urn:li:organization:2414183",
+  "servingStatuses": ["RUNNABLE"],
+  "status": "ACTIVE",
+  "type": "BUSINESS",
+  "version": { "versionTag": "10" }
+}

@@ -1,0 +1,1 @@
+{ "TrackingId": "4f1c0d2e-0000-0000-0000-000000000117", "Type": "AdApiFaultDetail", "Errors": [ { "Code": 117, "Detail": null, "ErrorCode": "CallRateExceeded", "Message": "You have exceeded the number of calls that you are allowed to make in a minute. Please reduce the number of calls that you make per minute." } ] }

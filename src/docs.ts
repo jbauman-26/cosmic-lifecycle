@@ -58,6 +58,32 @@ Google Ads, about 10 minutes (optional, for ad spend next to revenue):
 5. lifecycle connect google-ads --customer 123-456-7890 --client-id ID --secret-env GOOGLE_ADS_CLIENT_SECRET --refresh-token-env GOOGLE_ADS_REFRESH_TOKEN [--login-customer MANAGER_ID]
 Only read calls are made, even though Google's scope is named for full access.
 
+Microsoft Advertising, about 15 minutes (optional, for Bing ad spend next to revenue):
+1. You need a Microsoft Entra app registration (any Entra tenant plus personal Microsoft
+   accounts) with a client secret, and a Microsoft Advertising developer token from
+   Settings, Developer settings. The Cosmic AI app does this sign-in for you. These steps
+   are for doing it by hand.
+2. Sign in with Microsoft for a refresh token with the scopes msads.manage and offline_access.
+3. Open the account in Microsoft Advertising. The address bar shows aid= (the account id) and
+   cid= (the customer id). Use those numbers, not the account number.
+4. export MICROSOFT_ADS_CLIENT_SECRET=... MICROSOFT_ADS_REFRESH_TOKEN=... MICROSOFT_ADS_DEVELOPER_TOKEN=...
+5. lifecycle connect microsoft-ads --account ID --client-id ID --secret-env MICROSOFT_ADS_CLIENT_SECRET --refresh-token-env MICROSOFT_ADS_REFRESH_TOKEN --developer-token-env MICROSOFT_ADS_DEVELOPER_TOKEN [--customer CID]
+Pass --customer only when you reach the account through an agency's manager account.
+Only read calls are made: the account check and the reporting service. Microsoft has no
+read-only scope.
+
+LinkedIn Ads, about 10 minutes (optional, for LinkedIn ad spend next to pipeline):
+1. You need a LinkedIn developer app approved for the Advertising API, with programmatic
+   refresh tokens. The Cosmic AI app does this sign-in for you. These steps are for doing it
+   by hand.
+2. Sign in with LinkedIn for a refresh token with r_ads and r_ads_reporting. Your LinkedIn
+   member needs a role on the ad account; Viewer is enough.
+3. Copy the ad account id from Campaign Manager: the number after accounts/ in the address bar.
+4. export LINKEDIN_ADS_CLIENT_SECRET=... LINKEDIN_ADS_REFRESH_TOKEN=...
+5. lifecycle connect linkedin-ads --account ID --client-id ID --secret-env LINKEDIN_ADS_CLIENT_SECRET --refresh-token-env LINKEDIN_ADS_REFRESH_TOKEN
+Only read calls are made. A LinkedIn refresh token lasts one year from the sign-in; sign in
+again before then.
+
 Then:
   lifecycle sync
   lifecycle reconcile
@@ -164,7 +190,8 @@ Rules:
 - fact_crm_* tables hold HubSpot counts and amounts by day, pipeline, stage and original source. There are no contact, company or deal records.
 - Purchases and purchase value in fact_meta_ads_daily are what Meta attributes to its own ads. They are a claim, not orders. Never add them to Shopify revenue or to email revenue. For a number with no attribution in it, use the marketing_efficiency_ratio metric.
 - Conversions and conversions_value in fact_google_ads_campaign_daily and fact_google_ads_ad_group_daily are what Google attributes to its own ads. They are a claim, not orders, and they overlap with Meta's claims. Never add them to Shopify revenue, to email revenue or to Meta's purchases. cost is in the account currency.
-- Nothing in this tool sends a message, and nothing changes an ad account. Meta Ads and Google Ads are read only.
+- Conversions and conversion_value in fact_microsoft_ads_daily and fact_linkedin_ads_daily are what Microsoft Advertising and LinkedIn attribute to their own ads, by their own rules (for Microsoft, the account's conversion goals; for LinkedIn, post-click and post-view website conversions). They are claims, not orders, and they overlap with every other network's claims. Never add them to Shopify revenue, to CRM revenue, to email revenue or to another network's conversions. spend is in the account currency. LinkedIn days are UTC days.
+- Nothing in this tool sends a message, and nothing changes an ad account. Meta Ads, Google Ads, Microsoft Advertising and LinkedIn Ads are read only.
 - If a command fails with code \`busy\`, another lifecycle command is writing to the store. Wait and run it again. Do not delete files to get past it.
 - \`--cloud\` on a read command asks Cosmic Cloud instead of this machine. Use it only when the user is logged in (\`lifecycle cloud status --format json\`). Code \`not_built\` means Cloud does not have that route yet: run the command without \`--cloud\`, and do not retry. See \`lifecycle docs cloud\`.
 `,
@@ -261,10 +288,10 @@ Without either, the workspace is ~/.lifecycle, as before 0.14.0.
 ## Sources for each type
 
 Built in, with reconcile checks: shopify, klaviyo, ga4, stripe, meta, hubspot.
-Built in, read only, not yet run on a live account: google-ads.
+Built in, read only, not yet run on a live account: google-ads, microsoft-ads, linkedin-ads.
 Warehouse connectors written from the vendor docs and not yet run on a real
 account: hubspot-records, pipedrive, woocommerce, bigcommerce, customer-io.
-Planned: salesforce, linkedin-ads, google-search-console, posthog, mixpanel.
+Planned: salesforce, google-search-console, posthog, mixpanel.
 For anything planned, bring daily totals in with
   lifecycle sources import NAME --csv FILE
 See them with: lifecycle sources catalog --type TYPE
@@ -324,6 +351,8 @@ lifecycle connect stripe --key-env NAME
 lifecycle connect meta --account ID --token-env NAME
 lifecycle connect hubspot --token-env NAME
 lifecycle connect google-ads --customer ID --client-id ID --secret-env NAME --refresh-token-env NAME [--login-customer ID]
+lifecycle connect microsoft-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME --developer-token-env NAME [--customer ID]
+lifecycle connect linkedin-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
 lifecycle sync [--since DATE] [--only SOURCE[,SOURCE]] [--cloud]
 lifecycle disconnect SOURCE [--delete-data]
 lifecycle schema [TABLE] [--cloud]
@@ -529,7 +558,7 @@ Find and connect a source:
   lifecycle warehouse list | disconnect SLUG
 
 Readiness, said plainly:
-  native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads, Google Ads). Shopify, Klaviyo and GA4 have reconcile checks
+  native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads, Google Ads, Microsoft Advertising, LinkedIn Ads). Shopify, Klaviyo and GA4 have reconcile checks
   tested   a warehouse connector that has synced a real account
   built    written from the vendor's API docs, not yet run on a real account.
            Expect the first sync to need a fix. Report it: lifecycle feedback
@@ -668,6 +697,21 @@ Google Ads says the account cannot be read, or that it is a manager account:
   Connect a client account, not a manager. If access comes through a manager account, add
   --login-customer MANAGER_ID. A refresh token from an app in Testing mode stops working after
   seven days; sign in again for a new one.
+
+Microsoft Advertising refused the sign-in or the developer token:
+  Code 105 usually means a sandbox developer token used against production, or the other way
+  round. Use the production token from Settings, Developer settings. Microsoft may replace the
+  refresh token when it is used; the CLI keeps the new one in the keychain, but one passed in an
+  environment variable (as in GitHub Actions) is not updated, so sign in again if it stops working.
+
+Microsoft Advertising says the account cannot be read:
+  Use the aid= number from the address bar, not the account number. If you reach the account
+  through an agency's manager account, add --customer with that manager's cid= number.
+
+LinkedIn says the ad account cannot be read:
+  The signed-in member needs a role on the ad account (Viewer is enough), and the sign-in needs
+  r_ads and r_ads_reporting. LinkedIn also answers "not found" when the app is not approved for
+  the Advertising API. A test ad account syncs, but LinkedIn reports no numbers for it.
 
 Meta spend looks low for the last few days:
   Meta restates recent days as late conversions arrive. Each sync pulls the last 90 days

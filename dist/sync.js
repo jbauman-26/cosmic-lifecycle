@@ -6,6 +6,8 @@ import { CompactOrders, isDone, pollExport, readExport, startOrdersExport, waitF
 import { applyChanges, changedSince, clearState, readSyncState, replaceState, StateBuffer, stateRow, writeSyncState } from './shopify-state.js';
 import { toDaily } from './sources/meta.js';
 import { toAdGroupDaily, toCampaignDaily } from './sources/google-ads.js';
+import { toDaily as toMicrosoftDaily } from './sources/microsoft-ads.js';
+import { toDaily as toLinkedinDaily } from './sources/linkedin-ads.js';
 import { aggregateCharges, aggregateSubscriptions } from './sources/stripe.js';
 import { aggregateContacts, aggregateDeals, uniqueCount } from './sources/hubspot.js';
 import { isNoReportData, reportsVerified } from './sources/klaviyo.js';
@@ -443,5 +445,46 @@ export async function syncGoogleAds(db, load, opts) {
         await setTotal(db, 'google-ads', 'rows_pulled', campaigns.length + adGroups.length);
         const rows = campaignRows + adGroupRows;
         return campaignRows ? { status: 'ok', rows } : { status: 'warning', rows, detail: `Google Ads returned no campaign activity from ${since} to ${until}.` };
+    });
+}
+const windowStart = (until, days) => new Date(Date.parse(`${until}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10);
+async function writeAdDaily(db, table, rows, since, account, currency) {
+    const at = now();
+    await db.transaction(async (tx) => {
+        await tx.query(`DELETE FROM ${table} WHERE date >= $1 OR account_id <> $2`, [since, account]);
+        for (const d of rows) {
+            await tx.query(`INSERT INTO ${table} VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (date, account_id, campaign_id) DO NOTHING`, [d.date, account, d.campaignId, d.campaignName, d.spend, d.impressions, d.clicks, d.conversions, d.conversionValue, d.currency || currency, at]);
+        }
+    });
+    return rows.length;
+}
+export async function writeMicrosoftAds(db, raw, since, currency, account) {
+    return writeAdDaily(db, 'fact_microsoft_ads_daily', toMicrosoftDaily(raw, account, currency), since, account, currency);
+}
+export async function syncMicrosoftAds(db, load, opts) {
+    return recordRun(db, 'microsoft-ads', async () => {
+        const until = opts.today ?? now().slice(0, 10);
+        const since = windowStart(until, opts.days ?? settingValue('metrics.default_days'));
+        const raw = await load(since, until);
+        const rows = await writeMicrosoftAds(db, raw, since, opts.currency ?? '', opts.account);
+        await setTotal(db, 'microsoft-ads', 'rows_pulled', raw.length);
+        return rows ? { status: 'ok', rows } : { status: 'warning', rows, detail: `Microsoft Advertising returned no campaign activity from ${since} to ${until}.` };
+    });
+}
+export async function writeLinkedinAds(db, raw, names, since, currency, account) {
+    return writeAdDaily(db, 'fact_linkedin_ads_daily', toLinkedinDaily(raw, names), since, account, currency);
+}
+export async function syncLinkedinAds(db, load, opts) {
+    return recordRun(db, 'linkedin-ads', async () => {
+        const until = opts.today ?? now().slice(0, 10);
+        const since = windowStart(until, opts.days ?? settingValue('metrics.default_days'));
+        const raw = await load.analytics(since, until);
+        const names = raw.length ? await load.campaignNames() : new Map();
+        const rows = await writeLinkedinAds(db, raw, names, since, opts.currency ?? '', opts.account);
+        await setTotal(db, 'linkedin-ads', 'rows_pulled', raw.length);
+        if (rows)
+            return { status: 'ok', rows };
+        // LinkedIn serves no ads, and so reports nothing, for a test ad account.
+        return { status: 'warning', rows, detail: opts.test ? 'This is a LinkedIn test ad account. LinkedIn reports no numbers for test accounts.' : `LinkedIn returned no campaign activity from ${since} to ${until}.` };
     });
 }
