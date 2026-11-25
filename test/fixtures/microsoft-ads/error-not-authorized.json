@@ -1,0 +1,1 @@
+{ "TrackingId": "4f1c0d2e-0000-0000-0000-000000000106", "Type": "AdApiFaultDetail", "Errors": [ { "Code": 106, "Detail": null, "ErrorCode": "UserIsNotAuthorized", "Message": "The user does not represent a authorized developer." } ] }

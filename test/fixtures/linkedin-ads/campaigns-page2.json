@@ -1,0 +1,6 @@
+{
+  "elements": [
+    { "id": 145282399, "name": "Retarget: site visitors", "account": "urn:li:sponsoredAccount:512345678", "status": "PAUSED", "type": "SPONSORED_UPDATES", "costType": "CPM", "test": false }
+  ],
+  "metadata": {}
+}

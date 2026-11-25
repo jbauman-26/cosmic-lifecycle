@@ -1,0 +1,18 @@
+{
+  "Account": {
+    "AccountFinancialStatus": "ClearFinancialStatus",
+    "AccountLifeCycleStatus": "Active",
+    "AccountMode": "Expert",
+    "BillToCustomerId": "250012345",
+    "BusinessAddress": { "BusinessName": "Northwind Goods", "City": "Seattle", "CountryCode": "US", "Id": "1", "Line1": "1 Example Way", "PostalCode": "98101", "StateOrProvince": "WA" },
+    "CurrencyCode": "USD",
+    "Id": "180012345",
+    "Language": "English",
+    "Name": "Northwind Search",
+    "Number": "F123AB45",
+    "ParentCustomerId": "250012345",
+    "PaymentMethodType": "CreditCard",
+    "PrimaryUserId": "9001",
+    "TimeZone": "PacificTimeUSCanadaTijuana"
+  }
+}

@@ -10,6 +10,8 @@ import { HubSpot } from '../sources/hubspot.js'
 import { GoogleAds, googleAdsAccessToken, normalizeCustomerId } from '../sources/google-ads.js'
 import { fetchJson } from '../http.js'
 import { MerchantCenter, merchantAccessToken, normalizeMerchantId } from '../sources/google-merchant-center.js'
+import { MicrosoftAds, microsoftAdsAccessToken, normalizeId as normalizeMicrosoftId } from '../sources/microsoft-ads.js'
+import { LinkedinAds, linkedinAccessToken, normalizeAccountId as normalizeLinkedinId } from '../sources/linkedin-ads.js'
 import { RedditAds, normalizeRedditAccountId, redditAccessToken } from '../sources/reddit-ads.js'
 import { SnapchatAds, normalizeSnapAccountId, snapAccessToken } from '../sources/snapchat-ads.js'
 
@@ -158,6 +160,64 @@ export async function connectMerchantCenter(opts: { account?: string; clientId?:
 }
 
 type AdsConnectOpts = { account?: string; clientId?: string; secretEnv?: string; refreshTokenEnv?: string }
+
+// Keeps a newer Microsoft refresh token in the keychain when the old one came from there. One passed in the
+// environment is left alone: whoever set the variable owns it and should store the new value.
+export function keepRotatedToken(name: SecretName, fresh: string | null, old: string, save: (name: SecretName, value: string) => void = setSecret): boolean {
+  if (!fresh || fresh === old || process.env[envName(name)]) return false
+  try {
+    save(name, fresh)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const MICROSOFT_NEXT = 'lifecycle connect microsoft-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME --developer-token-env NAME'
+
+// Read only: the msads.manage scope is the only one Microsoft offers, but this CLI only ever calls GetAccount and
+// the reporting service. The developer token belongs to whoever registered the app; it is not the advertiser's.
+// --customer is the manager account the user reaches the ad account through. Without it, the account's own
+// parent customer is used, which is right unless the account is reached through an agency.
+export async function connectMicrosoftAds(opts: { account?: string; customer?: string; clientId?: string; secretEnv?: string; refreshTokenEnv?: string; developerTokenEnv?: string }, fetcher = fetchJson) {
+  if (!opts.account || !opts.clientId) throw new CliError('The account id and OAuth client id are required.', MICROSOFT_NEXT)
+  const account = normalizeMicrosoftId(opts.account, 'account')
+  const customer = opts.customer ? normalizeMicrosoftId(opts.customer, 'customer') : null
+  const secret = opts.secretEnv ? fromEnv(opts.secretEnv) : getSecret('microsoft-ads-client-secret')
+  const refresh = opts.refreshTokenEnv ? fromEnv(opts.refreshTokenEnv) : getSecret('microsoft-ads-refresh-token')
+  const developer = opts.developerTokenEnv ? fromEnv(opts.developerTokenEnv) : getSecret('microsoft-ads-developer-token')
+  if (!secret || !refresh || !developer) throw new CliError('Microsoft Advertising credentials are missing.', MICROSOFT_NEXT, 'missing_secret')
+  const t = await microsoftAdsAccessToken(opts.clientId, secret, refresh, fetcher)
+  const a = await new MicrosoftAds(t.accessToken, developer, account, customer, fetcher).check()
+  const keys: [SecretName, string][] = []
+  if (opts.secretEnv) keys.push(['microsoft-ads-client-secret', secret])
+  // Microsoft may send a newer refresh token with the access token. Keep that one when this command saves keys.
+  if (opts.refreshTokenEnv) keys.push(['microsoft-ads-refresh-token', t.refreshToken ?? refresh])
+  if (opts.developerTokenEnv) keys.push(['microsoft-ads-developer-token', developer])
+  const kept = keys.length ? keepKeys(keys) : NO_KEYS
+  writeConfig({ ...readConfig(), 'microsoft-ads': { account, customer: a.customer, clientId: opts.clientId, name: a.name, currency: a.currency, timezone: a.timezone } })
+  return { connected: true, account, customer: a.customer, name: a.name, currency: a.currency, timezone: a.timezone, ...kept }
+}
+
+const LINKEDIN_NEXT = 'lifecycle connect linkedin-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME'
+
+// Read only: the refresh token needs r_ads and r_ads_reporting, and this CLI only ever reads the account, its
+// campaign names and adAnalytics.
+export async function connectLinkedinAds(opts: { account?: string; clientId?: string; secretEnv?: string; refreshTokenEnv?: string }, fetcher = fetchJson) {
+  if (!opts.account || !opts.clientId) throw new CliError('The ad account id and OAuth client id are required.', LINKEDIN_NEXT)
+  const account = normalizeLinkedinId(opts.account)
+  const secret = opts.secretEnv ? fromEnv(opts.secretEnv) : getSecret('linkedin-ads-client-secret')
+  const refresh = opts.refreshTokenEnv ? fromEnv(opts.refreshTokenEnv) : getSecret('linkedin-ads-refresh-token')
+  if (!secret || !refresh) throw new CliError('LinkedIn Ads credentials are missing.', LINKEDIN_NEXT, 'missing_secret')
+  const token = await linkedinAccessToken(opts.clientId, secret, refresh, fetcher)
+  const a = await new LinkedinAds(token, account, fetcher).check()
+  const keys: [SecretName, string][] = []
+  if (opts.secretEnv) keys.push(['linkedin-ads-client-secret', secret])
+  if (opts.refreshTokenEnv) keys.push(['linkedin-ads-refresh-token', refresh])
+  const kept = keys.length ? keepKeys(keys) : NO_KEYS
+  writeConfig({ ...readConfig(), 'linkedin-ads': { account, clientId: opts.clientId, name: a.name, currency: a.currency, timezone: 'UTC', test: a.test } })
+  return { connected: true, account, name: a.name, currency: a.currency, timezone: 'UTC', test: a.test, ...kept }
+}
 
 const REDDIT_ADS_NEXT = 'lifecycle connect reddit-ads --account a2_abc123 --client-id ID --secret-env NAME --refresh-token-env NAME'
 

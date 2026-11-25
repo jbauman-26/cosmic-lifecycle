@@ -2,7 +2,7 @@
 import { Command } from 'commander';
 import { emit, emitError } from './output.js';
 import { init } from './commands/init.js';
-import { connectGa4, connectGoogleAds, connectHubspot, connectKlaviyo, connectMerchantCenter, connectMeta, connectRedditAds, connectShopify, connectSnapchatAds, connectStripe } from './commands/connect.js';
+import { connectGa4, connectGoogleAds, connectHubspot, connectKlaviyo, connectLinkedinAds, connectMerchantCenter, connectMeta, connectMicrosoftAds, connectRedditAds, connectShopify, connectSnapchatAds, connectStripe, keepRotatedToken } from './commands/connect.js';
 import { doctor } from './commands/doctor.js';
 import { openDb, migrate } from './db.js';
 import { readConfig, settingValue, writeConfig } from './config.js';
@@ -17,10 +17,12 @@ import { Stripe } from './sources/stripe.js';
 import { MetaAds } from './sources/meta.js';
 import { GoogleAds, googleAdsAccessToken } from './sources/google-ads.js';
 import { MerchantCenter, merchantAccessToken } from './sources/google-merchant-center.js';
+import { MicrosoftAds, microsoftAdsAccessToken } from './sources/microsoft-ads.js';
+import { LinkedinAds, linkedinAccessToken } from './sources/linkedin-ads.js';
 import { RedditAds, redditAccessToken } from './sources/reddit-ads.js';
 import { SnapchatAds, snapAccessToken } from './sources/snapchat-ads.js';
 import { HubSpot } from './sources/hubspot.js';
-import { exportProgress, syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncMerchantCenter, syncMeta, syncRedditAds, syncShopify, syncShopifyBulk, syncShopifyChanges, syncSnapchatAds, syncStripe } from './sync.js';
+import { exportProgress, syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncLinkedinAds, syncMerchantCenter, syncMeta, syncMicrosoftAds, syncRedditAds, syncShopify, syncShopifyBulk, syncShopifyChanges, syncSnapchatAds, syncStripe } from './sync.js';
 import { shopifyGql } from './sources/shopify-bulk.js';
 import { runQuery } from './query.js';
 import { PUBLIC_TABLES } from './schema.js';
@@ -273,6 +275,26 @@ connect.command('google-merchant-center').description('Read-only: daily clicks a
     const r = await connectMerchantCenter(opts);
     emit(format(), r, () => `Connected to Merchant Center account ${r.name || r.account}.${keyNote(r)}\nNext: lifecycle sync`);
 }));
+connect.command('microsoft-ads').description('Read-only: daily spend and results by campaign from Microsoft Advertising. No audiences, keywords, people or creative.')
+    .option('--account <id>', 'account id, the aid= number in the Microsoft Advertising address bar (not the account number)')
+    .option('--customer <id>', 'customer id (cid=) of the manager account you reach the ad account through. Defaults to the account\'s own customer')
+    .option('--client-id <id>', 'application (client) id of the Microsoft Entra app')
+    .option('--secret-env <name>', 'environment variable holding the app\'s client secret')
+    .option('--refresh-token-env <name>', 'environment variable holding a refresh token with the msads.manage scope')
+    .option('--developer-token-env <name>', 'environment variable holding the Microsoft Advertising developer token')
+    .action(write('connect microsoft-ads', async (opts) => {
+    const r = await connectMicrosoftAds(opts);
+    emit(format(), r, () => `Connected to Microsoft Advertising account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: lifecycle sync`);
+}));
+connect.command('linkedin-ads').description('Read-only: daily spend and results by campaign from LinkedIn Campaign Manager. No audiences, creatives or member data.')
+    .option('--account <id>', 'ad account id, the number after accounts/ in the Campaign Manager address bar')
+    .option('--client-id <id>', 'client id of the LinkedIn developer app')
+    .option('--secret-env <name>', 'environment variable holding the app\'s client secret')
+    .option('--refresh-token-env <name>', 'environment variable holding a refresh token with r_ads and r_ads_reporting')
+    .action(write('connect linkedin-ads', async (opts) => {
+    const r = await connectLinkedinAds(opts);
+    emit(format(), r, () => `Connected to LinkedIn ad account ${r.name || r.account} (${r.currency}, days in UTC)${r.test ? ', a test account that LinkedIn reports no numbers for' : ''}.${keyNote(r)}\nNext: lifecycle sync`);
+}));
 connect.command('reddit-ads').description('Read-only: daily spend and results by campaign. No audiences, communities, keywords, people or creative.')
     .option('--account <id>', 'Reddit ad account id, such as a2_abc123, from Accounts in Ads Manager')
     .option('--client-id <id>', 'app id of the developer application in Reddit Ads')
@@ -348,6 +370,11 @@ program.command('sync').description('Pull fresh totals from connected sources, t
         const gadsRefresh = getSecret('google-ads-refresh-token');
         const gmcSecret = getSecret('google-merchant-center-client-secret');
         const gmcRefresh = getSecret('google-merchant-center-refresh-token');
+        const msSecret = getSecret('microsoft-ads-client-secret');
+        const msRefresh = getSecret('microsoft-ads-refresh-token');
+        const msDeveloper = getSecret('microsoft-ads-developer-token');
+        const liSecret = getSecret('linkedin-ads-client-secret');
+        const liRefresh = getSecret('linkedin-ads-refresh-token');
         const radsSecret = getSecret('reddit-ads-client-secret');
         const radsRefresh = getSecret('reddit-ads-refresh-token');
         const sadsSecret = getSecret('snapchat-ads-client-secret');
@@ -361,6 +388,8 @@ program.command('sync').description('Pull fresh totals from connected sources, t
             hubspot: Boolean(config.hubspot && hubspotToken),
             'google-ads': Boolean(config['google-ads'] && gadsSecret && gadsRefresh),
             'google-merchant-center': Boolean(config['google-merchant-center'] && gmcSecret && gmcRefresh),
+            'microsoft-ads': Boolean(config['microsoft-ads'] && msSecret && msRefresh && msDeveloper),
+            'linkedin-ads': Boolean(config['linkedin-ads'] && liSecret && liRefresh),
             'reddit-ads': Boolean(config['reddit-ads'] && radsSecret && radsRefresh),
             'snapchat-ads': Boolean(config['snapchat-ads'] && sadsSecret && sadsRefresh),
         });
@@ -448,6 +477,21 @@ program.command('sync').description('Pull fresh totals from connected sources, t
                     let mc;
                     const api = async () => (mc ??= new MerchantCenter(await merchantAccessToken(g.clientId, gmcSecret, gmcRefresh), g.account));
                     results.push(await syncMerchantCenter(db, { performance: async (s, u) => (await api()).performance(s, u), products: async () => (await api()).products() }, { account: g.account }));
+                }
+                else if (source === 'microsoft-ads') {
+                    const m = config['microsoft-ads'];
+                    const api = async () => {
+                        const t = await microsoftAdsAccessToken(m.clientId, msSecret, msRefresh);
+                        keepRotatedToken('microsoft-ads-refresh-token', t.refreshToken, msRefresh);
+                        return new MicrosoftAds(t.accessToken, msDeveloper, m.account, m.customer);
+                    };
+                    results.push(await syncMicrosoftAds(db, async (s, u) => (await api()).campaigns(s, u), { account: m.account, currency: m.currency }));
+                }
+                else if (source === 'linkedin-ads') {
+                    const l = config['linkedin-ads'];
+                    let li;
+                    const api = async () => (li ??= new LinkedinAds(await linkedinAccessToken(l.clientId, liSecret, liRefresh), l.account));
+                    results.push(await syncLinkedinAds(db, { analytics: async (s, u) => (await api()).analytics(s, u), campaignNames: async () => (await api()).campaignNames() }, { account: l.account, currency: l.currency, test: l.test }));
                 }
                 else if (source === 'reddit-ads') {
                     const r = config['reddit-ads'];
@@ -995,7 +1039,7 @@ program.command('deploy').description('Run the daily sync from your own GitHub a
         emit(format(), plan, () => [`This would create:`, ...plan.creates.map((c) => `  ${c}`), `Secrets to set: ${plan.secrets.join(', ')}`, `Cost: ${plan.expectedCost}`, `Nothing was created. Add --yes to go ahead.`].join('\n'));
         return;
     }
-    const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_SHOPIFY_CUSTOMER_KEY: 'shopify-customer-key', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token', LIFECYCLE_HUBSPOT_TOKEN: 'hubspot-token', LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET: 'google-ads-client-secret', LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN: 'google-ads-refresh-token', LIFECYCLE_GOOGLE_MERCHANT_CENTER_CLIENT_SECRET: 'google-merchant-center-client-secret', LIFECYCLE_GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN: 'google-merchant-center-refresh-token', LIFECYCLE_REDDIT_ADS_CLIENT_SECRET: 'reddit-ads-client-secret', LIFECYCLE_REDDIT_ADS_REFRESH_TOKEN: 'reddit-ads-refresh-token', LIFECYCLE_SNAPCHAT_ADS_CLIENT_SECRET: 'snapchat-ads-client-secret', LIFECYCLE_SNAPCHAT_ADS_REFRESH_TOKEN: 'snapchat-ads-refresh-token' };
+    const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_SHOPIFY_CUSTOMER_KEY: 'shopify-customer-key', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token', LIFECYCLE_HUBSPOT_TOKEN: 'hubspot-token', LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET: 'google-ads-client-secret', LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN: 'google-ads-refresh-token', LIFECYCLE_GOOGLE_MERCHANT_CENTER_CLIENT_SECRET: 'google-merchant-center-client-secret', LIFECYCLE_GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN: 'google-merchant-center-refresh-token', LIFECYCLE_MICROSOFT_ADS_CLIENT_SECRET: 'microsoft-ads-client-secret', LIFECYCLE_MICROSOFT_ADS_REFRESH_TOKEN: 'microsoft-ads-refresh-token', LIFECYCLE_MICROSOFT_ADS_DEVELOPER_TOKEN: 'microsoft-ads-developer-token', LIFECYCLE_LINKEDIN_ADS_CLIENT_SECRET: 'linkedin-ads-client-secret', LIFECYCLE_LINKEDIN_ADS_REFRESH_TOKEN: 'linkedin-ads-refresh-token', LIFECYCLE_REDDIT_ADS_CLIENT_SECRET: 'reddit-ads-client-secret', LIFECYCLE_REDDIT_ADS_REFRESH_TOKEN: 'reddit-ads-refresh-token', LIFECYCLE_SNAPCHAT_ADS_CLIENT_SECRET: 'snapchat-ads-client-secret', LIFECYCLE_SNAPCHAT_ADS_REFRESH_TOKEN: 'snapchat-ads-refresh-token' };
     const secrets = {};
     // The daily sync in GitHub Actions uses the same store key as this machine, so both keep the same scrambled ids.
     if (plan.secrets.includes('LIFECYCLE_SHOPIFY_CUSTOMER_KEY'))

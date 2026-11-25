@@ -5,7 +5,7 @@ import { noun, readWorkspace } from './workspace.js'
 // What this CLI can connect today. Only sources with a working connector are listed:
 // a source that is planned but not built is not in the catalog.
 export type CatalogSource = {
-  slug: 'klaviyo' | 'shopify' | 'ga4' | 'stripe' | 'meta' | 'hubspot' | 'google-ads' | 'google-merchant-center' | 'reddit-ads' | 'snapchat-ads'
+  slug: 'klaviyo' | 'shopify' | 'ga4' | 'stripe' | 'meta' | 'hubspot' | 'google-ads' | 'google-merchant-center' | 'microsoft-ads' | 'linkedin-ads' | 'reddit-ads' | 'snapchat-ads'
   name: string
   syncs: string
   credential: string
@@ -77,6 +77,24 @@ export const CATALOG: CatalogSource[] = [
     setupMinutes: 10,
     connect: 'lifecycle connect google-merchant-center --account 123456789 --client-id ID --secret-env NAME --refresh-token-env NAME',
     tested: 'Written from the Merchant API Reports v1 docs and tested against recorded answers. Not yet run on a live account.',
+  },
+  {
+    slug: 'microsoft-ads',
+    name: 'Microsoft Advertising',
+    syncs: 'Daily spend, impressions, clicks, and the conversions and revenue Microsoft attributes to its ads, by campaign. No audiences, keywords, search terms, people or creative.',
+    credential: 'Microsoft Entra app client id and secret, a refresh token from Microsoft sign-in with msads.manage, and a Microsoft Advertising developer token. Only read calls are made.',
+    setupMinutes: 15,
+    connect: 'lifecycle connect microsoft-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME --developer-token-env NAME',
+    tested: 'Written from the Bing Ads API v13 REST docs and tested against recorded answers. Not yet run on a live account.',
+  },
+  {
+    slug: 'linkedin-ads',
+    name: 'LinkedIn Ads',
+    syncs: 'Daily spend, impressions, clicks, and the website conversions and conversion value LinkedIn attributes to its ads, by campaign. No audiences, creatives or member data.',
+    credential: 'LinkedIn developer app client id and secret, plus a refresh token from LinkedIn sign-in with r_ads and r_ads_reporting. Only read calls are made.',
+    setupMinutes: 10,
+    connect: 'lifecycle connect linkedin-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME',
+    tested: 'Written from the LinkedIn Marketing API docs (version 202611) and tested against recorded answers. Not yet run on a live ad account.',
   },
   {
     slug: 'reddit-ads',

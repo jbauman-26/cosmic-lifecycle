@@ -1,0 +1,8 @@
+{
+  "elements": [
+    { "pivotValues": ["urn:li:sponsoredCampaign:145282384"], "dateRange": { "start": { "month": 11, "year": 2026, "day": 22 }, "end": { "month": 11, "year": 2026, "day": 22 } }, "costInLocalCurrency": "19.91833", "impressions": 165, "clicks": 11, "externalWebsiteConversions": 2, "conversionValueInLocalCurrency": "300.0" },
+    { "pivotValues": ["urn:li:sponsoredCampaign:145282399"], "dateRange": { "start": { "month": 11, "year": 2026, "day": 22 }, "end": { "month": 11, "year": 2026, "day": 22 } }, "costInLocalCurrency": "0.0", "impressions": 6, "clicks": 0, "externalWebsiteConversions": 0, "conversionValueInLocalCurrency": "0" },
+    { "pivotValues": ["urn:li:sponsoredCampaign:145282384"], "dateRange": { "start": { "month": 11, "year": 2026, "day": 23 }, "end": { "month": 11, "year": 2026, "day": 23 } }, "costInLocalCurrency": "22.5", "impressions": 180, "clicks": 14, "externalWebsiteConversions": 1 }
+  ],
+  "paging": { "count": 10, "links": [], "start": 0 }
+}

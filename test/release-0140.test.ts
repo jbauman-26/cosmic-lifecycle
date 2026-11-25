@@ -325,7 +325,9 @@ describe('connectors added in 0.14.0 strip personal data from recorded responses
   const slugs = readdirSync(FIXTURES).map((f) => f.replace(/\.json$/, '')).sort()
   it('has a recorded response for every built connector added in this release', () => {
     expect(slugs).toEqual(['bigcommerce', 'customer-io', 'hubspot-records', 'pipedrive', 'woocommerce'])
-    for (const s of ['salesforce', 'linkedin-ads', 'posthog', 'mixpanel']) expect(WAREHOUSE_CATALOG.find((x) => x.slug === s)?.readiness, s).toBe('planned')
+    // LinkedIn Ads became a built-in source (lifecycle connect linkedin-ads), so it left the warehouse catalog.
+    expect(WAREHOUSE_CATALOG.find((x) => x.slug === 'linkedin-ads')).toBeUndefined()
+    for (const s of ['salesforce', 'posthog', 'mixpanel']) expect(WAREHOUSE_CATALOG.find((x) => x.slug === s)?.readiness, s).toBe('planned')
   })
   for (const slug of ['bigcommerce', 'customer-io', 'hubspot-records', 'pipedrive', 'woocommerce']) {
     it(`${slug}: no name, email, phone or address comes out, and the useful fields stay`, () => {

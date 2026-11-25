@@ -5,7 +5,7 @@ import { deleteSecret, envName } from './secrets.js';
 import { clearState } from './shopify-state.js';
 // The sources built into the CLI. Each one has a config section written by
 // connect, the keys it saved, and the tables only it fills.
-export const NATIVE = ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'hubspot', 'google-ads', 'google-merchant-center', 'reddit-ads', 'snapchat-ads'];
+export const NATIVE = ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'hubspot', 'google-ads', 'google-merchant-center', 'microsoft-ads', 'linkedin-ads', 'reddit-ads', 'snapchat-ads'];
 export const NATIVE_SECRETS = {
     // The store key goes with the store: disconnecting Shopify deletes it, and the scrambled ids it made (below).
     shopify: ['shopify-client-secret', 'shopify-customer-key'],
@@ -16,6 +16,8 @@ export const NATIVE_SECRETS = {
     hubspot: ['hubspot-token'],
     'google-ads': ['google-ads-client-secret', 'google-ads-refresh-token'],
     'google-merchant-center': ['google-merchant-center-client-secret', 'google-merchant-center-refresh-token'],
+    'microsoft-ads': ['microsoft-ads-client-secret', 'microsoft-ads-refresh-token', 'microsoft-ads-developer-token'],
+    'linkedin-ads': ['linkedin-ads-client-secret', 'linkedin-ads-refresh-token'],
     'reddit-ads': ['reddit-ads-client-secret', 'reddit-ads-refresh-token'],
     'snapchat-ads': ['snapchat-ads-client-secret', 'snapchat-ads-refresh-token'],
 };
@@ -30,6 +32,8 @@ export const NATIVE_TABLES = {
     hubspot: ['fact_crm_deals_daily', 'fact_crm_pipeline_open', 'fact_crm_contacts_daily'],
     'google-ads': ['fact_google_ads_campaign_daily', 'fact_google_ads_ad_group_daily'],
     'google-merchant-center': ['fact_merchant_performance_daily', 'fact_merchant_products_daily'],
+    'microsoft-ads': ['fact_microsoft_ads_daily'],
+    'linkedin-ads': ['fact_linkedin_ads_daily'],
     'reddit-ads': ['fact_reddit_ads_daily'],
     'snapchat-ads': ['fact_snapchat_ads_daily'],
 };

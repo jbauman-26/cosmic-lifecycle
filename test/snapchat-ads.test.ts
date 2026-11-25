@@ -263,7 +263,7 @@ describe('wiring', () => {
     expect(envName('snapchat-ads-refresh-token')).toBe('LIFECYCLE_SNAPCHAT_ADS_REFRESH_TOKEN')
   })
   it('puts both secrets in the daily workflow only when connected', () => {
-    const y = workflowYaml(false, false, [], false, false, false, false, false, false, true)
+    const y = workflowYaml(false, false, [], false, false, false, false, false, false, false, false, true)
     expect(y).toContain('LIFECYCLE_SNAPCHAT_ADS_CLIENT_SECRET: ${{ secrets.LIFECYCLE_SNAPCHAT_ADS_CLIENT_SECRET }}')
     expect(y).toContain('LIFECYCLE_SNAPCHAT_ADS_REFRESH_TOKEN: ${{ secrets.LIFECYCLE_SNAPCHAT_ADS_REFRESH_TOKEN }}')
     expect(workflowYaml(false)).not.toContain('SNAPCHAT')

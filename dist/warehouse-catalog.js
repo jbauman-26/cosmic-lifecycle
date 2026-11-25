@@ -1032,17 +1032,6 @@ export const WAREHOUSE_CATALOG = [
         "notes": "API version pinned to 2026-07 (current at time of writing). trackings: cursor pagination via data.pagination.next_cursor (data.pagination.has_next_page also present), limit max 200 (default 100). Incremental on updated_at via updated_at_min. created_at_min defaults to 120 days ago and AfterShip only stores 120 days of tracking data, so the first sync returns at most the last 120 days and trackings older than that age out of the API; the warehouse keeps what it already loaded. Checkpoints (carrier scan events) come nested in each tracking and dlt unpacks them into a child table trackings__checkpoints, so no separate checkpoint call is needed. couriers lists the account's activated couriers, single page, replaced each run. GET rate limit 5 requests per second. Customer names, emails and phone numbers inside customers and subscribed_* fields are stripped by the runner's personal-data filter."
     },
     {
-        "slug": "microsoft-ads",
-        "name": "Microsoft Advertising (Bing Ads)",
-        "category": "ads",
-        "readiness": "planned",
-        "why": "#25 of 100 tools Shopify stores use. StoreLeads: detected on 49,268 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/technology/Bing%20Ads",
-        "docs": "https://learn.microsoft.com/en-us/advertising/guides/",
-        "credentials": [],
-        "params": [],
-        "notes": "Needs an OAuth sign-in flow, not built yet. CSV import meanwhile."
-    },
-    {
         "slug": "pinterest-ads",
         "name": "Pinterest Ads",
         "category": "ads",
@@ -3646,17 +3635,6 @@ export const WAREHOUSE_CATALOG = [
         "credentials": [],
         "params": [],
         "notes": "Planned. Salesforce needs an OAuth connected app and SOQL queries, not a REST list spec, so it waits for the sign-in flow in the Cosmic AI app. CSV import of daily pipeline totals meanwhile."
-    },
-    {
-        "slug": "linkedin-ads",
-        "name": "LinkedIn Ads",
-        "category": "ads",
-        "readiness": "planned",
-        "why": "Added in 0.14.0 for B2B workspaces, where LinkedIn is a common paid channel. No usage count on file.",
-        "docs": "https://learn.microsoft.com/en-us/linkedin/marketing/",
-        "credentials": [],
-        "params": [],
-        "notes": "Planned. The Marketing API needs an OAuth app that LinkedIn approves for advertising access, and Cosmic has not applied. CSV import of daily spend and clicks meanwhile."
     },
     {
         "slug": "posthog",

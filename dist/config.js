@@ -16,6 +16,10 @@ const Config = z
     'snapchat-ads': z.object({ account: z.string(), clientId: z.string(), name: z.string(), currency: z.string(), timezone: z.string(), organizationId: z.string().optional() }).optional(),
     hubspot: z.object({ portal: z.string(), currency: z.string() }).optional(),
     'google-merchant-center': z.object({ account: z.string(), clientId: z.string(), name: z.string() }).optional(),
+    // customer is the manager account (CustomerId header) the user reaches the ad account through.
+    'microsoft-ads': z.object({ account: z.string(), customer: z.string(), clientId: z.string(), name: z.string(), currency: z.string(), timezone: z.string() }).optional(),
+    // LinkedIn reports by UTC day, so timezone is always UTC.
+    'linkedin-ads': z.object({ account: z.string(), clientId: z.string(), name: z.string(), currency: z.string(), timezone: z.string(), test: z.boolean() }).optional(),
     // What kind of business this is, and which source the trust gate checks against. Missing means shopify.
     workspace: z.object({ type: z.string(), reference: z.string() }).partial().optional(),
     registry: z.object({ uri: z.string() }).partial().optional(),

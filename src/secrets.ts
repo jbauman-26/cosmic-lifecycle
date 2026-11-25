@@ -9,7 +9,7 @@ const service = () => {
   const ws = workspaceName()
   return ws ? `lifecycle-cli:${ws}` : 'lifecycle-cli'
 }
-export type SecretName = 'hubspot-token' | 'klaviyo-read-key' | 'shopify-client-secret' | 'shopify-customer-key' | 'database-url' | 'klaviyo-write-key' | 'ga4-client-secret' | 'ga4-refresh-token' | 'stripe-read-key' | 'meta-ads-token' | 'google-ads-client-secret' | 'google-ads-refresh-token' | 'google-merchant-center-client-secret' | 'google-merchant-center-refresh-token' | 'reddit-ads-client-secret' | 'reddit-ads-refresh-token' | 'snapchat-ads-client-secret' | 'snapchat-ads-refresh-token' | 'kie-api-key' | 'fal-key' | 'apify-token' | 'scrapecreators-key' | 'cloud-token'
+export type SecretName = 'hubspot-token' | 'klaviyo-read-key' | 'shopify-client-secret' | 'shopify-customer-key' | 'database-url' | 'klaviyo-write-key' | 'ga4-client-secret' | 'ga4-refresh-token' | 'stripe-read-key' | 'meta-ads-token' | 'google-ads-client-secret' | 'google-ads-refresh-token' | 'google-merchant-center-client-secret' | 'google-merchant-center-refresh-token' | 'microsoft-ads-client-secret' | 'microsoft-ads-refresh-token' | 'microsoft-ads-developer-token' | 'linkedin-ads-client-secret' | 'linkedin-ads-refresh-token' | 'reddit-ads-client-secret' | 'reddit-ads-refresh-token' | 'snapchat-ads-client-secret' | 'snapchat-ads-refresh-token' | 'kie-api-key' | 'fal-key' | 'apify-token' | 'scrapecreators-key' | 'cloud-token'
 
 const ENV: Record<SecretName, string> = {
   'klaviyo-read-key': 'LIFECYCLE_KLAVIYO_READ_KEY',
@@ -27,6 +27,12 @@ const ENV: Record<SecretName, string> = {
   'google-ads-refresh-token': 'LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN',
   'google-merchant-center-client-secret': 'LIFECYCLE_GOOGLE_MERCHANT_CENTER_CLIENT_SECRET',
   'google-merchant-center-refresh-token': 'LIFECYCLE_GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN',
+  'microsoft-ads-client-secret': 'LIFECYCLE_MICROSOFT_ADS_CLIENT_SECRET',
+  'microsoft-ads-refresh-token': 'LIFECYCLE_MICROSOFT_ADS_REFRESH_TOKEN',
+  // Microsoft Advertising needs a developer token on every call, from the developer's own Microsoft Advertising account.
+  'microsoft-ads-developer-token': 'LIFECYCLE_MICROSOFT_ADS_DEVELOPER_TOKEN',
+  'linkedin-ads-client-secret': 'LIFECYCLE_LINKEDIN_ADS_CLIENT_SECRET',
+  'linkedin-ads-refresh-token': 'LIFECYCLE_LINKEDIN_ADS_REFRESH_TOKEN',
   'reddit-ads-client-secret': 'LIFECYCLE_REDDIT_ADS_CLIENT_SECRET',
   'reddit-ads-refresh-token': 'LIFECYCLE_REDDIT_ADS_REFRESH_TOKEN',
   'snapchat-ads-client-secret': 'LIFECYCLE_SNAPCHAT_ADS_CLIENT_SECRET',

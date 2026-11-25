@@ -23,6 +23,12 @@ const ENV = {
     'google-ads-refresh-token': 'LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN',
     'google-merchant-center-client-secret': 'LIFECYCLE_GOOGLE_MERCHANT_CENTER_CLIENT_SECRET',
     'google-merchant-center-refresh-token': 'LIFECYCLE_GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN',
+    'microsoft-ads-client-secret': 'LIFECYCLE_MICROSOFT_ADS_CLIENT_SECRET',
+    'microsoft-ads-refresh-token': 'LIFECYCLE_MICROSOFT_ADS_REFRESH_TOKEN',
+    // Microsoft Advertising needs a developer token on every call, from the developer's own Microsoft Advertising account.
+    'microsoft-ads-developer-token': 'LIFECYCLE_MICROSOFT_ADS_DEVELOPER_TOKEN',
+    'linkedin-ads-client-secret': 'LIFECYCLE_LINKEDIN_ADS_CLIENT_SECRET',
+    'linkedin-ads-refresh-token': 'LIFECYCLE_LINKEDIN_ADS_REFRESH_TOKEN',
     'reddit-ads-client-secret': 'LIFECYCLE_REDDIT_ADS_CLIENT_SECRET',
     'reddit-ads-refresh-token': 'LIFECYCLE_REDDIT_ADS_REFRESH_TOKEN',
     'snapchat-ads-client-secret': 'LIFECYCLE_SNAPCHAT_ADS_CLIENT_SECRET',

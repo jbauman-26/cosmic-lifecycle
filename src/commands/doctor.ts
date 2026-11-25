@@ -11,6 +11,9 @@ import { HubSpot } from '../sources/hubspot.js'
 import { readWorkspace, REFERENCE_NAME } from '../workspace.js'
 import { GoogleAds, googleAdsAccessToken } from '../sources/google-ads.js'
 import { MerchantCenter, merchantAccessToken } from '../sources/google-merchant-center.js'
+import { MicrosoftAds, microsoftAdsAccessToken } from '../sources/microsoft-ads.js'
+import { LinkedinAds, linkedinAccessToken } from '../sources/linkedin-ads.js'
+import { keepRotatedToken } from './connect.js'
 import { RedditAds, redditAccessToken } from '../sources/reddit-ads.js'
 import { SnapchatAds, snapAccessToken } from '../sources/snapchat-ads.js'
 import { CliError } from '../errors.js'
@@ -85,6 +88,35 @@ export async function doctor(): Promise<{ healthy: boolean; checks: Check[] }> {
       checks.push({ name: 'google-ads', ok: true, detail: `Sign-in reads ${a.name || a.customer} in ${a.currency}${a.testAccount ? ' (a test account)' : ''}` })
     } catch (e) {
       checks.push({ name: 'google-ads', ok: false, detail: e instanceof Error ? e.message : 'Sign-in was refused.', next: e instanceof CliError ? e.next : 'lifecycle connect google-ads' })
+    }
+  }
+
+  const msads = config['microsoft-ads']
+  const msSecret = getSecret('microsoft-ads-client-secret')
+  const msRefresh = getSecret('microsoft-ads-refresh-token')
+  const msDeveloper = getSecret('microsoft-ads-developer-token')
+  if (msads && (!msSecret || !msRefresh || !msDeveloper)) checks.push({ name: 'microsoft-ads', ok: false, detail: 'Connected, but the client secret, refresh token or developer token is missing.', next: 'lifecycle connect microsoft-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME --developer-token-env NAME' })
+  else if (msads && msSecret && msRefresh && msDeveloper) {
+    try {
+      const t = await microsoftAdsAccessToken(msads.clientId, msSecret, msRefresh)
+      keepRotatedToken('microsoft-ads-refresh-token', t.refreshToken, msRefresh)
+      const a = await new MicrosoftAds(t.accessToken, msDeveloper, msads.account, msads.customer).check()
+      checks.push({ name: 'microsoft-ads', ok: true, detail: `Sign-in reads ${a.name || a.account} in ${a.currency}` })
+    } catch (e) {
+      checks.push({ name: 'microsoft-ads', ok: false, detail: e instanceof Error ? e.message : 'Sign-in was refused.', next: e instanceof CliError ? e.next : 'lifecycle connect microsoft-ads' })
+    }
+  }
+
+  const liads = config['linkedin-ads']
+  const liSecret = getSecret('linkedin-ads-client-secret')
+  const liRefresh = getSecret('linkedin-ads-refresh-token')
+  if (liads && (!liSecret || !liRefresh)) checks.push({ name: 'linkedin-ads', ok: false, detail: 'Connected, but the client secret or refresh token is missing.', next: 'lifecycle connect linkedin-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME' })
+  else if (liads && liSecret && liRefresh) {
+    try {
+      const a = await new LinkedinAds(await linkedinAccessToken(liads.clientId, liSecret, liRefresh), liads.account).check()
+      checks.push({ name: 'linkedin-ads', ok: true, detail: `Sign-in reads ${a.name || a.account} in ${a.currency}${a.test ? ' (a test account, which LinkedIn reports nothing for)' : ''}` })
+    } catch (e) {
+      checks.push({ name: 'linkedin-ads', ok: false, detail: e instanceof Error ? e.message : 'Sign-in was refused.', next: e instanceof CliError ? e.next : 'lifecycle connect linkedin-ads' })
     }
   }
 

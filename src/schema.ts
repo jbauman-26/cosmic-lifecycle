@@ -80,6 +80,16 @@ export const MIGRATIONS = [
     date DATE NOT NULL, account_id TEXT NOT NULL, products BIGINT NOT NULL, eligible BIGINT NOT NULL, eligible_limited BIGINT NOT NULL,
     pending BIGINT NOT NULL, disapproved BIGINT NOT NULL,
     source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, account_id))`,
+  // Microsoft Advertising's and LinkedIn's own numbers for their own ads, read only, daily campaign totals.
+  // Conversions and conversion_value are what each network attributes to itself, not orders.
+  `CREATE TABLE IF NOT EXISTS fact_microsoft_ads_daily (
+    date DATE NOT NULL, account_id TEXT NOT NULL, campaign_id TEXT NOT NULL, campaign_name TEXT NOT NULL, spend NUMERIC NOT NULL, impressions BIGINT NOT NULL, clicks BIGINT NOT NULL,
+    conversions NUMERIC NOT NULL, conversion_value NUMERIC NOT NULL, currency TEXT NOT NULL,
+    source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, account_id, campaign_id))`,
+  `CREATE TABLE IF NOT EXISTS fact_linkedin_ads_daily (
+    date DATE NOT NULL, account_id TEXT NOT NULL, campaign_id TEXT NOT NULL, campaign_name TEXT NOT NULL, spend NUMERIC NOT NULL, impressions BIGINT NOT NULL, clicks BIGINT NOT NULL,
+    conversions NUMERIC NOT NULL, conversion_value NUMERIC NOT NULL, currency TEXT NOT NULL,
+    source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, account_id, campaign_id))`,
   // Reddit's and Snapchat's own numbers for their own ads, read only. Conversions and their value are purchases each
   // network attributes to itself, not orders. Snapchat's clicks are swipe-ups. Days follow each ad account's time zone.
   `CREATE TABLE IF NOT EXISTS fact_reddit_ads_daily (
@@ -158,6 +168,7 @@ export const PUBLIC_TABLES = [
   'fact_stripe_daily', 'fact_stripe_subscriptions_daily', 'fact_stripe_mrr', 'fact_meta_ads_daily',
   'fact_crm_deals_daily', 'fact_crm_pipeline_open', 'fact_crm_contacts_daily', 'fact_cogs_daily', 'fact_cogs_sku_daily', 'fact_google_ads_campaign_daily', 'fact_google_ads_ad_group_daily',
   'fact_merchant_performance_daily', 'fact_merchant_products_daily',
+  'fact_microsoft_ads_daily', 'fact_linkedin_ads_daily',
   'fact_reddit_ads_daily', 'fact_snapchat_ads_daily',
   'meta_sync_run', 'meta_source_total', 'meta_source_window', 'meta_reconcile_result',
 ] as const

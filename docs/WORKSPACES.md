@@ -85,9 +85,10 @@ Trust line statuses: `passed`, `failed`, `unchecked`, and new in 0.14.0 `unrefer
 | Salesforce | catalog | planned: needs an OAuth connected app | |
 | Google Ads | built in (`connect google-ads`), read only | built: from the Google Ads API docs (v26), tested against recorded answers; not run on a live or test account | daily cost and results by campaign and ad group; no audiences, keywords, people or creative |
 | Google Merchant Center | built in (`connect google-merchant-center`), read only | built: from the Merchant API Reports v1 docs, tested against recorded answers; not run on a live account | daily clicks and impressions for free listings and Shopping ads, and product counts by status; no product ids, titles or prices |
+| Microsoft Advertising | built in (`connect microsoft-ads`), read only | built: from the Bing Ads API v13 REST docs, tested against recorded answers; not run on a live account | daily spend and results by campaign; no audiences, keywords, people or creative |
+| LinkedIn Ads | built in (`connect linkedin-ads`), read only | built: from the LinkedIn Marketing API docs (202611), tested against recorded answers; not run on a live ad account | daily spend and results by campaign; no audiences, creatives or member data |
 | Reddit Ads | built in (`connect reddit-ads`), read only | built: from the Reddit Ads API docs (v3), tested against recorded answers; not run on a live account | daily spend and attributed purchases by campaign; no audiences, communities, keywords, people or creative |
 | Snapchat Ads | built in (`connect snapchat-ads`), read only | built: from the Snapchat Marketing API docs (v1), tested against recorded answers; not run on a live account | daily spend and attributed purchases by campaign; no audiences, creatives, people or pixel events |
-| LinkedIn Ads | catalog | planned: needs an approved Marketing API app | |
 | Google Search Console | catalog | planned: needs Google sign-in | |
 | PostHog, Mixpanel | catalog | planned: query results come as arrays or streams, which need a runner change | |
 

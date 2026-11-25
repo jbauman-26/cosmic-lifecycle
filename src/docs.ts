@@ -68,6 +68,32 @@ Google Merchant Center, about 10 minutes (optional, for free listings and Shoppi
 5. export GOOGLE_MERCHANT_CENTER_CLIENT_SECRET=... GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN=...
 6. lifecycle connect google-merchant-center --account 123456789 --client-id ID --secret-env GOOGLE_MERCHANT_CENTER_CLIENT_SECRET --refresh-token-env GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN
 Google has no read-only Merchant scope. Only read calls are made: reports and the account name.
+Microsoft Advertising, about 15 minutes (optional, for Bing ad spend next to revenue):
+1. You need a Microsoft Entra app registration (any Entra tenant plus personal Microsoft
+   accounts) with a client secret, and a Microsoft Advertising developer token from
+   Settings, Developer settings. The Cosmic AI app does this sign-in for you. These steps
+   are for doing it by hand.
+2. Sign in with Microsoft for a refresh token with the scopes msads.manage and offline_access.
+3. Open the account in Microsoft Advertising. The address bar shows aid= (the account id) and
+   cid= (the customer id). Use those numbers, not the account number.
+4. export MICROSOFT_ADS_CLIENT_SECRET=... MICROSOFT_ADS_REFRESH_TOKEN=... MICROSOFT_ADS_DEVELOPER_TOKEN=...
+5. lifecycle connect microsoft-ads --account ID --client-id ID --secret-env MICROSOFT_ADS_CLIENT_SECRET --refresh-token-env MICROSOFT_ADS_REFRESH_TOKEN --developer-token-env MICROSOFT_ADS_DEVELOPER_TOKEN [--customer CID]
+Pass --customer only when you reach the account through an agency's manager account.
+Only read calls are made: the account check and the reporting service. Microsoft has no
+read-only scope.
+
+LinkedIn Ads, about 10 minutes (optional, for LinkedIn ad spend next to pipeline):
+1. You need a LinkedIn developer app approved for the Advertising API, with programmatic
+   refresh tokens. The Cosmic AI app does this sign-in for you. These steps are for doing it
+   by hand.
+2. Sign in with LinkedIn for a refresh token with r_ads and r_ads_reporting. Your LinkedIn
+   member needs a role on the ad account; Viewer is enough.
+3. Copy the ad account id from Campaign Manager: the number after accounts/ in the address bar.
+4. export LINKEDIN_ADS_CLIENT_SECRET=... LINKEDIN_ADS_REFRESH_TOKEN=...
+5. lifecycle connect linkedin-ads --account ID --client-id ID --secret-env LINKEDIN_ADS_CLIENT_SECRET --refresh-token-env LINKEDIN_ADS_REFRESH_TOKEN
+Only read calls are made. A LinkedIn refresh token lasts one year from the sign-in; sign in
+again before then.
+
 
 Reddit Ads, about 10 minutes (optional, for ad spend next to revenue):
 1. You need a developer application from Business > Developer Portal in Reddit Ads (a business
@@ -195,8 +221,9 @@ Rules:
 - Conversions and conversions_value in fact_google_ads_campaign_daily and fact_google_ads_ad_group_daily are what Google attributes to its own ads. They are a claim, not orders, and they overlap with Meta's claims. Never add them to Shopify revenue, to email revenue or to Meta's purchases. cost is in the account currency.
 - fact_merchant_performance_daily holds Merchant Center clicks and impressions by day and marketing_method (ORGANIC is free listings, ADS is Shopping ads). conversions and conversion_value are reported by Google for free listings only, so ADS rows have none; they are a claim, not orders. Never add them to Shopify revenue or to Google Ads conversions. currency is empty on rows with no value.
 - fact_merchant_products_daily is one snapshot per sync day of how many products Merchant Center holds and how many are eligible, eligible_limited, pending or disapproved. A day with no sync has no row. There are no product ids or titles.
+- Conversions and conversion_value in fact_microsoft_ads_daily and fact_linkedin_ads_daily are what Microsoft Advertising and LinkedIn attribute to their own ads, by their own rules (for Microsoft, the account's conversion goals; for LinkedIn, post-click and post-view website conversions). They are claims, not orders, and they overlap with every other network's claims. Never add them to Shopify revenue, to CRM revenue, to email revenue or to another network's conversions. spend is in the account currency. LinkedIn days are UTC days.
 - conversions and conversion_value in fact_reddit_ads_daily and fact_snapchat_ads_daily are the purchases Reddit and Snapchat attribute to their own ads (Reddit: click-through plus view-through; Snapchat: its default 28-day swipe and 1-day view windows). They are a claim, not orders, and they overlap with Meta's and Google's claims. Never add them to Shopify revenue, to email revenue or to another network's claims. spend is in the account currency. clicks in fact_snapchat_ads_daily are swipe-ups. Days follow each ad account's own time zone.
-- Nothing in this tool sends a message, and nothing changes an ad account or a product feed. Meta Ads, Google Ads, Google Merchant Center, Reddit Ads and Snapchat Ads are read only.
+- Nothing in this tool sends a message, and nothing changes an ad account or a product feed. Meta Ads, Google Ads, Google Merchant Center, Microsoft Advertising, LinkedIn Ads, Reddit Ads and Snapchat Ads are read only.
 - If a command fails with code \`busy\`, another lifecycle command is writing to the store. Wait and run it again. Do not delete files to get past it.
 - \`--cloud\` on a read command asks Cosmic Cloud instead of this machine. Use it only when the user is logged in (\`lifecycle cloud status --format json\`). Code \`not_built\` means Cloud does not have that route yet: run the command without \`--cloud\`, and do not retry. See \`lifecycle docs cloud\`.
 `,
@@ -293,10 +320,10 @@ Without either, the workspace is ~/.lifecycle, as before 0.14.0.
 ## Sources for each type
 
 Built in, with reconcile checks: shopify, klaviyo, ga4, stripe, meta, hubspot.
-Built in, read only, not yet run on a live account: google-ads, google-merchant-center, reddit-ads, snapchat-ads.
+Built in, read only, not yet run on a live account: google-ads, google-merchant-center, microsoft-ads, linkedin-ads, reddit-ads, snapchat-ads.
 Warehouse connectors written from the vendor docs and not yet run on a real
 account: hubspot-records, pipedrive, woocommerce, bigcommerce, customer-io.
-Planned: salesforce, linkedin-ads, google-search-console, posthog, mixpanel.
+Planned: salesforce, google-search-console, posthog, mixpanel.
 For anything planned, bring daily totals in with
   lifecycle sources import NAME --csv FILE
 See them with: lifecycle sources catalog --type TYPE
@@ -357,6 +384,8 @@ lifecycle connect meta --account ID --token-env NAME
 lifecycle connect hubspot --token-env NAME
 lifecycle connect google-ads --customer ID --client-id ID --secret-env NAME --refresh-token-env NAME [--login-customer ID]
 lifecycle connect google-merchant-center --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
+lifecycle connect microsoft-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME --developer-token-env NAME [--customer ID]
+lifecycle connect linkedin-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
 lifecycle connect reddit-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
 lifecycle connect snapchat-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
 lifecycle sync [--since DATE] [--only SOURCE[,SOURCE]] [--cloud]
@@ -564,7 +593,7 @@ Find and connect a source:
   lifecycle warehouse list | disconnect SLUG
 
 Readiness, said plainly:
-  native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads, Google Ads, Google Merchant Center, Reddit Ads, Snapchat Ads). Shopify, Klaviyo and GA4 have reconcile checks
+  native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads, Google Ads, Google Merchant Center, Microsoft Advertising, LinkedIn Ads, Reddit Ads, Snapchat Ads). Shopify, Klaviyo and GA4 have reconcile checks
   tested   a warehouse connector that has synced a real account
   built    written from the vendor's API docs, not yet run on a real account.
            Expect the first sync to need a fix. Report it: lifecycle feedback
@@ -713,6 +742,21 @@ Merchant Center says the account cannot be read:
   The Google user needs Performance and insights or Admin access on that Merchant Center account.
   Check the account id at the top of Merchant Center. A refresh token from an app in Testing mode
   stops working after seven days; sign in again for a new one.
+Microsoft Advertising refused the sign-in or the developer token:
+  Code 105 usually means a sandbox developer token used against production, or the other way
+  round. Use the production token from Settings, Developer settings. Microsoft may replace the
+  refresh token when it is used; the CLI keeps the new one in the keychain, but one passed in an
+  environment variable (as in GitHub Actions) is not updated, so sign in again if it stops working.
+
+Microsoft Advertising says the account cannot be read:
+  Use the aid= number from the address bar, not the account number. If you reach the account
+  through an agency's manager account, add --customer with that manager's cid= number.
+
+LinkedIn says the ad account cannot be read:
+  The signed-in member needs a role on the ad account (Viewer is enough), and the sign-in needs
+  r_ads and r_ads_reporting. LinkedIn also answers "not found" when the app is not approved for
+  the Advertising API. A test ad account syncs, but LinkedIn reports no numbers for it.
+
 
 Reddit Ads or Snapchat Ads says the account cannot be read:
   The signed-in member needs access to that ad account: on Reddit, a role in the business that
