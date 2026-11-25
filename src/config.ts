@@ -111,6 +111,8 @@ export const SETTINGS = {
   } },
   'query.row_cap': { description: 'Most rows lifecycle query returns', default: 1000, parse: numberIn('query.row_cap', 1, 100000, { whole: true, example: '1000' }) },
   'metrics.default_days': { description: 'Window in days for metrics, reports and sync pulls when none is given', default: 90, parse: numberIn('metrics.default_days', 1, 730, { whole: true, example: '90' }) },
+  'shopify.bulk_min_orders': { description: 'Stores with at least this many orders sync Shopify through one bulk export instead of paging. 0 always uses the export', default: 25000, parse: numberIn('shopify.bulk_min_orders', 0, 1000000000, { whole: true, example: '25000' }) },
+  'shopify.export_wait_seconds': { description: 'Seconds a sync waits for a Shopify bulk export to finish before leaving it for the next sync', default: 120, parse: numberIn('shopify.export_wait_seconds', 0, 3600, { whole: true, example: '120' }) },
 } satisfies Record<string, Setting>
 
 // Settings added in 0.14.0 for workspaces that are not Shopify stores. They can be set in any

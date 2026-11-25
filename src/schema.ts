@@ -93,6 +93,11 @@ export const MIGRATIONS = [
   // Units and revenue by SKU and day, for a cost per product the owner keeps outside Shopify. A SKU is a product code, not a person.
   `CREATE TABLE IF NOT EXISTS fact_cogs_sku_daily (
     date DATE NOT NULL, sku TEXT NOT NULL, units BIGINT NOT NULL, revenue NUMERIC NOT NULL, source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, sku))`,
+  // Shopify order exports (bulk operations) a sync started, so a later sync can read one that finished after it stopped.
+  // The operation id and its state only. The file it points to is never stored.
+  `CREATE TABLE IF NOT EXISTS meta_shopify_bulk (
+    op_id TEXT PRIMARY KEY, status TEXT NOT NULL, started_at TIMESTAMPTZ NOT NULL, checked_at TIMESTAMPTZ, consumed_at TIMESTAMPTZ,
+    objects BIGINT, error_code TEXT, expected BIGINT)`,
 ]
 
 export const PUBLIC_TABLES = [

@@ -5,7 +5,7 @@ import { init } from './commands/init.js';
 import { connectGa4, connectGoogleAds, connectHubspot, connectKlaviyo, connectMeta, connectShopify, connectStripe } from './commands/connect.js';
 import { doctor } from './commands/doctor.js';
 import { openDb, migrate } from './db.js';
-import { readConfig, writeConfig } from './config.js';
+import { readConfig, settingValue, writeConfig } from './config.js';
 import { getSecret, getSourceSecret } from './secrets.js';
 import { CliError } from './errors.js';
 import { fetchOrderCount, fetchOrders, shopifyToken } from './sources/shopify.js';
@@ -16,7 +16,8 @@ import { Stripe } from './sources/stripe.js';
 import { MetaAds } from './sources/meta.js';
 import { GoogleAds, googleAdsAccessToken } from './sources/google-ads.js';
 import { HubSpot } from './sources/hubspot.js';
-import { syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncMeta, syncShopify, syncStripe } from './sync.js';
+import { exportProgress, syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncMeta, syncShopify, syncShopifyBulk, syncStripe } from './sync.js';
+import { shopifyGql } from './sources/shopify-bulk.js';
 import { runQuery } from './query.js';
 import { PUBLIC_TABLES } from './schema.js';
 import { VERSION } from './version.js';
@@ -264,7 +265,11 @@ program.command('sync').description('Pull fresh totals from connected sources, t
     .option('--since <date>', 'start of the Klaviyo report window')
     .option('--only <source>', `sync only this built-in source: ${NATIVE.join(', ')} (repeatable, or a comma list)`, collectList)
     .option('--cloud', 'start the sync on Cosmic Cloud instead of on this machine. It returns at once. Needs lifecycle login')
+    .option('--export-wait <seconds>', 'for a large Shopify store, seconds to wait for its bulk export before leaving it for the next sync')
     .action(run(async (opts) => {
+    if (opts.exportWait !== undefined && !(Number.isInteger(Number(opts.exportWait)) && Number(opts.exportWait) >= 0 && Number(opts.exportWait) <= 3600)) {
+        throw new CliError('Use a whole number of seconds from 0 to 3600.', 'lifecycle sync --only shopify --export-wait 120', 'bad_value');
+    }
     if (opts.cloud) {
         const client = new CloudClient();
         const only = parseOnly(opts.only);
@@ -319,7 +324,22 @@ program.command('sync').description('Pull fresh totals from connected sources, t
                     const { store, clientId } = config.shopify;
                     let token;
                     const tok = async () => (token ??= await shopifyToken(store, clientId, shopifySecret));
-                    results.push(await syncShopify(db, async () => fetchOrders(store, await tok()), async () => fetchOrderCount(store, await tok())));
+                    // A big store goes through one bulk export, picked up across syncs, instead of one request per 250 orders.
+                    // When Shopify gives no exact count the export is used too, because the store may be large.
+                    // A failure here (a bad key, a missing scope) falls through to the paged path, which records it as this run's error.
+                    const total = await (async () => fetchOrderCount(store, await tok()))().catch(() => undefined);
+                    const minOrders = settingValue('shopify.bulk_min_orders');
+                    if (total !== undefined && (total === null || total >= minOrders)) {
+                        results.push(await syncShopifyBulk(db, {
+                            gql: shopifyGql(store, await tok()),
+                            reportedCount: async (before) => fetchOrderCount(store, await tok(), before ?? undefined),
+                            waitMs: (opts.exportWait !== undefined ? Number(opts.exportWait) : settingValue('shopify.export_wait_seconds')) * 1000,
+                            expected: total,
+                        }));
+                    }
+                    else {
+                        results.push(await syncShopify(db, async () => fetchOrders(store, await tok()), async () => fetchOrderCount(store, await tok())));
+                    }
                     // Unit costs, once the owner has run lifecycle costs sync. Its own result line, so a cost failure never hides the orders.
                     if (config.costs?.shopify) {
                         const at = new Date().toISOString();
@@ -1345,12 +1365,14 @@ program.command('status').description('One-screen summary: setup, sources, trust
         const trust = db ? await trustLine(db).catch(() => null) : null;
         const update = await checkForUpdate();
         const checklist = await loadChecklist(db, config);
-        const out = { version: VERSION, setUp: Boolean(config), database: config?.database.kind ?? null, sources, trust, deployRepo: config?.deploy?.repo ?? null, update, checklist };
+        const shopifyExport = db ? await exportProgress(db) : null;
+        const out = { version: VERSION, setUp: Boolean(config), database: config?.database.kind ?? null, sources, trust, deployRepo: config?.deploy?.repo ?? null, update, checklist, shopifyExport };
         emit(format(), out, () => [
             `lifecycle ${VERSION}${update.newer ? `  (update available: ${update.latest}. To get it, ${UPDATE_HINT})` : ''}`,
             config ? `Database: ${config.database.kind}` : 'Not set up. Run lifecycle init, or follow lifecycle docs quickstart',
             ...sources.map((s) => `${s.connected ? 'connected    ' : 'not connected'} ${s.name}${s.lastSync ? `, last sync ${s.lastSync.slice(0, 16).replace('T', ' ')}` : ''}`),
             trust ? `Trust: ${trust.line}` : '',
+            shopifyExport?.state === 'running' ? `Shopify order export: ${shopifyExport.ordersExported}${shopifyExport.ordersExpected ? ` of about ${shopifyExport.ordersExpected}` : ''} orders so far. The next sync picks it up.` : '',
             `Daily sync: ${config?.deploy?.repo ?? 'not deployed. lifecycle deploy --repo OWNER/NAME'}`,
             ...(checklist.done < checklist.total ? checklistLines(checklist) : []),
         ].filter(Boolean).join('\n'));

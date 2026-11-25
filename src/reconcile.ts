@@ -41,9 +41,11 @@ const one = async (db: Tx, sql: string, params: unknown[] = []) => (await db.que
 
 // A source whose latest entry is a disconnect is left out, so removing a source never turns
 // into a stale warning two days later. Shared by every workspace type.
+// A source whose latest entry is a disconnect is left out, so removing a source never turns into a stale
+// warning two days later. A Shopify run that only waited on an order export brought nothing new, so it does not count as fresh.
 async function freshness(db: Tx, t: Tolerances): Promise<Check> {
   const last = await db.query(
-    `SELECT source, max(finished_at) AS at FROM meta_sync_run r WHERE status NOT IN ('failed', 'disconnected', 'running')
+    `SELECT source, max(finished_at) AS at FROM meta_sync_run r WHERE status NOT IN ('failed', 'disconnected', 'running') AND coalesce(code, '') <> 'export_running'
        AND NOT EXISTS (SELECT 1 FROM meta_sync_run d WHERE d.source = r.source AND d.status = 'disconnected'
          AND d.started_at >= (SELECT max(x.started_at) FROM meta_sync_run x WHERE x.source = r.source))
      GROUP BY source`,
