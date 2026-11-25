@@ -2,39 +2,40 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
-## Unreleased
+## 0.14.1 (2026-11-25)
 
-Shopify sync for large stores. Measured on synthetic data shaped like a Shopify Plus brand (3 million orders over 3 years, 600,000 customers); no real store was connected.
+Shopify sync for large stores, and Google Ads as a built-in read-only source. Both were built from the vendors' documentation and tested against stand-ins; no real Shopify store and no live or test Google Ads account was connected. Everything 0.14.0 does is unchanged.
 
 ### Added
 
 - **Large stores sync Shopify through one bulk export.** At 25,000 orders or more (`shopify.bulk_min_orders`), `lifecycle sync` asks Shopify for a bulk operation instead of paging 250 orders at a time, which at 3 million orders is 12,000 requests in a row. The operation id is saved in `meta_shopify_bulk`, so a sync that stops early loses nothing: the next one polls the same export, or reads the same finished file again (Shopify keeps it a week). Totals are replaced only after the whole file is read and its line count matches Shopify's own count. While the export is still building, the sync returns `warning` with code `export_running`, the last totals stay, and that run does not count as fresh. A sync waits `shopify.export_wait_seconds` (120) for the export, or `--export-wait SECONDS`.
+- The export asks for the same fields as the paged path and no personal field. Customer ids are counted in memory and never stored; the file's address is never stored either. The 0.13.2 personal-data rules and 0.14.0 workspace types are unchanged: the export runs only for a connected Shopify store.
 - The file is read as a stream into a compact buffer: on 3 million synthetic orders, about 560 MB peak memory and 8 seconds to read, total and write, against about 1.8 GB for the paged path holding every order as an object. The daily and cohort totals were identical to the paged path's, row for row.
 - The completeness check compares the orders in the export with Shopify's count of orders created up to the moment the export started, so orders placed while Shopify builds the file do not fail it.
-- **Progress for an app.** A sync that leaves the export running returns `progress` (`state`, `startedAt`, `checkedAt`, `ordersExported`, `ordersExpected`, `code`), and `lifecycle status --format json` returns the same as `shopifyExport`. Counts and times only. `state` is `running`, `done` or `failed`; `code` is `export_failed`, `file_expired`, `export_missing` or Shopify's own error code in lower case.
+- **Export progress for an app.** A sync that leaves the export running returns `progress` (`state`, `startedAt`, `checkedAt`, `ordersExported`, `ordersExpected`, `code`), and `lifecycle status --format json` returns the same as `shopifyExport`. Counts and times only. `state` is `running`, `done` or `failed`; `code` is `export_failed`, `file_expired`, `export_missing` or Shopify's own error code in lower case.
 - A warning when the oldest order Shopify returns is within 60 days: without the `read_all_orders` scope Shopify returns only the last 60 days, and older customers then count as new.
+- **Google Ads, built in and read only.** `lifecycle connect google-ads --customer 123-456-7890 --client-id ID --secret-env NAME --refresh-token-env NAME [--login-customer ID]`. Daily cost, impressions, clicks, conversions and conversion value by campaign and by ad group, through `GoogleAdsService.Search` (v26), in `fact_google_ads_campaign_daily` and `fact_google_ads_ad_group_daily`. No audiences, keywords, people or creative. The OAuth client secret and refresh token are kept in the workspace's keychain entry like GA4's (`google-ads-client-secret`, `google-ads-refresh-token`). A manager account is refused at connect; `--login-customer` covers access through a manager. Each sync replaces the 90-day window and drops rows from any other account. No developer token is sent: Google retired them on 2026-09-09.
+- `deploy` passes `LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET` and `LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN` when Google Ads is connected. `doctor` checks the account.
+
+### Changed
+
+- Google Ads leaves the warehouse catalog's planned list, and the docs that called it planned now say built in, not yet run on a live account.
 
 ### Fixed
 
 - A page Shopify answers with `THROTTLED` (inside a 200 reply) is retried after the wait Shopify's cost numbers imply, up to 5 times, instead of failing the sync at once.
 
-### What is proven and what is not
-
-- Typecheck and the full suite pass. The bulk path is tested against replies built from Shopify's documentation, not recorded from a live store, and end to end at 3 million synthetic orders against a stand-in endpoint.
-- Not run against a real Shopify store. The `created_at:<=` filter on `ordersCount` is unverified on a live store; if Shopify ignores it, `orders_complete` fails instead of passing silently.
-- Every sync after the first still exports the full history. A daily export of a 3 million order store is unmeasured on Shopify's side.
-
-Google Ads as a built-in read-only source. Written from the Google Ads API docs (v26) and tested against recorded answers; no live or test account was connected.
-
-### Added
-
-- **`lifecycle connect google-ads --customer 123-456-7890 --client-id ID --secret-env NAME --refresh-token-env NAME [--login-customer ID]`.** Daily cost, impressions, clicks, conversions and conversion value by campaign and by ad group, through `GoogleAdsService.Search`, in `fact_google_ads_campaign_daily` and `fact_google_ads_ad_group_daily`. No audiences, keywords, people or creative. The OAuth client secret and refresh token are kept in the workspace's keychain entry like GA4's (`google-ads-client-secret`, `google-ads-refresh-token`). A manager account is refused at connect; `--login-customer` covers access through a manager. Each sync replaces the 90-day window and drops rows from any other account.
-- `deploy` passes `LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET` and `LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN` when Google Ads is connected. `doctor` checks the account.
-- Google Ads leaves the warehouse catalog's planned list, because it is built in.
-
 ### For the app and Cloud
 
-- New source `google-ads`. New error codes: `google_ads_access_level`, `google_ads_customer`, `google_ads_error`, `google_ads_manager`, `google_ads_permission`.
+- New source `google-ads`. New table `meta_shopify_bulk`. New `progress` on a Shopify sync result and `shopifyExport` on `status`.
+- New error codes: `export_running` (a warning), `export_busy`, `export_failed`, `export_expired`, `export_incomplete`, `export_download`, `export_missing`, `google_ads_access_level`, `google_ads_customer`, `google_ads_error`, `google_ads_manager`, `google_ads_permission`.
+
+### What is proven and what is not
+
+- Typecheck and the full suite pass, with every 0.14.0 test unchanged except the version checks. The bulk path is tested against replies built from Shopify's documentation, not recorded from a live store, and end to end at 3 million synthetic orders against a stand-in endpoint. Google Ads is tested against answers shaped from the v26 REST reference.
+- Not run against a real Shopify store. The `created_at:<=` filter on `ordersCount` is unverified on a live store; if Shopify ignores it, `orders_complete` fails instead of passing silently.
+- Every sync after the first still exports the full history. A daily export of a 3 million order store is unmeasured on Shopify's side. A daily sync that only fetches what changed is not in this release.
+- Google Ads has not read a live or test account. Getting a refresh token needs Google sign-in with a passkey, done by the account owner.
 
 ## 0.14.0 (2026-11-24)
 
