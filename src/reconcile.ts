@@ -1,6 +1,7 @@
 import type { Db, Tx } from './db.js'
 import { settingValue } from './config.js'
 import { readWorkspace, REFERENCE_NAME, type Workspace } from './workspace.js'
+import { readCosts } from './costs.js'
 
 export type CheckStatus = 'pass' | 'warn' | 'fail' | 'skipped'
 export type Check = { name: string; status: CheckStatus; expected: number | null; actual: number | null; diffPct: number | null; detail: string }
@@ -275,10 +276,11 @@ export async function costCheck(db: Tx): Promise<Check | null> {
   if (!num(r.days)) return null
   const lines = num(r.lines)
   const share = lines ? round((num(r.costed) / lines) * 100) : 100
-  const pctSet = (await db.query(`SELECT 1 FROM meta_cost_setting WHERE key = 'cogs_percent'`)).length > 0
-  const status: CheckStatus = share >= 90 || pctSet ? 'pass' : 'warn'
+  // Only Shopify product costs depend on coverage. A percent or a cost per product does not.
+  const mode = readCosts()?.cogs.mode ?? 'shopify'
+  const status: CheckStatus = share >= 90 || mode !== 'shopify' ? 'pass' : 'warn'
   return {
     name: 'cost_coverage', status, expected: lines, actual: num(r.costed), diffPct: share,
-    detail: `${share}% of line items have a unit cost in Shopify.${share < 100 ? (pctSet ? ' cogs_percent covers the rest.' : ' The rest count as zero cost until you set cogs_percent: lifecycle costs set cogs_percent 35') : ''}`,
+    detail: `${share}% of line items have a product cost in Shopify.${share < 100 ? (mode === 'shopify' ? ' The rest count as zero cost: add costs to those products in Shopify, or use a percent or a cost per product.' : ` Cost of goods comes from your ${mode === 'percent' ? 'percent' : 'cost per product'}, so this does not change the margin.`) : ''}`,
   }
 }

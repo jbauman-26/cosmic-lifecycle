@@ -5,7 +5,8 @@ import { trustLine } from './reconcile.js'
 import { ATTRIBUTION_NOTE } from './reports.js'
 import { settingValue } from './config.js'
 import { readWorkspace, WORKSPACE_TYPES, type WorkspaceType } from './workspace.js'
-import { costNotes, costsConfigured } from './costs.js'
+import { costsConfigured } from './costs.js'
+import { computeMargin, MARGIN_SQL } from './margin.js'
 
 // 90 unless someone ran lifecycle config set metrics.default_days.
 export const defaultDays = () => settingValue('metrics.default_days')
@@ -26,8 +27,8 @@ export type Metric = {
   needs: Source[]
   sql: string
   notes?: string[]
-  // Margin metrics: the answer also names the cost inputs that are not set.
-  costInputs?: boolean
+  // Margin metrics are computed from costs.json; this says which part of the answer is the value.
+  margin?: 'cogs' | 'cm1' | 'cm2' | 'cm3' | 'cm3_percent' | 'coverage'
 }
 
 const ratio = (num: string, den: string, scale = 1) =>
@@ -144,30 +145,17 @@ export const PACK_METRICS: Metric[] = [
   { name: 'cost_per_lead', title: 'Cost per lead', description: 'Meta ad spend divided by new HubSpot contacts, over the days Meta was synced for.', unit: 'usd', needs: ['meta', 'hubspot'], sql: ratio(META_SPEND, CRM_LEADS_SINCE_META), notes: [CLAIM_FREE, META_ONLY_SPEND, 'Every new contact counts, from any source, so this is a blended cost per lead. Pair it with pipeline created: the cheapest lead is not always the cheapest customer.', META_CCY_NOTE] },
 ]
 
-// 0.14.0: contribution margin for a store. Revenue is Shopify net revenue (after discounts, edits and
-// refunds) minus the tax on those orders where the cost sync read it. Every cost input is the owner's
-// own number in meta_cost_setting, or Shopify's unit cost per line item; one not set counts as zero.
-const COST = (key: string) => `(SELECT coalesce((SELECT value FROM meta_cost_setting WHERE key = '${key}'), 0))`
-const M_ORDERS = ORDERS
-const M_NET = NET
-const M_TAX = `(SELECT coalesce(sum(c.tax), 0) FROM fact_cogs_daily c WHERE c.date >= $1 AND EXISTS (SELECT 1 FROM fact_orders_daily o WHERE o.date = c.date))`
-const M_REVENUE = `(${M_NET} - ${M_TAX})`
-const M_COGS = `(SELECT coalesce(sum(CASE WHEN c.date IS NOT NULL THEN c.cogs_known + c.uncosted_revenue * ${COST('cogs_percent')} / 100 ELSE (o.net_revenue) * ${COST('cogs_percent')} / 100 END), 0) FROM fact_orders_daily o LEFT JOIN fact_cogs_daily c ON c.date = o.date WHERE o.date >= $1)`
-const M_FULFIL = `(${M_ORDERS} * (${COST('shipping_per_order')} + ${COST('fulfillment_per_order')} + ${COST('payment_fee_fixed')}) + ${M_NET} * ${COST('payment_fee_percent')} / 100)`
-const M_CM1 = `(${M_REVENUE} - ${M_COGS})`
-const M_CM2 = `(${M_CM1} - ${M_FULFIL})`
-const M_CM3 = `(${M_CM2} - ${META_SPEND})`
-const MARGIN_NOTE = 'Revenue is Shopify net revenue, after discounts, edits and refunds, minus tax on days the cost sync read it. Shipping charged to the customer stays in revenue; what shipping costs you is a cost below.'
-const COGS_NOTE = 'Cost of goods is Shopify\'s unit cost times the quantity still on each order. Lines with no unit cost, and days with no cost sync, use cogs_percent; on those days it applies to net revenue, tax included.'
-const RETURNS_NOTE = 'Refunds lower revenue. The cost of a return (shipping it back, restocking, goods written off) is not counted.'
-
+// 0.14.0: contribution margin for a store, from the owner's costs.json (the file the app writes) and
+// the daily facts. Computed in src/margin.ts; the SQL shown is the one fixed query it reads.
+type MarginPart = 'cogs' | 'cm1' | 'cm2' | 'cm3' | 'cm3_percent' | 'coverage'
+const marginMetric = (name: string, title: string, description: string, unit: Unit, margin: MarginPart): Metric => ({ name, title, description, unit, needs: ['shopify'], sql: MARGIN_SQL, margin })
 export const MARGIN_METRICS: Metric[] = [
-  { name: 'cogs', title: 'Cost of goods', description: 'Shopify unit cost times quantity for orders in the window, plus cogs_percent of revenue for lines with no cost.', unit: 'usd', needs: ['shopify'], sql: single(M_COGS), notes: [COGS_NOTE], costInputs: true },
-  { name: 'gross_margin', title: 'Gross margin (CM1)', description: 'Revenue minus cost of goods.', unit: 'usd', needs: ['shopify'], sql: single(M_CM1), notes: [MARGIN_NOTE, COGS_NOTE], costInputs: true },
-  { name: 'contribution_margin_before_ads', title: 'Contribution margin before ads (CM2)', description: 'Gross margin minus shipping, fulfillment and payment fees per order.', unit: 'usd', needs: ['shopify'], sql: single(M_CM2), notes: [MARGIN_NOTE, COGS_NOTE, RETURNS_NOTE], costInputs: true },
-  { name: 'contribution_margin', title: 'Contribution margin (CM3)', description: 'Contribution margin before ads, minus ad spend in the window.', unit: 'usd', needs: ['shopify'], sql: single(M_CM3), notes: [MARGIN_NOTE, COGS_NOTE, RETURNS_NOTE, 'Ad spend is Meta spend in the window. Other paid channels are not counted yet, so the true margin is lower if you run them.', META_CCY_NOTE], costInputs: true },
-  { name: 'contribution_margin_percent', title: 'Contribution margin percent', description: 'Contribution margin (CM3) as a share of revenue.', unit: 'percent', needs: ['shopify'], sql: ratio(M_CM3, M_REVENUE, 100), notes: [MARGIN_NOTE], costInputs: true },
-  { name: 'cost_coverage', title: 'Line items with a unit cost', description: 'Share of line items in the window that have a unit cost in Shopify. The rest use cogs_percent.', unit: 'percent', needs: ['shopify'], sql: ratio(`(SELECT coalesce(sum(lines_with_cost), 0) FROM fact_cogs_daily WHERE date >= $1)`, `(SELECT coalesce(sum(lines), 0) FROM fact_cogs_daily WHERE date >= $1)`, 100) },
+  marginMetric('cogs', 'Cost of goods', 'Cost of goods for orders in the window, from Shopify product costs, a percent, or your cost per product.', 'usd', 'cogs'),
+  marginMetric('gross_margin', 'Margin after cost of goods (CM1)', 'Revenue less what the products cost you.', 'usd', 'cm1'),
+  marginMetric('contribution_margin_before_ads', 'Margin after shipping and fees (CM2)', 'CM1 less shipping and payment fees.', 'usd', 'cm2'),
+  marginMetric('contribution_margin', 'Contribution margin (CM3)', 'CM2 less ad spend. Also returns each day, what went in and what is missing.', 'usd', 'cm3'),
+  marginMetric('contribution_margin_percent', 'Contribution margin percent', 'CM3 as a share of revenue.', 'percent', 'cm3_percent'),
+  marginMetric('cost_coverage', 'Line items with a Shopify cost', 'Share of line items in the window whose product has a cost in Shopify.', 'percent', 'coverage'),
 ]
 
 // Which metrics each workspace type sees first. Shopify is exactly the 0.13 list, in order.
@@ -368,13 +356,23 @@ export async function runMetric(db: Tx | Db, name: string, days = defaultDays(),
     if (!r.length) missing.push(s)
   }
   const base = { metric: m.name, title: m.title, unit: m.unit, days, since, sql: m.sql, notes: m.notes ?? [], saved: false as const }
+  if (m.margin && !missing.length) {
+    const r = await computeMargin(db, since, days)
+    if (r.status !== 'ok') return { ...base, ...r, metric: m.name, value: null, numerator: null, denominator: null, missing: [] as Source[], trust: r.trust }
+    const t = r.total
+    const value = m.margin === 'cm3_percent' ? (t.revenue > 0 ? Math.round((t.cm3 / t.revenue) * 1000000) / 10000 : null) : m.margin === 'coverage' ? r.coverage : t[m.margin]
+    const parts = m.margin === 'cm3_percent' ? { numerator: t.cm3, denominator: t.revenue } : { numerator: null, denominator: null }
+    // contribution_margin carries the whole answer the app reads; the others carry the total beside their value.
+    // For contribution_margin, `missing` is the app's list of costs counted as zero, not sources.
+    const extra = m.name === 'contribution_margin' ? { currency: r.currency, total: t, rows: r.rows, included: r.included, missing: r.missing as unknown as Source[], orders_without_cost: r.orders_without_cost } : { currency: r.currency, total: t, included: r.included, missing_costs: r.missing, missing: [] as Source[] }
+    return { ...base, notes: [...r.notes, ...r.missing.map((x) => `Counted as zero: ${x}.`)], value, ...parts, ...extra, trust: r.trust, status: value === null ? ('no_data' as const) : ('ok' as const), detail: value === null ? 'No value for this window.' : '' }
+  }
   if (missing.length) {
     return { ...base, value: null, numerator: null, denominator: null, missing, trust: await trustLine(db), status: 'no_data' as const, detail: `No ${missing.join(' or ')} data synced. Connect it, then lifecycle sync.` }
   }
 
   const row = (await db.query(m.sql, [since]))[0] ?? {}
   const value = num(row.value)
-  if (m.costInputs) base.notes = [...base.notes, ...(await costNotes(db, since))]
   return {
     ...base,
     value: round(value, m.unit === 'count' ? 0 : 4),

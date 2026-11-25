@@ -6,7 +6,7 @@ import { workspacesDir } from './paths.js'
 import { findMetric, runMetric } from './metrics.js'
 import { storeCurrency } from './costs.js'
 import { tryWriteLock } from './lock.js'
-import { assertCurrency, fetchRate, parseRates, type Rate } from './fx.js'
+import { assertCurrency, fetchRates, parseRates, rateLine, type Rates } from './fx.js'
 import { readWorkspace } from './workspace.js'
 
 // One number across several stores, in one currency. Each store is a workspace on this machine:
@@ -22,7 +22,6 @@ const HOW: Record<string, How> = {
   contribution_margin_percent: 'money_over_money',
   flow_revenue_share: 'money_over_money',
   returning_order_share: 'count_over_count',
-  cost_coverage: 'count_over_count',
   ga4_purchase_rate: 'count_over_count',
   crm_win_rate: 'count_over_count',
   crm_lead_to_customer_rate: 'count_over_count',
@@ -61,7 +60,7 @@ async function inStore<T>(store: string, fn: () => Promise<T>): Promise<T> {
   }
 }
 
-export type RollupOptions = { open?: { store: string; db: import('./db.js').Db }; stores?: string[] | 'all'; currency?: string; days?: number; rateDate?: string; rates?: string[]; fetchRate?: typeof fetchRate }
+export type RollupOptions = { open?: { store: string; db: import('./db.js').Db }; stores?: string[] | 'all'; currency?: string; days?: number; rateDate?: string; rates?: string[]; fetchRates?: typeof fetchRates }
 
 export async function rollupMetric(name: string, opts: RollupOptions) {
   const how = rollupHow(name)
@@ -71,18 +70,18 @@ export async function rollupMetric(name: string, opts: RollupOptions) {
   const currency = assertCurrency(wanted)
   const stores = opts.stores === 'all' || !opts.stores?.length ? listStores() : opts.stores
   if (opts.rateDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(opts.rateDate)) throw new CliError('Use a rate date like 2026-11-20.', `lifecycle metrics run ${name} --all-stores --currency ${currency} --rate-date 2026-11-20`, 'bad_value')
-  const manual = parseRates(opts.rates, currency, opts.rateDate ?? new Date().toISOString().slice(0, 10))
-  const rates = new Map<string, Rate>(manual)
-  const getRate = opts.fetchRate ?? fetchRate
+  const manual = parseRates(opts.rates)
   const m = findMetric(name)
+  const counts = how === 'count' || how === 'count_over_count'
   type StoreRow = { store: string; status: string; [k: string]: any }
   const rows: StoreRow[] = []
+  // First every store's own answer and currency, then one rate request for all of them.
   for (const store of stores) {
     rows.push(await inStore(store, async () => {
       try {
         readConfig()
       } catch {
-        return { store, status: 'not_set_up' as const, detail: 'This store is not set up on this machine.' }
+        return { store, status: 'not_set_up', detail: 'This store is not set up on this machine.' }
       }
       // A database this process already holds (the MCP server's own) is used as it is, never opened twice.
       const held = opts.open?.store === store ? opts.open.db : null
@@ -98,45 +97,61 @@ export async function rollupMetric(name: string, opts: RollupOptions) {
         }
         const r = await runMetric(db, name, opts.days)
         const set = getSetting('workspace.currency')
-        const ccy = (set ? String(set) : null) ?? (await storeCurrency(db))
-        if (!ccy) return { store, status: 'no_currency' as const, detail: `This store's currency is not known. Set it: lifecycle --workspace ${store} config set workspace.currency EUR`, trust: r.trust }
-        let rate = rates.get(ccy) ?? null
-        if (!rate && how !== 'count' && how !== 'count_over_count') {
-          rate = await getRate(ccy, currency, opts.rateDate ?? null)
-          rates.set(ccy, rate)
-        }
-        const k = how === 'count' || how === 'count_over_count' ? 1 : rate!.rate
-        return { store, status: r.status, currency: ccy, value: r.value, numerator: r.numerator, denominator: r.denominator, rate: how === 'count' || how === 'count_over_count' ? null : rate, converted: r.value === null ? null : how === 'money_over_money' || how === 'count_over_count' ? r.value : Math.round(r.value * k * 100) / 100, trust: r.trust, notes: r.notes, detail: r.detail, workspace: readWorkspace().type }
+        const ccy = (await storeCurrency(db)) ?? (set ? String(set) : null)
+        const base = { store, status: r.status, value: r.value, numerator: r.numerator, denominator: r.denominator, trust: r.trust, notes: r.notes, detail: r.detail, workspace: readWorkspace().type }
+        if (!ccy && !counts) return { ...base, status: 'no_currency', detail: `This store's currency is not known. Set it in the app under Settings, Costs, or: lifecycle --workspace ${store} costs set currency EUR` }
+        return { ...base, currency: ccy }
       } finally {
         if (!held) await db.close()
       }
     }))
   }
-  const ok = rows.filter((r) => 'converted' in r && r.status === 'ok')
+  const need = [...new Set(rows.filter((r) => r.currency && r.currency !== currency && manual[r.currency] === undefined).map((r) => String(r.currency)))]
+  const fetched: Rates = need.length && !counts ? await (opts.fetchRates ?? fetchRates)(currency, opts.rateDate ?? null, need) : { base: currency, date: opts.rateDate ?? '', rates: { [currency]: 1 }, source: '' }
+  const rateOf = (ccy: string) => (ccy === currency ? 1 : manual[ccy] ?? fetched.rates[ccy] ?? null)
+  for (const r of rows) {
+    if (r.status !== 'ok') continue
+    if (counts) {
+      r.rate = null
+      r.converted = r.value
+      continue
+    }
+    const rate = rateOf(String(r.currency))
+    r.rate = rate
+    if (rate === null) {
+      r.status = 'no_rate'
+      r.detail = `No ${r.currency} rate for that day.`
+      r.converted = null
+      continue
+    }
+    r.rateSource = r.currency === currency ? 'same currency' : manual[r.currency] !== undefined ? 'set by the owner' : fetched.source
+    r.converted = how === 'money_over_money' ? r.value : r.value === null ? null : Math.round((r.value / rate) * 100) / 100
+  }
+  const ok = rows.filter((r) => r.status === 'ok')
   let total: number | null = null
   if (ok.length) {
-    const rate = (r: StoreRow) => (r.rate ? r.rate.rate : 1)
-    if (how === 'money' || how === 'count') total = ok.reduce((n, r) => n + (r.converted ?? 0), 0)
+    const rate = (r: StoreRow) => (r.rate ? r.rate : 1)
+    if (how === 'money' || how === 'count') total = Math.round(ok.reduce((n, r) => n + (r.converted ?? 0), 0) * 100) / 100
     else {
-      const num = ok.reduce((n, r) => n + Number(r.numerator ?? 0) * (how === 'count_over_count' ? 1 : rate(r)), 0)
-      const den = ok.reduce((n, r) => n + Number(r.denominator ?? 0) * (how === 'money_over_money' ? rate(r) : 1), 0)
-      total = den > 0 ? (num / den) * (m.unit === 'percent' ? 100 : 1) : null
+      const num = ok.reduce((n, r) => n + Number(r.numerator ?? 0) / (how === 'count_over_count' ? 1 : rate(r)), 0)
+      const den = ok.reduce((n, r) => n + Number(r.denominator ?? 0) / (how === 'money_over_money' ? rate(r) : 1), 0)
+      total = den > 0 ? Math.round((num / den) * (m.unit === 'percent' ? 100 : 1) * 10000) / 10000 : null
     }
-    total = total === null ? null : Math.round(total * 10000) / 10000
   }
   const trusts: { status: string; line: string }[] = rows.map((r) => (r.trust ? r.trust : { status: 'unchecked', line: '' }))
   const worst = TRUST_ORDER.find((s) => trusts.some((t) => t.status === s)) ?? 'unchecked'
   const missing = rows.filter((r) => r.status !== 'ok').map((r) => r.store)
-  const used = [...rates.values()].filter((r) => r.source !== 'same currency' && rows.some((x) => x.rate === r))
-  const line = worst === 'passed'
-    ? `Every store's numbers passed its own checks. In ${currency}${used.length ? ` at ${used.map((r) => `${r.from} ${r.rate} on ${r.date} (${r.source})`).join('; ')}` : ''}.`
-    : `Not every store's numbers passed: ${rows.map((r, i) => `${r.store} ${trusts[i]!.status}`).join(', ')}. In ${currency}${used.length ? ` at ${used.map((r) => `${r.from} ${r.rate} on ${r.date}`).join('; ')}` : ''}.`
+  const usedManual = rows.some((r) => r.rateSource === 'set by the owner')
+  const usedFetched = rows.some((r) => r.rateSource === fetched.source && fetched.source)
+  const currencyLine = counts ? `A count: no currency.` : usedFetched ? rateLine(fetched, false) + (usedManual ? ' Some rates set by the owner.' : '') : usedManual ? rateLine(fetched, true) : `In ${currency}.`
+  const line = worst === 'passed' ? "Every store's numbers passed its own checks." : `Not every store's numbers passed: ${rows.map((r, i) => `${r.store} ${trusts[i]!.status}`).join(', ')}.`
+  const rates = counts ? [] : Object.entries({ ...fetched.rates, ...manual }).filter(([c]) => c !== currency && rows.some((r) => r.currency === c)).map(([c, rate]) => ({ base: currency, currency: c, rate, date: manual[c] !== undefined ? null : fetched.date, source: manual[c] !== undefined ? 'set by the owner' : fetched.source }))
   return {
     rollup: true as const, metric: name, title: m.title, unit: m.unit, days: opts.days ?? null, currency, total,
-    stores: rows, rates: used, trust: { status: worst, line },
+    stores: rows, rates, line: currencyLine, trust: { status: worst, line }, left_out: missing,
     notes: [
       ...(missing.length ? [`Left out of the total: ${missing.join(', ')}.`] : []),
-      'Each store\'s money numbers are taken to be in that store\'s currency, then converted at one rate for the whole window. Rates are reference rates, not what a bank paid.',
+      'Each store\'s money numbers are taken to be in that store\'s currency and divided by one rate for the whole window. Rates are reference rates, not what a bank paid.',
     ],
   }
 }

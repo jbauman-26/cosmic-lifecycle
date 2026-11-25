@@ -94,9 +94,9 @@ dlt status, for the record: HubSpot, Salesforce, Pipedrive, Google Ads and Strip
 
 Added at the coordinator's request for the beta readiness plan (WP8). Contract for the app and Cloud: `cosmic-ai-desktop/docs/margin-contract.md`.
 
-- Costs: Shopify unit cost per line item (`src/sources/shopify-costs.ts`), plus the owner's `cogs_percent`, shipping, fulfillment and payment fee inputs (`lifecycle costs`).
-- Metrics: `cogs`, `gross_margin`, `contribution_margin_before_ads`, `contribution_margin`, `contribution_margin_percent`, `cost_coverage`.
-- Roll-up: `metrics run NAME --all-stores --currency USD`, one workspace per store, Frankfurter rates (ECB first) with the date on every total (https://frankfurter.dev).
+- Costs: the app's `costs.json` in the workspace folder (cost of goods from Shopify product costs, a percent, or a cost per SKU; shipping; payment fees; ad sources). Shopify product costs and SKU sales are read in `src/sources/shopify-costs.ts`. Fulfillment has no field of its own in the app's file; put it in shipping per order.
+- Metrics: `cogs`, `gross_margin`, `contribution_margin_before_ads`, `contribution_margin`, `contribution_margin_percent`, `cost_coverage`. `contribution_margin` returns the app's answer: `total`, `rows`, `included`, `missing`, `orders_without_cost`, `trust`.
+- Roll-up: `metrics run NAME --all-stores --currency USD`, one workspace per store, ECB reference rates via Frankfurter's v1 API, the app's rule (divide by the rate) and its line (https://frankfurter.dev).
 
 ## 6. Named workspaces
 

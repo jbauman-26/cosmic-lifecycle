@@ -80,16 +80,15 @@ export const MIGRATIONS = [
     // so the owner's cogs_percent can cover them.
     `CREATE TABLE IF NOT EXISTS fact_cogs_daily (
     date DATE PRIMARY KEY, currency TEXT NOT NULL, cogs_known NUMERIC NOT NULL, uncosted_revenue NUMERIC NOT NULL, tax NUMERIC NOT NULL,
-    lines BIGINT NOT NULL, lines_with_cost BIGINT NOT NULL, source_synced_at TIMESTAMPTZ NOT NULL)`,
-    // The owner's own cost inputs: percents and per-order amounts. Kept next to the data, so the
-    // margin metrics stay fixed SQL that reads them, and Cosmic Cloud can hold the same rows.
-    `CREATE TABLE IF NOT EXISTS meta_cost_setting (
-    key TEXT PRIMARY KEY, value NUMERIC NOT NULL, set_at TIMESTAMPTZ NOT NULL)`,
+    lines BIGINT NOT NULL, lines_with_cost BIGINT NOT NULL, orders_without_cost BIGINT NOT NULL, source_synced_at TIMESTAMPTZ NOT NULL)`,
+    // Units and revenue by SKU and day, for a cost per product the owner keeps outside Shopify. A SKU is a product code, not a person.
+    `CREATE TABLE IF NOT EXISTS fact_cogs_sku_daily (
+    date DATE NOT NULL, sku TEXT NOT NULL, units BIGINT NOT NULL, revenue NUMERIC NOT NULL, source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, sku))`,
 ];
 export const PUBLIC_TABLES = [
     'dim_flow', 'dim_campaign', 'dim_segment', 'fact_flow_daily',
     'fact_orders_daily', 'fact_cohort_monthly', 'fact_klaviyo_orders_daily', 'fact_flow_window', 'fact_ga4_daily',
     'fact_stripe_daily', 'fact_stripe_subscriptions_daily', 'fact_stripe_mrr', 'fact_meta_ads_daily',
-    'fact_crm_deals_daily', 'fact_crm_pipeline_open', 'fact_crm_contacts_daily', 'fact_cogs_daily', 'meta_cost_setting',
+    'fact_crm_deals_daily', 'fact_crm_pipeline_open', 'fact_crm_contacts_daily', 'fact_cogs_daily', 'fact_cogs_sku_daily',
     'meta_sync_run', 'meta_source_total', 'meta_source_window', 'meta_reconcile_result',
 ];

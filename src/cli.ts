@@ -57,7 +57,8 @@ import { randomUUID } from 'node:crypto'
 import { NATIVE, chooseSources, disconnectNative, isNative, parseOnly } from './native.js'
 import { CLOUD_TOKEN_ENV, CLOUD_URL_ENV, CloudClient, clean, cloudTokenSource, cloudUrl, isNotBuilt, loggedIn, verifyLogin } from './cloud.js'
 import { assertReadOnlySql } from './query.js'
-import { listCosts, setCost, unsetCost, writeCosts, COST_KEYS } from './costs.js'
+import { readCosts, setCost, setProductCosts, writeCosts, costsPath, COST_KEYS } from './costs.js'
+import { readFileSync } from 'node:fs'
 import { fetchCostOrders } from './sources/shopify-costs.js'
 import { rollupMetric } from './rollup.js'
 import { assertReference, assertType, readWorkspace, REFERENCE_NAME, TYPES, WORKSPACE_TYPES, noun, type WorkspaceType } from './workspace.js'
@@ -499,7 +500,8 @@ metrics.command('run').argument('<names...>').option('--days <n>', 'window in da
     emit(format(), out, () => results.map((r) => [
       r.trust.line,
       `${r.title}, all stores, last ${r.days} days: ${r.total === null ? 'no value' : r.unit === 'usd' ? `${r.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${r.currency}` : formatValue(r.unit, r.total)}`,
-      ...r.stores.map((x: any) => `  ${x.store}: ${x.status === 'ok' ? `${x.value} ${x.currency ?? ''}${x.rate ? ` x ${x.rate.rate} (${x.rate.date}) = ${x.converted} ${r.currency}` : ''}` : x.detail ?? x.status}`),
+      r.line,
+      ...r.stores.map((x: any) => `  ${x.store}: ${x.status === 'ok' ? `${x.value} ${x.currency ?? ''}${x.rate && x.rate !== 1 ? ` / ${x.rate} = ${x.converted} ${r.currency}` : ''}` : x.detail ?? x.status}`),
       ...r.notes,
     ].join('\n')).join('\n\n'))
     if (results.some((r) => r.stores.some((x: any) => x.status !== 'ok'))) process.exitCode = 1
@@ -547,38 +549,26 @@ metrics.command('candidates').description('Custom queries run more than once: ca
 }))
 
 // Costs for contribution margin: the owner's own rates, plus Shopify unit costs.
-const costs = program.command('costs').description('Cost inputs for contribution margin: Shopify unit costs plus your own shipping, fulfillment and payment fee rates')
-costs.command('show').description('Every cost input, its value and when it was set').action(run(async () => {
+const costs = program.command('costs').description('Cost inputs for contribution margin, in costs.json, the file the Cosmic AI app writes: cost of goods, shipping, payment fees and ad spend')
+costs.command('show').description('The cost inputs in costs.json, and how much of Shopify the cost sync has read').action(run(async () => {
+  const c = readCosts()
   const db = await openDb()
   try {
     await migrateIfFree(db, 'costs show')
-    const c = await listCosts(db)
     const cov = (await db.query(`SELECT count(*)::int AS days, coalesce(sum(lines), 0)::int AS lines, coalesce(sum(lines_with_cost), 0)::int AS costed, max(source_synced_at) AS at FROM fact_cogs_daily`))[0] ?? {}
-    const out = { costs: c, shopifyCosts: { days: Number(cov.days ?? 0), lines: Number(cov.lines ?? 0), linesWithCost: Number(cov.costed ?? 0), syncedAt: cov.at ? new Date(String(cov.at)).toISOString() : null } }
-    emit(format(), out, () => [...c.map((x) => `${x.key.padEnd(22)} ${x.value === null ? 'not set (counts as 0)' : x.value}  ${x.help}`), out.shopifyCosts.days ? `Shopify unit costs: ${out.shopifyCosts.linesWithCost} of ${out.shopifyCosts.lines} line items, synced ${clock(out.shopifyCosts.syncedAt)}` : 'Shopify unit costs: not synced. lifecycle costs sync'].join('\n'))
+    const out = { file: costsPath(), costs: c, shopifyCosts: { days: Number(cov.days ?? 0), lines: Number(cov.lines ?? 0), linesWithCost: Number(cov.costed ?? 0), syncedAt: cov.at ? new Date(String(cov.at)).toISOString() : null } }
+    emit(format(), out, () => [c ? JSON.stringify(c, null, 2) : 'No costs set. Start with: lifecycle costs set currency USD', out.shopifyCosts.days ? `Shopify product costs: ${out.shopifyCosts.linesWithCost} of ${out.shopifyCosts.lines} line items, synced ${clock(out.shopifyCosts.syncedAt)}` : 'Shopify product costs: not synced. lifecycle costs sync'].join('\n'))
   } finally {
     await db.close()
   }
 }))
-costs.command('set').argument('<key>', Object.keys(COST_KEYS).join(', ')).argument('<value>').description('Set one cost input').action(write('costs set', async (key: string, value: string) => {
-  const db = await openDb()
-  try {
-    await migrate(db)
-    const r = await setCost(db, key, value)
-    emit(format(), r, () => `${r.key} = ${r.value}`)
-  } finally {
-    await db.close()
-  }
+costs.command('set').argument('<key>', COST_KEYS.join(', ')).argument('<value>', 'such as USD, shopify, percent:35, per_order:6.50, none, 2.9, meta').description('Set one cost input in costs.json, the same file the Cosmic AI app writes').action(run(async (key: string, value: string) => {
+  const c = setCost(key, value)
+  emit(format(), c, () => `Saved ${key}. lifecycle costs show prints them all.`)
 }))
-costs.command('unset').argument('<key>').description('Remove one cost input. It counts as zero again').action(write('costs unset', async (key: string) => {
-  const db = await openDb()
-  try {
-    await migrate(db)
-    const r = await unsetCost(db, key)
-    emit(format(), r, () => `${r.key} removed`)
-  } finally {
-    await db.close()
-  }
+costs.command('products').argument('<csv>', 'a CSV of sku,unit_cost').option('--fallback <percent>', 'cost of goods for SKUs not in the file, as a percent of their revenue').description('Use your own cost per product instead of Shopify\'s').action(run(async (file: string, opts) => {
+  const c = setProductCosts(readFileSync(file, 'utf8'), opts.fallback)
+  emit(format(), c, () => `Saved ${c.cogs.mode === 'per_product' ? c.cogs.items.length : 0} product costs. Run lifecycle costs sync so sales by SKU are read.`)
 }))
 costs.command('sync').description('Read each line item\'s unit cost from Shopify. Needs read_inventory and read_products on the app. After the first one, lifecycle sync does it too').action(write('costs sync', async () => {
   const config = readConfig()

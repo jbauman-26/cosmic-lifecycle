@@ -1,5 +1,6 @@
 import { settingValue } from './config.js';
 import { readWorkspace, REFERENCE_NAME } from './workspace.js';
+import { readCosts } from './costs.js';
 // The defaults. Each one can be changed with lifecycle config set, see tolerances().
 export const TOLERANCE = { klaviyoOrders: 3, ga4Purchases: 15, attributedShareFlag: 60, freshnessDays: 2 };
 // Read on its own, not in tolerances(), so a store's tolerances read exactly as in 0.13.
@@ -263,10 +264,11 @@ export async function costCheck(db) {
         return null;
     const lines = num(r.lines);
     const share = lines ? round((num(r.costed) / lines) * 100) : 100;
-    const pctSet = (await db.query(`SELECT 1 FROM meta_cost_setting WHERE key = 'cogs_percent'`)).length > 0;
-    const status = share >= 90 || pctSet ? 'pass' : 'warn';
+    // Only Shopify product costs depend on coverage. A percent or a cost per product does not.
+    const mode = readCosts()?.cogs.mode ?? 'shopify';
+    const status = share >= 90 || mode !== 'shopify' ? 'pass' : 'warn';
     return {
         name: 'cost_coverage', status, expected: lines, actual: num(r.costed), diffPct: share,
-        detail: `${share}% of line items have a unit cost in Shopify.${share < 100 ? (pctSet ? ' cogs_percent covers the rest.' : ' The rest count as zero cost until you set cogs_percent: lifecycle costs set cogs_percent 35') : ''}`,
+        detail: `${share}% of line items have a product cost in Shopify.${share < 100 ? (mode === 'shopify' ? ' The rest count as zero cost: add costs to those products in Shopify, or use a percent or a cost per product.' : ` Cost of goods comes from your ${mode === 'percent' ? 'percent' : 'cost per product'}, so this does not change the margin.`) : ''}`,
     };
 }

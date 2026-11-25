@@ -1,12 +1,14 @@
 import { fetchJson, HttpError } from './http.js';
 import { CliError } from './errors.js';
 import { apiBase } from './sources/api-base.js';
-// Exchange rates for a roll-up across stores in different currencies. The source is Frankfurter
-// (https://frankfurter.dev), free, keyless, and free for commercial use per its FAQ. The European
-// Central Bank's reference rate is asked for first; a currency the ECB does not publish falls back
-// to Frankfurter's blended rate. Every rate is returned with the date it is for and where it came
-// from, so a converted total always says which rate made it. An owner can also give a rate by hand.
-export const FX_SOURCE = 'Frankfurter (frankfurter.dev)';
+// Exchange rates for one total across stores. The same source and the same rule as the Cosmic AI
+// app (cosmic-ai-desktop/src/shared/margin.ts), so both print the same total for the same day:
+// Frankfurter's v1 API, which republishes the European Central Bank's daily reference rates. Free,
+// no key, free for commercial use per its FAQ (https://frankfurter.dev).
+//
+// A rate is "1 reporting currency = rate store currency", and a store's amount is divided by it.
+// The date kept is the day the source published, which can be earlier than the day asked for.
+export const FX_SOURCE = 'European Central Bank reference rates, via Frankfurter';
 const API = 'https://api.frankfurter.dev';
 export const assertCurrency = (c) => {
     const v = c.trim().toUpperCase();
@@ -14,44 +16,40 @@ export const assertCurrency = (c) => {
         throw new CliError(`${c} is not a three letter currency code.`, 'Use a code such as USD, EUR or GBP.', 'bad_value');
     return v;
 };
-// --rate EUR=1.0955 means one EUR is 1.0955 of the reporting currency.
-export function parseRates(values, to, date) {
-    const out = new Map();
+export async function fetchRates(base, day, symbols, fetcher = fetchJson) {
+    const qs = new URLSearchParams({ base, ...(symbols.length ? { symbols: symbols.join(',') } : {}) });
+    let b;
+    try {
+        b = await fetcher(`${apiBase('fx', API)}/v1/${day ?? 'latest'}?${qs}`, {}, 'Exchange rate request', { retries: 2 });
+    }
+    catch (e) {
+        if (e instanceof HttpError && (e.status === 404 || e.status === 422))
+            return { base, date: day ?? '', rates: { [base]: 1 }, source: FX_SOURCE };
+        throw new CliError(`Could not get exchange rates: ${e instanceof Error ? e.message : String(e)}`, 'Try again, or give the rate by hand: --rate EUR=0.91', 'no_rate');
+    }
+    if (b?.base !== base || typeof b?.date !== 'string' || typeof b?.rates !== 'object')
+        throw new CliError('The exchange rate source sent an answer this CLI cannot read.', 'Try again, or give the rate by hand: --rate EUR=0.91', 'no_rate');
+    const rates = { [base]: 1 };
+    for (const [k, v] of Object.entries(b.rates))
+        if (typeof v === 'number' && v > 0)
+            rates[k] = v;
+    return { base, date: b.date, rates, source: FX_SOURCE };
+}
+// --rate EUR=0.9099 means 1 of the reporting currency is 0.9099 EUR, the way the source writes it.
+export function parseRates(values) {
+    const out = {};
     for (const v of values ?? []) {
         const m = /^([A-Za-z]{3})=([0-9]*\.?[0-9]+)$/.exec(v.trim());
         if (!m || !(Number(m[2]) > 0))
-            throw new CliError(`${v} is not a rate.`, `Write it as CODE=RATE, one CODE in ${to}: --rate EUR=1.0955`, 'bad_value');
-        const from = assertCurrency(m[1]);
-        out.set(from, { from, to, rate: Number(m[2]), date, source: 'set by the owner' });
+            throw new CliError(`${v} is not a rate.`, 'Write it as CODE=RATE, how many CODE one unit of the reporting currency buys: --rate EUR=0.9099', 'bad_value');
+        out[assertCurrency(m[1])] = Number(m[2]);
     }
     return out;
 }
-export async function fetchRate(from, to, date, fetcher = fetchJson) {
-    if (from === to)
-        return { from, to, rate: 1, date: date ?? new Date().toISOString().slice(0, 10), source: 'same currency' };
-    const base = apiBase('fx', API);
-    const q = date ? `?date=${date}` : '';
-    const read = async (path, source) => {
-        const b = await fetcher(`${base}${path}${q}`, {}, 'Exchange rate request', { retries: 2 });
-        const rate = Number(b?.rate);
-        if (!(rate > 0) || typeof b?.date !== 'string')
-            throw new CliError(`The exchange rate source sent no rate for ${from} to ${to}.`, `Give it by hand: --rate ${from}=RATE`, 'no_rate');
-        return { from, to, rate, date: b.date, source };
-    };
-    try {
-        return await read(`/v2/providers/ecb/rate/${from.toLowerCase()}/${to.toLowerCase()}`, `${FX_SOURCE}, European Central Bank reference rate`);
-    }
-    catch (e) {
-        if (!(e instanceof HttpError && (e.status === 404 || e.status === 422)))
-            throw wrap(e, from);
-    }
-    try {
-        return await read(`/v2/rate/${from.toLowerCase()}/${to.toLowerCase()}`, `${FX_SOURCE}, blended rate`);
-    }
-    catch (e) {
-        throw wrap(e, from);
-    }
+// "In USD at European Central Bank reference rates, via Frankfurter for Nov 24, 2026."
+export function rateLine(r, manual) {
+    if (manual)
+        return `In ${r.base} at rates set by the owner.`;
+    const day = r.date ? new Date(`${r.date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : 'the latest day';
+    return `In ${r.base} at ${r.source} for ${day}.`;
 }
-const wrap = (e, from) => e instanceof CliError && e.code === 'no_rate'
-    ? e
-    : new CliError(`Could not get an exchange rate for ${from}: ${e instanceof Error ? e.message : String(e)}`, `Try again, or give it by hand: --rate ${from}=RATE`, 'no_rate');

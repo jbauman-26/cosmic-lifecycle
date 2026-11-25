@@ -20,6 +20,7 @@ const COSTS_QUERY = `query($c: String) {
       lineItems(first: 100) {
         pageInfo { hasNextPage }
         nodes {
+          sku
           currentQuantity
           discountedUnitPriceAfterAllDiscountsSet { shopMoney { amount } }
           variant { inventoryItem { unitCost { amount } } }
@@ -33,32 +34,45 @@ const money = (n) => Math.round(n * 10000) / 10000;
 // A line with no variant, or a variant with no cost, counts its revenue as uncosted.
 export function aggregateCosts(orders) {
     const daily = new Map();
+    const skus = new Map();
     let truncatedOrders = 0;
     for (const o of orders) {
         if (o.cancelledAt)
             continue;
         const date = o.processedAt.slice(0, 10);
-        const d = daily.get(date) ?? { date, cogsKnown: 0, uncostedRevenue: 0, tax: 0, lines: 0, linesWithCost: 0 };
+        const d = daily.get(date) ?? { date, cogsKnown: 0, uncostedRevenue: 0, tax: 0, lines: 0, linesWithCost: 0, ordersWithoutCost: 0 };
         if (o.lineItems.pageInfo?.hasNextPage)
             truncatedOrders++;
         d.tax = money(d.tax + Number(o.currentTotalTaxSet?.shopMoney.amount ?? 0));
+        let uncosted = false;
         for (const l of o.lineItems.nodes) {
             const qty = Number(l.currentQuantity ?? 0);
             if (!qty)
                 continue;
             d.lines++;
+            const price = Number(l.discountedUnitPriceAfterAllDiscountsSet?.shopMoney.amount ?? 0);
+            // By SKU too, for a cost per product the owner keeps outside Shopify. A line with no SKU is "(none)".
+            const sku = (l.sku ?? '').trim().slice(0, 64) || '(none)';
+            const k = `${date}|${sku}`;
+            const sd = skus.get(k) ?? { date, sku, units: 0, revenue: 0 };
+            sd.units += qty;
+            sd.revenue = money(sd.revenue + price * qty);
+            skus.set(k, sd);
             const cost = l.variant?.inventoryItem?.unitCost?.amount;
             if (cost !== undefined && cost !== null && cost !== '' && Number.isFinite(Number(cost))) {
                 d.linesWithCost++;
                 d.cogsKnown = money(d.cogsKnown + Number(cost) * qty);
             }
             else {
-                d.uncostedRevenue = money(d.uncostedRevenue + Number(l.discountedUnitPriceAfterAllDiscountsSet?.shopMoney.amount ?? 0) * qty);
+                uncosted = true;
+                d.uncostedRevenue = money(d.uncostedRevenue + price * qty);
             }
         }
+        if (uncosted)
+            d.ordersWithoutCost++;
         daily.set(date, d);
     }
-    return { daily: [...daily.values()], truncatedOrders };
+    return { daily: [...daily.values()], skus: [...skus.values()], truncatedOrders };
 }
 export async function fetchCostOrders(store, token, fetcher = fetchJson) {
     const out = [];
