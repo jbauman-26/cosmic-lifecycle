@@ -4,6 +4,7 @@ import { trustLine } from './reconcile.js';
 import { ATTRIBUTION_NOTE } from './reports.js';
 import { settingValue } from './config.js';
 import { readWorkspace, WORKSPACE_TYPES } from './workspace.js';
+import { costNotes, costsConfigured } from './costs.js';
 // 90 unless someone ran lifecycle config set metrics.default_days.
 export const defaultDays = () => settingValue('metrics.default_days');
 const ratio = (num, den, scale = 1) => `SELECT CASE WHEN (${den}) > 0 THEN (${num}) * ${scale}.0 / (${den}) END AS value, (${num}) AS numerator, (${den}) AS denominator`;
@@ -114,6 +115,30 @@ export const PACK_METRICS = [
     { name: 'crm_average_deal_size', title: 'Average deal size', description: 'Closed won revenue divided by deals won in the window.', unit: 'usd', needs: ['hubspot'], sql: ratio(CRM_WON_AMOUNT, CRM_WON_IN_CCY), notes: [CRM_CCY_NOTE] },
     { name: 'cost_per_lead', title: 'Cost per lead', description: 'Meta ad spend divided by new HubSpot contacts, over the days Meta was synced for.', unit: 'usd', needs: ['meta', 'hubspot'], sql: ratio(META_SPEND, CRM_LEADS_SINCE_META), notes: [CLAIM_FREE, META_ONLY_SPEND, 'Every new contact counts, from any source, so this is a blended cost per lead. Pair it with pipeline created: the cheapest lead is not always the cheapest customer.', META_CCY_NOTE] },
 ];
+// 0.14.0: contribution margin for a store. Revenue is Shopify net revenue (after discounts, edits and
+// refunds) minus the tax on those orders where the cost sync read it. Every cost input is the owner's
+// own number in meta_cost_setting, or Shopify's unit cost per line item; one not set counts as zero.
+const COST = (key) => `(SELECT coalesce((SELECT value FROM meta_cost_setting WHERE key = '${key}'), 0))`;
+const M_ORDERS = ORDERS;
+const M_NET = NET;
+const M_TAX = `(SELECT coalesce(sum(c.tax), 0) FROM fact_cogs_daily c WHERE c.date >= $1 AND EXISTS (SELECT 1 FROM fact_orders_daily o WHERE o.date = c.date))`;
+const M_REVENUE = `(${M_NET} - ${M_TAX})`;
+const M_COGS = `(SELECT coalesce(sum(CASE WHEN c.date IS NOT NULL THEN c.cogs_known + c.uncosted_revenue * ${COST('cogs_percent')} / 100 ELSE (o.net_revenue) * ${COST('cogs_percent')} / 100 END), 0) FROM fact_orders_daily o LEFT JOIN fact_cogs_daily c ON c.date = o.date WHERE o.date >= $1)`;
+const M_FULFIL = `(${M_ORDERS} * (${COST('shipping_per_order')} + ${COST('fulfillment_per_order')} + ${COST('payment_fee_fixed')}) + ${M_NET} * ${COST('payment_fee_percent')} / 100)`;
+const M_CM1 = `(${M_REVENUE} - ${M_COGS})`;
+const M_CM2 = `(${M_CM1} - ${M_FULFIL})`;
+const M_CM3 = `(${M_CM2} - ${META_SPEND})`;
+const MARGIN_NOTE = 'Revenue is Shopify net revenue, after discounts, edits and refunds, minus tax on days the cost sync read it. Shipping charged to the customer stays in revenue; what shipping costs you is a cost below.';
+const COGS_NOTE = 'Cost of goods is Shopify\'s unit cost times the quantity still on each order. Lines with no unit cost, and days with no cost sync, use cogs_percent; on those days it applies to net revenue, tax included.';
+const RETURNS_NOTE = 'Refunds lower revenue. The cost of a return (shipping it back, restocking, goods written off) is not counted.';
+export const MARGIN_METRICS = [
+    { name: 'cogs', title: 'Cost of goods', description: 'Shopify unit cost times quantity for orders in the window, plus cogs_percent of revenue for lines with no cost.', unit: 'usd', needs: ['shopify'], sql: single(M_COGS), notes: [COGS_NOTE], costInputs: true },
+    { name: 'gross_margin', title: 'Gross margin (CM1)', description: 'Revenue minus cost of goods.', unit: 'usd', needs: ['shopify'], sql: single(M_CM1), notes: [MARGIN_NOTE, COGS_NOTE], costInputs: true },
+    { name: 'contribution_margin_before_ads', title: 'Contribution margin before ads (CM2)', description: 'Gross margin minus shipping, fulfillment and payment fees per order.', unit: 'usd', needs: ['shopify'], sql: single(M_CM2), notes: [MARGIN_NOTE, COGS_NOTE, RETURNS_NOTE], costInputs: true },
+    { name: 'contribution_margin', title: 'Contribution margin (CM3)', description: 'Contribution margin before ads, minus ad spend in the window.', unit: 'usd', needs: ['shopify'], sql: single(M_CM3), notes: [MARGIN_NOTE, COGS_NOTE, RETURNS_NOTE, 'Ad spend is Meta spend in the window. Other paid channels are not counted yet, so the true margin is lower if you run them.', META_CCY_NOTE], costInputs: true },
+    { name: 'contribution_margin_percent', title: 'Contribution margin percent', description: 'Contribution margin (CM3) as a share of revenue.', unit: 'percent', needs: ['shopify'], sql: ratio(M_CM3, M_REVENUE, 100), notes: [MARGIN_NOTE], costInputs: true },
+    { name: 'cost_coverage', title: 'Line items with a unit cost', description: 'Share of line items in the window that have a unit cost in Shopify. The rest use cogs_percent.', unit: 'percent', needs: ['shopify'], sql: ratio(`(SELECT coalesce(sum(lines_with_cost), 0) FROM fact_cogs_daily WHERE date >= $1)`, `(SELECT coalesce(sum(lines), 0) FROM fact_cogs_daily WHERE date >= $1)`, 100) },
+];
 // Which metrics each workspace type sees first. Shopify is exactly the 0.13 list, in order.
 export const PACKS = {
     shopify: METRICS.map((m) => m.name),
@@ -124,7 +149,7 @@ export const PACKS = {
     creator: ['stripe_net_revenue', 'stripe_new_customers', 'stripe_mrr', 'stripe_subscriptions_started', 'stripe_subscriptions_ended', 'stripe_subscription_churn_rate', 'ga4_sessions', 'visit_to_paid_rate', 'meta_ad_spend', 'cost_per_new_customer', 'flow_attributed_revenue'],
 };
 // Every built-in metric: the Shopify pack, then the rest. A name is unique across both.
-export const ALL_METRICS = [...METRICS, ...PACK_METRICS];
+export const ALL_METRICS = [...METRICS, ...PACK_METRICS, ...MARGIN_METRICS];
 export function assertPack(p) {
     const v = p.trim().toLowerCase();
     if (v !== 'all' && !WORKSPACE_TYPES.includes(v))
@@ -185,8 +210,12 @@ export async function findSavedMetric(db, name) {
 // Built-in metrics first, then the owner's saved ones, each marked.
 export async function listAllMetrics(db, pack) {
     const saved = db ? await listSavedMetrics(db) : [];
+    // A store that has entered costs also sees the margin metrics, after the 0.13 list.
+    const p = pack ?? readWorkspace().type;
+    const margin = p === 'shopify' && (await costsConfigured(db)) ? MARGIN_METRICS.map(({ name, title, description, unit, needs }) => ({ name, title, description, unit, needs, saved: false })) : [];
     return [
         ...listMetrics(pack),
+        ...margin,
         ...saved.map((m) => ({ name: m.name, title: m.title, description: SAVED_NOTE, unit: m.unit, needs: [], saved: true })),
     ];
 }
@@ -306,6 +335,8 @@ export async function runMetric(db, name, days = defaultDays(), now = Date.now()
     }
     const row = (await db.query(m.sql, [since]))[0] ?? {};
     const value = num(row.value);
+    if (m.costInputs)
+        base.notes = [...base.notes, ...(await costNotes(db, since))];
     return {
         ...base,
         value: round(value, m.unit === 'count' ? 0 : 4),

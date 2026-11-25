@@ -15,7 +15,9 @@ import { listAllMetrics, metricCandidates, runMetric } from './metrics.js';
 import { tryWriteLock, withWriteLock } from './lock.js';
 import { ALL_NATIVE, CATALOG } from './sources-catalog.js';
 import { readWorkspace, REFERENCE_NAME, TYPES, WORKSPACE_TYPES } from './workspace.js';
-import { assertPack } from './metrics.js';
+import { assertPack, defaultDays } from './metrics.js';
+import { rollupMetric } from './rollup.js';
+import { workspaceName } from './paths.js';
 const text = (data) => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
 export async function schemaInfo(db) {
     const out = {};
@@ -54,9 +56,17 @@ export function buildMcpServer(db) {
     });
     server.registerTool('metric', {
         description: 'Run one metric over a window: a verified one, or a number the owner saved (the result says saved: true, and its SQL is the owner\'s, not reviewed). Returns the value, its inputs, the exact SQL and the trust line. Names come from list_metrics.',
-        inputSchema: { name: z.string().regex(/^[a-z][a-z0-9_]{2,63}$/).describe('a name from list_metrics'), days: z.number().int().min(1).max(730).optional().describe('window in days; defaults to metrics.default_days, 90 unless changed') },
+        inputSchema: {
+            name: z.string().regex(/^[a-z][a-z0-9_]{2,63}$/).describe('a name from list_metrics'),
+            days: z.number().int().min(1).max(730).optional().describe('window in days; defaults to metrics.default_days, 90 unless changed'),
+            stores: z.union([z.literal('all'), z.array(z.string().regex(/^(default|[a-z0-9][a-z0-9-]{0,39})$/))]).optional().describe('add the metric up across stores (workspaces on this machine): all, or a list. Needs currency'),
+            currency: z.string().regex(/^[A-Za-z]{3}$/).optional().describe('reporting currency for stores, such as USD'),
+            rate_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('exchange rate date; defaults to the latest'),
+        },
         annotations: readOnly,
-    }, async ({ name, days }) => text(await runMetric(db, name, days)));
+    }, async ({ name, days, stores, currency, rate_date }) => text(stores
+        ? await rollupMetric(name, { stores, currency, days: days ?? defaultDays(), rateDate: rate_date, open: { store: workspaceName() ?? 'default', db } })
+        : await runMetric(db, name, days)));
     server.registerTool('list_source_catalog', { description: 'Sources this CLI can connect, what each syncs, and the command to connect it.', annotations: readOnly }, async () => text(readWorkspace().type === 'shopify' ? CATALOG : ALL_NATIVE));
     server.registerTool('list_tool_catalog', { description: 'Read-only Klaviyo and Shopify API tools that run on the user\'s own keys.', annotations: readOnly }, async () => text(toolCatalog()));
     server.registerTool('run_tool', {

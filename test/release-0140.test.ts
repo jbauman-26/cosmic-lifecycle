@@ -554,3 +554,15 @@ describe('a SaaS workspace end to end, with no Shopify', () => {
     expect(JSON.parse(readFileSync(join(home, 'config.json'), 'utf8')).workspace).toBeUndefined()
   }, 60_000)
 })
+
+describe('0.14.0', () => {
+  it('is version 0.14.0 everywhere a version is written, and documents workspaces', async () => {
+    const { VERSION } = await import('../src/version.js')
+    const { DOCS } = await import('../src/docs.js')
+    expect(VERSION).toBe('0.14.0')
+    expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe('0.14.0')
+    expect(readFileSync('CHANGELOG.md', 'utf8')).toMatch(/^## 0\.14\.0 \(2026-11-24\)/m)
+    expect(DOCS.workspaces).toMatch(/unreferenced/)
+    for (const f of ['docs/WORKSPACES.md', 'CHANGELOG.md', 'README.md']) expect(readFileSync(f, 'utf8')).not.toMatch(/[–—]/)
+  })
+})

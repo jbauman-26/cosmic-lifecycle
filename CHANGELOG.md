@@ -2,6 +2,42 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.14.0 (2026-11-24)
+
+The CLI for any marketer. A workspace now says what kind of business it is, and the trust gate checks its numbers against that business's own source of truth. Shopify stays a first-class path and stops being a requirement. An install from before 0.14.0 is a Shopify store and behaves exactly as it did. The spec is `docs/WORKSPACES.md`.
+
+### Added
+
+- **Workspace types.** `lifecycle init --type shopify|ecommerce|saas|b2b|agency|creator`, and a picker when a new workspace is set up in a terminal with no `--type`. Stored as `workspace.type` in `config.json`. No type means `shopify`. `lifecycle workspace show` and `lifecycle workspace list`, and an MCP tool `workspace`.
+- **A source of truth per type.** Shopify orders for a store, Stripe for ecommerce, SaaS and creator, HubSpot for B2B, set per client for an agency. Change it with `lifecycle config set workspace.reference stripe|hubspot|shopify|ga4|none` or `init --reference`. New checks: `reference`, `stripe_daily_complete`, `subscriptions_balance`, `ga4_vs_reference`, `ad_claims` (a warning above `reconcile.ad_claim_flag`, default 100%), `deals_complete`, `contacts_complete`, `deals_daily_vs_pulled`. A store runs the seven 0.13 checks and no others.
+- **Trust status `unreferenced`.** When a workspace has no source of truth, it has not synced, or the only one is GA4, every number says so in a plain sentence instead of passing or failing.
+- **Metric packs.** 22 new built-in metrics: MRR history, ARPA, churn, new paying customers, cost per new customer, visit to paid, Meta CPC, CTR and CPM, leads, lead to customer, deals, pipeline created, open pipeline, won revenue, win rate, average deal size, cost per lead. `metrics list` shows the workspace's pack; `metrics list --pack TYPE|all` shows any. MCP `list_metrics` takes `pack`. A store's list is the 0.13 list.
+- **HubSpot as a built-in source.** `lifecycle connect hubspot --token-env HUBSPOT_TOKEN` (a private app with `crm.objects.deals.read` and `crm.objects.contacts.read`). It asks HubSpot for stage, source, date and amount properties only and stores daily counts and amounts in `fact_crm_deals_daily`, `fact_crm_pipeline_open` and `fact_crm_contacts_daily`. No contact, company or deal record, and no id, is stored. Built from the CRM v3 docs and tested against a stand-in; not yet run on a real portal.
+- **Warehouse connectors**, built from vendor docs, not yet run on a real account: `hubspot-records` (ids, stages, sources, dates, amounts), `pipedrive`, `woocommerce`, `bigcommerce`, `customer-io`. Planned with reasons: `salesforce`, `linkedin-ads`, `posthog`, `mixpanel`. Each built one loads in dlt and passes the 0.13.2 personal-data rules on recorded rows. `sources catalog --type TYPE`.
+- **Contribution margin for a store.** `lifecycle costs show|set|unset|sync`: Shopify unit costs per line item (needs `read_inventory` and `read_products`), plus the owner's `cogs_percent`, `shipping_per_order`, `fulfillment_per_order`, `payment_fee_percent` and `payment_fee_fixed`. Metrics `cogs`, `gross_margin`, `contribution_margin_before_ads`, `contribution_margin`, `contribution_margin_percent`, `cost_coverage`, each naming the inputs not set. A reconcile check `cost_coverage` once costs are synced. The margin metrics join a store's list only once costs exist. Contract: `cosmic-ai-desktop/docs/margin-contract.md`.
+- **One total across stores.** `metrics run NAME --all-stores|--stores A,B --currency USD [--rate-date DATE] [--rate EUR=1.09]`, and the same on the MCP `metric` tool (`stores`, `currency`, `rate_date`). Rates from Frankfurter (frankfurter.dev), the European Central Bank's rate first, with the rate, its date and source on every total. Settings `workspace.currency` and `rollup.currency`.
+- **Named workspaces.** `lifecycle --workspace NAME ...` or `LIFECYCLE_WORKSPACE`: an agency keeps one per client, each with its own config, database, files and keychain service.
+- **A demo per type.** `lifecycle demo --type saas|b2b`, and `demo` picks the workspace's type. Each plants a fault the trust gate catches.
+- **Kits by type.** Kit manifests take `types` and `extra_needs`. `kits list --type TYPE`.
+- `connect shopify --shop` (`--store` still works). `docs workspaces`.
+- `LIFECYCLE_STRIPE_API_URL`, `LIFECYCLE_HUBSPOT_API_URL` and `LIFECYCLE_FX_API_URL` point a source at a stand-in on this machine, for tests. Only a loopback address is accepted.
+
+### Changed
+
+- Help text, docs, the README and the `/lifecycle` skill speak to any business. Sentences that come from Cosmic Cloud, and the JSON keys, are unchanged.
+- `init --format json` also returns `type` and `reference`.
+- `reconcile` removes the stored result of a check the workspace no longer runs.
+
+### For the app and Cloud
+
+- New trust status `unreferenced`. New check names above. New tables `fact_crm_*`, `fact_cogs_daily`, `meta_cost_setting`. New secret `hubspot-token` (`LIFECYCLE_HUBSPOT_TOKEN`). New error codes: `bad_type`, `unknown_pack`, `hubspot_scope`, `not_summable`, `no_currency`, `no_rate`.
+
+### What is proven and what is not
+
+- Typecheck and the full suite pass, with every 0.13 test unchanged. A SaaS workspace runs `init --type saas`, `demo`, `connect stripe` and `sync` against a stand-in Stripe, `reconcile`, `metrics run` and the MCP server end to end with no Shopify. A B2B workspace does the same against a stand-in HubSpot.
+- Margin matches a hand calculation to the tenth of a cent on a fixed store. A USD and an EUR store roll up into one USD total that moves with the rate date.
+- Not run on any real HubSpot portal, Shopify cost data, WooCommerce, BigCommerce, Pipedrive or Customer.io account. The tests use a stand-in rate source. One call to the real one (ECB EUR to USD for 2026-11-20) returned the shape the code reads, and a currency the ECB does not publish returned 422, which falls back to the blended rate.
+
 ## 0.13.2 (2026-11-24)
 
 A privacy fix. The promise is that customer names, emails, phone numbers and street addresses never enter the warehouse. Two gaps were found on 2026-11-24 and are closed here, and a third was found while closing them.

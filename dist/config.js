@@ -109,6 +109,18 @@ export const SETTINGS = {
 // Settings added in 0.14.0 for workspaces that are not Shopify stores. They can be set in any
 // workspace, and `config list` shows them in every workspace but a store, whose list reads as in 0.13.
 export const WORKSPACE_SETTINGS = {
+    'workspace.currency': { description: 'This store\'s currency for a roll-up across stores, such as EUR. Read from Shopify by lifecycle costs sync when not set', parse: (v) => {
+            const c = v.trim().toUpperCase();
+            if (!/^[A-Z]{3}$/.test(c))
+                throw new CliError('Use a three letter currency code, such as EUR.', 'lifecycle config set workspace.currency EUR', 'bad_value');
+            return c;
+        } },
+    'rollup.currency': { description: 'Reporting currency for metrics run --all-stores, such as USD', parse: (v) => {
+            const c = v.trim().toUpperCase();
+            if (!/^[A-Z]{3}$/.test(c))
+                throw new CliError('Use a three letter currency code, such as USD.', 'lifecycle config set rollup.currency USD', 'bad_value');
+            return c;
+        } },
     'workspace.reference': { description: 'Source of truth the trust gate checks against: shopify, stripe, hubspot, ga4 or none. Default: the one for the workspace type', parse: (v) => {
             const r = v.trim().toLowerCase();
             if (!['shopify', 'stripe', 'hubspot', 'ga4', 'none'].includes(r))
