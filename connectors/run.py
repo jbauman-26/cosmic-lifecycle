@@ -34,7 +34,7 @@ PLACEHOLDER = re.compile(r"\{(secret|param):([A-Za-z0-9_]+)\}")
 # that asks for personal data to be removed stops instead of loading unfiltered rows.
 RULES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "personal-rules.json")
 EMAIL_VALUE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-PHONE_VALUE = re.compile(r"(?<![\w+])(?:\+(?=(?:[ .()-]*\d){8})\d{1,3}(?:[ .-]?\(?\d{1,4}\)?){1,4}[ .-]?\d{3,4}|\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4})(?!\d)", re.ASCII)
+PHONE_VALUE = re.compile(r"(?<![\w+])(?:\+(?=(?:[ .()-]*\d){8})\d{1,3}(?:[ .-]?\(?\d{1,4}\)?){1,4}[ .-]?\d{3,4}|\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4})(?!\d|\.\d)", re.ASCII)
 REMOVED = "[removed]"
 
 

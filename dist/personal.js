@@ -299,9 +299,10 @@ export const EMAIL_PATTERN = '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}';
  * A phone number: + and at least eight digits in groups, or ten digits written as 3-3-4 with
  * optional spaces, dots, dashes or brackets. A date (2026-11-24), a time, a price, an order number of
  * another length and a 13 digit timestamp do not match. A bare ten digit number does: in free text
- * that is far more often a phone than anything else.
+ * that is far more often a phone than anything else. A number followed by a dot and digits is an
+ * amount (1234567890.00 is $1.2 billion, not a phone), the same rule as the app's looksLikePhone.
  */
-export const PHONE_PATTERN = '(?<![\\w+])(?:\\+(?=(?:[ .()-]*\\d){8})\\d{1,3}(?:[ .-]?\\(?\\d{1,4}\\)?){1,4}[ .-]?\\d{3,4}|\\(?\\d{3}\\)?[ .-]?\\d{3}[ .-]?\\d{4})(?!\\d)';
+export const PHONE_PATTERN = '(?<![\\w+])(?:\\+(?=(?:[ .()-]*\\d){8})\\d{1,3}(?:[ .-]?\\(?\\d{1,4}\\)?){1,4}[ .-]?\\d{3,4}|\\(?\\d{3}\\)?[ .-]?\\d{3}[ .-]?\\d{4})(?!\\d|\\.\\d)';
 export const REMOVED = '[removed]';
 const EMAIL_RE = new RegExp(EMAIL_PATTERN, 'g');
 const PHONE_RE = new RegExp(PHONE_PATTERN, 'g');

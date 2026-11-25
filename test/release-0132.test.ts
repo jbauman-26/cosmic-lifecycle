@@ -192,6 +192,7 @@ print(json.dumps(out))
       'write to someone.fixture@example.org today', 'call +1 555 010 0199', 'call +15550100199 now', 'ring (555) 010-0142.', 'ring 555-010-0142', 'ring 555.010.0142', 'mobile 5550100142',
       'UK line +44 20 7946 0958', 'AU +61 2 9374 4000 ok', 'order 2026-11-24 arrived', 'at 2026-11-24T10:30:00Z', 'order #1001 late', 'paid $1,234,567.89', 'ms 1732492800123', 'id 550e8400-e29b-41d4-a716-446655440000',
       'tracking 9400111899223197428490', 'size 10 12 14', 'v1.2.3', 'no personal details here', '3 x 100g + 2', 'ref AB1234567890', 'won +10000 points', 'at 10:30:00+0100', 'in +5 days',
+      'net revenue 1234567890.00 this year', 'gross 12345678901.5 total', 'refunds 1000000000.25',
     ]
     const py = python(`
 import json, sys
@@ -201,6 +202,8 @@ print(json.dumps([run.scrub_free_text(t) for t in json.loads(sys.stdin.read())])
 `, texts) as string[]
     expect(py).toEqual(texts.map(scrubFreeText))
     const out = Object.fromEntries(texts.map((t, i) => [t, py[i]]))
+    // An amount with ten or more digits before the cents is money, not a phone number (0.15.0).
+    for (const t of ['net revenue 1234567890.00 this year', 'gross 12345678901.5 total', 'refunds 1000000000.25']) expect(out[t], t).toBe(t)
     for (const t of texts.slice(0, 9)) {
       expect(out[t], t).toContain('[removed]')
       expect(out[t], t).not.toMatch(/\d{4}|@/)
