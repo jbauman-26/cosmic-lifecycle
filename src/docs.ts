@@ -209,6 +209,28 @@ count), deals_daily_vs_pulled, freshness.
 Shopify: the store checks. GA4: freshness only, and the line says GA4 is a
 tracking tool. None: freshness only.
 
+## Contribution margin for a store
+
+  lifecycle costs set cogs_percent 35          for lines with no Shopify unit cost
+  lifecycle costs set shipping_per_order 6.10
+  lifecycle costs set fulfillment_per_order 2.25
+  lifecycle costs set payment_fee_percent 2.9
+  lifecycle costs set payment_fee_fixed 0.30
+  lifecycle costs sync                         reads unit costs from Shopify (read_inventory, read_products)
+  lifecycle metrics run contribution_margin
+
+Metrics: cogs, gross_margin (CM1), contribution_margin_before_ads (CM2),
+contribution_margin (CM3, after Meta spend), contribution_margin_percent,
+cost_coverage. An input not set counts as zero and the answer says which.
+
+## One total across stores
+
+Each store is a workspace on this machine. Give each its currency (lifecycle costs
+sync reads it from Shopify), then:
+  lifecycle metrics run shopify_net_revenue --all-stores --currency USD --rate-date 2026-11-20
+Rates come from Frankfurter (frankfurter.dev), the European Central Bank's rate
+first. Every total names the rate and its date. --rate EUR=1.09 sets one by hand.
+
 ## Agencies: one workspace per client
 
   lifecycle --workspace acme-co init --type agency --reference stripe
@@ -291,6 +313,8 @@ lifecycle query "SELECT ..." [--cloud]
 lifecycle metrics list [--pack TYPE|all] [--cloud]|show NAME|run NAME... [--days N] [--cloud]|candidates
 lifecycle metrics save NAME --sql 'SELECT ...' [--title TEXT] [--unit count|usd|percent|usd_per_recipient|ratio]
 lifecycle metrics delete NAME
+lifecycle metrics run NAME... --all-stores|--stores A,B --currency USD [--rate-date DATE] [--rate EUR=1.09]
+lifecycle costs show|set KEY VALUE|unset KEY|sync
 lifecycle sources list [--cloud]|catalog [--type TYPE]|import NAME --csv FILE [--date-column NAME]
 lifecycle tools catalog [--query TEXT]|providers|run TOOL [--input JSON] [--wait] [--timeout SECONDS] [--out FILE]|get RUN [--out FILE]|abort RUN|runs
 lifecycle exec -- COMMAND [ARGS]
@@ -322,6 +346,7 @@ lifecycle config list|get|set|unset KEY [VALUE]
         reconcile.attributed_share_flag (60), reconcile.freshness_days (2),
         query.row_cap (1000), metrics.default_days (90)
   outside a Shopify workspace also: workspace.reference, reconcile.ad_claim_flag (100)
+  for a roll-up across stores: workspace.currency, rollup.currency
 lifecycle secrets list|set NAME --from-env VAR|delete NAME
 lifecycle mcp
 lifecycle doctor

@@ -124,6 +124,9 @@ export async function runChecks(db: Tx, t: Tolerances = tolerances()): Promise<C
 
 export async function reconcile(db: Db, t: Tolerances = tolerances(), ws: Workspace = readWorkspace()) {
   const checks = ws.type === 'shopify' && ws.reference === 'shopify' ? await runChecks(db, t) : await runReferenceChecks(db, t, ws)
+  // Only a store that synced its costs gets this one, after the others, so a store without costs reads as in 0.13.
+  const cost = await costCheck(db)
+  if (cost) checks.push(cost)
   const at = new Date().toISOString()
   await db.transaction(async (tx) => {
     // A check this workspace no longer runs (the type or the reference changed) would otherwise
@@ -258,4 +261,24 @@ export async function runReferenceChecks(db: Tx, t: Tolerances, ws: Workspace): 
 
   checks.push(await freshness(db, t))
   return checks
+}
+
+// Do enough line items carry a Shopify unit cost for the margin to stand on? A warning, never a failure:
+// lines with no cost use the owner's cogs_percent, and the margin says so.
+export async function costCheck(db: Tx): Promise<Check | null> {
+  let r: Record<string, unknown> = {}
+  try {
+    r = (await db.query(`SELECT coalesce(sum(lines), 0) AS lines, coalesce(sum(lines_with_cost), 0) AS costed, count(*) AS days FROM fact_cogs_daily`))[0] ?? {}
+  } catch {
+    return null
+  }
+  if (!num(r.days)) return null
+  const lines = num(r.lines)
+  const share = lines ? round((num(r.costed) / lines) * 100) : 100
+  const pctSet = (await db.query(`SELECT 1 FROM meta_cost_setting WHERE key = 'cogs_percent'`)).length > 0
+  const status: CheckStatus = share >= 90 || pctSet ? 'pass' : 'warn'
+  return {
+    name: 'cost_coverage', status, expected: lines, actual: num(r.costed), diffPct: share,
+    detail: `${share}% of line items have a unit cost in Shopify.${share < 100 ? (pctSet ? ' cogs_percent covers the rest.' : ' The rest count as zero cost until you set cogs_percent: lifecycle costs set cogs_percent 35') : ''}`,
+  }
 }

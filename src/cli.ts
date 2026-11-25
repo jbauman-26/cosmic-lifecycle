@@ -5,7 +5,7 @@ import { init } from './commands/init.js'
 import { connectGa4, connectHubspot, connectKlaviyo, connectMeta, connectShopify, connectStripe } from './commands/connect.js'
 import { doctor } from './commands/doctor.js'
 import { openDb, migrate, type Db } from './db.js'
-import { readConfig } from './config.js'
+import { readConfig, writeConfig } from './config.js'
 import { getSecret, getSourceSecret } from './secrets.js'
 import { CliError } from './errors.js'
 import { fetchOrderCount, fetchOrders, shopifyToken } from './sources/shopify.js'
@@ -57,6 +57,9 @@ import { randomUUID } from 'node:crypto'
 import { NATIVE, chooseSources, disconnectNative, isNative, parseOnly } from './native.js'
 import { CLOUD_TOKEN_ENV, CLOUD_URL_ENV, CloudClient, clean, cloudTokenSource, cloudUrl, isNotBuilt, loggedIn, verifyLogin } from './cloud.js'
 import { assertReadOnlySql } from './query.js'
+import { listCosts, setCost, unsetCost, writeCosts, COST_KEYS } from './costs.js'
+import { fetchCostOrders } from './sources/shopify-costs.js'
+import { rollupMetric } from './rollup.js'
 import { assertReference, assertType, readWorkspace, REFERENCE_NAME, TYPES, WORKSPACE_TYPES, noun, type WorkspaceType } from './workspace.js'
 import { pickType } from './commands/init.js'
 import { configPath, workspaceName, workspacesDir } from './paths.js'
@@ -298,6 +301,18 @@ program.command('sync').description('Pull fresh totals from connected sources, t
         let token: string | undefined
         const tok = async () => (token ??= await shopifyToken(store, clientId, shopifySecret!))
         results.push(await syncShopify(db, async () => fetchOrders(store, await tok()), async () => fetchOrderCount(store, await tok())))
+        // Unit costs, once the owner has run lifecycle costs sync. Its own result line, so a cost failure never hides the orders.
+        if ((config as { costs?: { shopify?: boolean } }).costs?.shopify) {
+          const at = new Date().toISOString()
+          try {
+            const { orders, currency } = await fetchCostOrders(store, await tok())
+            const w = await writeCosts(db, orders, currency ?? 'USD')
+            results.push({ source: 'shopify_costs', status: 'ok', rows: w.days })
+          } catch (e) {
+            results.push({ source: 'shopify_costs', status: 'failed', rows: 0, detail: e instanceof Error ? e.message : String(e), code: e instanceof CliError ? e.code : 'error' })
+          }
+          await db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status, rows_written, detail, code) VALUES ($1,'shopify_costs',$2,$3,$4,$5,$6,$7)`, [randomUUID(), at, new Date().toISOString(), results.at(-1)!.status, results.at(-1)!.rows, results.at(-1)!.detail ?? null, results.at(-1)!.code ?? null])
+        }
       } else if (source === 'klaviyo') {
         results.push(await syncKlaviyo(db, new Klaviyo(key!), opts))
       } else if (source === 'ga4') {
@@ -468,7 +483,28 @@ metrics.command('delete').argument('<name>').description('Delete a saved number.
     await db.close()
   }
 }))
-metrics.command('run').argument('<names...>').option('--days <n>', 'window in days (default: metrics.default_days, 90)').option('--cloud', CLOUD_FLAG).description('Run one or more metrics').action(run(async (names: string[], opts) => {
+metrics.command('run').argument('<names...>').option('--days <n>', 'window in days (default: metrics.default_days, 90)').option('--cloud', CLOUD_FLAG)
+  .option('--all-stores', 'add the metric up across every workspace on this machine, in one currency')
+  .option('--stores <names>', 'add it up across these workspaces only, a comma list (default is the unnamed one)')
+  .option('--currency <code>', 'currency for --all-stores or --stores. Default: the rollup.currency setting')
+  .option('--rate-date <date>', 'exchange rate date, YYYY-MM-DD. Default: the latest rate')
+  .option('--rate <CODE=RATE>', 'give a rate by hand: one CODE in the reporting currency (repeatable)', collectList)
+  .description('Run one or more metrics').action(run(async (names: string[], opts) => {
+  if (opts.allStores || opts.stores) {
+    const days = opts.days === undefined ? defaultDays() : Number(opts.days)
+    const stores = opts.allStores ? ('all' as const) : String(opts.stores).split(',').map((x: string) => x.trim()).filter(Boolean)
+    const results: Awaited<ReturnType<typeof rollupMetric>>[] = []
+    for (const n of names) results.push(await rollupMetric(n, { stores, currency: opts.currency, days, rateDate: opts.rateDate, rates: opts.rate }))
+    const out = names.length === 1 ? results[0]! : { rollup: true, currency: results[0]!.currency, metrics: results }
+    emit(format(), out, () => results.map((r) => [
+      r.trust.line,
+      `${r.title}, all stores, last ${r.days} days: ${r.total === null ? 'no value' : r.unit === 'usd' ? `${r.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${r.currency}` : formatValue(r.unit, r.total)}`,
+      ...r.stores.map((x: any) => `  ${x.store}: ${x.status === 'ok' ? `${x.value} ${x.currency ?? ''}${x.rate ? ` x ${x.rate.rate} (${x.rate.date}) = ${x.converted} ${r.currency}` : ''}` : x.detail ?? x.status}`),
+      ...r.notes,
+    ].join('\n')).join('\n\n'))
+    if (results.some((r) => r.stores.some((x: any) => x.status !== 'ok'))) process.exitCode = 1
+    return
+  }
   if (opts.cloud) {
     const client = new CloudClient()
     const days = opts.days === undefined ? undefined : Number(opts.days)
@@ -505,6 +541,57 @@ metrics.command('candidates').description('Custom queries run more than once: ca
     await migrateIfFree(db, 'metrics candidates')
     const c = await metricCandidates(db, Number(opts.minRuns))
     emit(format(), c, () => (c.length ? [...c.map((x) => `${x.runs} runs  ${x.sql}`), '', 'To ask for one as a verified metric: lifecycle feedback "metric request: ..."'].join('\n') : 'No repeated custom queries yet.'))
+  } finally {
+    await db.close()
+  }
+}))
+
+// Costs for contribution margin: the owner's own rates, plus Shopify unit costs.
+const costs = program.command('costs').description('Cost inputs for contribution margin: Shopify unit costs plus your own shipping, fulfillment and payment fee rates')
+costs.command('show').description('Every cost input, its value and when it was set').action(run(async () => {
+  const db = await openDb()
+  try {
+    await migrateIfFree(db, 'costs show')
+    const c = await listCosts(db)
+    const cov = (await db.query(`SELECT count(*)::int AS days, coalesce(sum(lines), 0)::int AS lines, coalesce(sum(lines_with_cost), 0)::int AS costed, max(source_synced_at) AS at FROM fact_cogs_daily`))[0] ?? {}
+    const out = { costs: c, shopifyCosts: { days: Number(cov.days ?? 0), lines: Number(cov.lines ?? 0), linesWithCost: Number(cov.costed ?? 0), syncedAt: cov.at ? new Date(String(cov.at)).toISOString() : null } }
+    emit(format(), out, () => [...c.map((x) => `${x.key.padEnd(22)} ${x.value === null ? 'not set (counts as 0)' : x.value}  ${x.help}`), out.shopifyCosts.days ? `Shopify unit costs: ${out.shopifyCosts.linesWithCost} of ${out.shopifyCosts.lines} line items, synced ${clock(out.shopifyCosts.syncedAt)}` : 'Shopify unit costs: not synced. lifecycle costs sync'].join('\n'))
+  } finally {
+    await db.close()
+  }
+}))
+costs.command('set').argument('<key>', Object.keys(COST_KEYS).join(', ')).argument('<value>').description('Set one cost input').action(write('costs set', async (key: string, value: string) => {
+  const db = await openDb()
+  try {
+    await migrate(db)
+    const r = await setCost(db, key, value)
+    emit(format(), r, () => `${r.key} = ${r.value}`)
+  } finally {
+    await db.close()
+  }
+}))
+costs.command('unset').argument('<key>').description('Remove one cost input. It counts as zero again').action(write('costs unset', async (key: string) => {
+  const db = await openDb()
+  try {
+    await migrate(db)
+    const r = await unsetCost(db, key)
+    emit(format(), r, () => `${r.key} removed`)
+  } finally {
+    await db.close()
+  }
+}))
+costs.command('sync').description('Read each line item\'s unit cost from Shopify. Needs read_inventory and read_products on the app. After the first one, lifecycle sync does it too').action(write('costs sync', async () => {
+  const config = readConfig()
+  const secret = getSecret('shopify-client-secret')
+  if (!config.shopify || !secret) throw new CliError('Shopify is not connected.', 'lifecycle connect shopify', 'not_connected')
+  const db = await openDb()
+  try {
+    await migrate(db)
+    const token = await shopifyToken(config.shopify.store, config.shopify.clientId, secret)
+    const { orders, currency } = await fetchCostOrders(config.shopify.store, token)
+    const r = await writeCosts(db, orders, currency ?? 'USD')
+    writeConfig({ ...readConfig(), costs: { shopify: true } } as never)
+    emit(format(), { ...r, currency }, () => [`Read unit costs for ${r.linesWithCost} of ${r.lines} line items over ${r.days} days (${currency ?? 'currency unknown'}).`, r.truncatedOrders ? `${r.truncatedOrders} orders have more than 100 line items; lines past the first 100 are not counted.` : '', r.coveragePct !== null && r.coveragePct < 100 ? 'Lines with no unit cost use cogs_percent: lifecycle costs set cogs_percent 35' : '', 'Next: lifecycle metrics run contribution_margin'].filter(Boolean).join('\n'))
   } finally {
     await db.close()
   }
