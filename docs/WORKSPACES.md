@@ -89,6 +89,8 @@ Trust line statuses: `passed`, `failed`, `unchecked`, and new in 0.14.0 `unrefer
 | LinkedIn Ads | built in (`connect linkedin-ads`), read only | built: from the LinkedIn Marketing API docs (202611), tested against recorded answers; not run on a live ad account | daily spend and results by campaign; no audiences, creatives or member data |
 | Reddit Ads | built in (`connect reddit-ads`), read only | built: from the Reddit Ads API docs (v3), tested against recorded answers; not run on a live account | daily spend and attributed purchases by campaign; no audiences, communities, keywords, people or creative |
 | Snapchat Ads | built in (`connect snapchat-ads`), read only | built: from the Snapchat Marketing API docs (v1), tested against recorded answers; not run on a live account | daily spend and attributed purchases by campaign; no audiences, creatives, people or pixel events |
+| TikTok Ads | built in (`connect tiktok-ads`), read only | built: from the TikTok API for Business docs (v1.3), tested against recorded answers; not run on a live ad account | daily spend and results by campaign; no audiences, creatives or people |
+| Pinterest Ads | built in (`connect pinterest-ads`), read only | built: from the Pinterest API v5 docs, tested against recorded answers; not run on a live ad account | daily spend and results by campaign; no audiences, pins, creatives or people |
 | Google Search Console | catalog | planned: needs Google sign-in | |
 | PostHog, Mixpanel | catalog | planned: query results come as arrays or streams, which need a runner change | |
 

@@ -106,7 +106,7 @@ describe('verified metrics', () => {
 
 describe('source catalog and setup prompts', () => {
   it('lists only sources with a working connector', () => {
-    expect(CATALOG.map((s) => s.slug)).toEqual(['klaviyo', 'shopify', 'ga4', 'stripe', 'meta', 'google-ads', 'google-merchant-center', 'microsoft-ads', 'linkedin-ads', 'reddit-ads', 'snapchat-ads'])
+    expect(CATALOG.map((s) => s.slug)).toEqual(['klaviyo', 'shopify', 'ga4', 'stripe', 'meta', 'google-ads', 'google-merchant-center', 'microsoft-ads', 'linkedin-ads', 'reddit-ads', 'snapchat-ads', 'tiktok-ads', 'pinterest-ads'])
   })
 
   it('reports connected sources and the next step for the rest', async () => {

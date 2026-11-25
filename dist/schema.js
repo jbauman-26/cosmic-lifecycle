@@ -100,6 +100,16 @@ export const MIGRATIONS = [
     date DATE NOT NULL, account_id TEXT NOT NULL, campaign_id TEXT NOT NULL, campaign_name TEXT NOT NULL, spend NUMERIC NOT NULL, impressions BIGINT NOT NULL, clicks BIGINT NOT NULL,
     conversions NUMERIC NOT NULL, conversion_value NUMERIC NOT NULL, currency TEXT NOT NULL,
     source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, account_id, campaign_id))`,
+    // TikTok's own numbers for its own ads, read only. Conversions are website purchases and their value, as TikTok attributes them, not orders.
+    `CREATE TABLE IF NOT EXISTS fact_tiktok_ads_daily (
+    date DATE NOT NULL, account_id TEXT NOT NULL, campaign_id TEXT NOT NULL, campaign_name TEXT NOT NULL, spend NUMERIC NOT NULL, impressions BIGINT NOT NULL, clicks BIGINT NOT NULL,
+    conversions NUMERIC NOT NULL, conversion_value NUMERIC NOT NULL, currency TEXT NOT NULL,
+    source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, account_id, campaign_id))`,
+    // Pinterest's own numbers for its own ads, read only. Conversions are checkouts and their value, as Pinterest attributes them, not orders.
+    `CREATE TABLE IF NOT EXISTS fact_pinterest_ads_daily (
+    date DATE NOT NULL, account_id TEXT NOT NULL, campaign_id TEXT NOT NULL, campaign_name TEXT NOT NULL, spend NUMERIC NOT NULL, impressions BIGINT NOT NULL, clicks BIGINT NOT NULL,
+    conversions NUMERIC NOT NULL, conversion_value NUMERIC NOT NULL, currency TEXT NOT NULL,
+    source_synced_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (date, account_id, campaign_id))`,
     // The error code of a failed run, such as key_rejected or rate_limited, so the app can say what went wrong without the raw reply.
     `ALTER TABLE meta_sync_run ADD COLUMN IF NOT EXISTS code TEXT`,
     // Custom SQL that agents ran because no verified metric fit. Repeated ones become new metrics.
@@ -168,5 +178,6 @@ export const PUBLIC_TABLES = [
     'fact_merchant_performance_daily', 'fact_merchant_products_daily',
     'fact_microsoft_ads_daily', 'fact_linkedin_ads_daily',
     'fact_reddit_ads_daily', 'fact_snapchat_ads_daily',
+    'fact_tiktok_ads_daily', 'fact_pinterest_ads_daily',
     'meta_sync_run', 'meta_source_total', 'meta_source_window', 'meta_reconcile_result',
 ];

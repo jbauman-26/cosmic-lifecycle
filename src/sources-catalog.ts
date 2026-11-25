@@ -5,7 +5,7 @@ import { noun, readWorkspace } from './workspace.js'
 // What this CLI can connect today. Only sources with a working connector are listed:
 // a source that is planned but not built is not in the catalog.
 export type CatalogSource = {
-  slug: 'klaviyo' | 'shopify' | 'ga4' | 'stripe' | 'meta' | 'hubspot' | 'google-ads' | 'google-merchant-center' | 'microsoft-ads' | 'linkedin-ads' | 'reddit-ads' | 'snapchat-ads'
+  slug: 'klaviyo' | 'shopify' | 'ga4' | 'stripe' | 'meta' | 'hubspot' | 'google-ads' | 'google-merchant-center' | 'microsoft-ads' | 'linkedin-ads' | 'reddit-ads' | 'snapchat-ads' | 'tiktok-ads' | 'pinterest-ads'
   name: string
   syncs: string
   credential: string
@@ -113,6 +113,24 @@ export const CATALOG: CatalogSource[] = [
     setupMinutes: 10,
     connect: 'lifecycle connect snapchat-ads --account AD_ACCOUNT_ID --client-id ID --secret-env NAME --refresh-token-env NAME',
     tested: 'Written from the Snapchat Marketing API docs (v1) and tested against recorded answers. Not yet run on a live ad account.',
+  },
+  {
+    slug: 'tiktok-ads',
+    name: 'TikTok Ads',
+    syncs: 'Daily spend, impressions, clicks, and the website purchases and purchase value TikTok attributes to its ads, by campaign. No audiences, creatives or people.',
+    credential: 'Long-term advertiser access token from an app with the Reporting permission, plus the advertiser id and app id. Only read calls are made.',
+    setupMinutes: 10,
+    connect: 'lifecycle connect tiktok-ads --account ADVERTISER_ID --app-id ID --token-env NAME',
+    tested: 'Written from the TikTok API for Business docs (v1.3) and tested against recorded answers. Not yet run on a live ad account.',
+  },
+  {
+    slug: 'pinterest-ads',
+    name: 'Pinterest Ads',
+    syncs: 'Daily spend, impressions, clicks, and the checkouts and checkout value Pinterest attributes to its ads, by campaign. No audiences, pins, creatives or people.',
+    credential: 'Pinterest app id and secret, plus a refresh token from Pinterest sign-in with the ads:read scope. Only read calls are made.',
+    setupMinutes: 10,
+    connect: 'lifecycle connect pinterest-ads --account AD_ACCOUNT_ID --client-id ID --secret-env NAME --refresh-token-env NAME',
+    tested: 'Written from the Pinterest API v5 docs (spec 5.32.0) and tested against recorded answers. Not yet run on a live ad account.',
   },
 ]
 

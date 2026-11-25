@@ -1,17 +1,6 @@
 export const READINESS_LEGEND = 'Readiness: native = built in with reconcile checks. tested = warehouse connector run on a real account. built = connector written from the vendor API docs, not yet run on a real account. planned = no connector yet; use lifecycle sources import meanwhile.';
 export const WAREHOUSE_CATALOG = [
     {
-        "slug": "tiktok-ads",
-        "name": "TikTok Ads",
-        "category": "ads",
-        "readiness": "planned",
-        "why": "#5 of 100 tools Shopify stores use. StoreLeads: detected on 414,088 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/technology/TikTok%20Pixel",
-        "docs": "https://business-api.tiktok.com/portal/docs",
-        "credentials": [],
-        "params": [],
-        "notes": "Needs an OAuth sign-in flow, not built yet. CSV import meanwhile."
-    },
-    {
         "slug": "judge-me",
         "name": "Judge.me",
         "category": "reviews",
@@ -1030,17 +1019,6 @@ export const WAREHOUSE_CATALOG = [
             ]
         },
         "notes": "API version pinned to 2026-07 (current at time of writing). trackings: cursor pagination via data.pagination.next_cursor (data.pagination.has_next_page also present), limit max 200 (default 100). Incremental on updated_at via updated_at_min. created_at_min defaults to 120 days ago and AfterShip only stores 120 days of tracking data, so the first sync returns at most the last 120 days and trackings older than that age out of the API; the warehouse keeps what it already loaded. Checkpoints (carrier scan events) come nested in each tracking and dlt unpacks them into a child table trackings__checkpoints, so no separate checkpoint call is needed. couriers lists the account's activated couriers, single page, replaced each run. GET rate limit 5 requests per second. Customer names, emails and phone numbers inside customers and subscribed_* fields are stripped by the runner's personal-data filter."
-    },
-    {
-        "slug": "pinterest-ads",
-        "name": "Pinterest Ads",
-        "category": "ads",
-        "readiness": "planned",
-        "why": "#26 of 100 tools Shopify stores use. Ranking position is judgment. StoreLeads app page shows no install count (Pinterest app not detectable). StoreLeads: Pinterest account linked on 216,448 Shopify stores. Source: https://storeleads.app/reports/shopify",
-        "docs": "https://developers.pinterest.com/docs/api/v5/",
-        "credentials": [],
-        "params": [],
-        "notes": "Needs an OAuth sign-in flow, not built yet. CSV import meanwhile."
     },
     {
         "slug": "omnisend",

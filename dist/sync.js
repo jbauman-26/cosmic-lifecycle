@@ -11,6 +11,8 @@ import { toDaily as toMicrosoftDaily } from './sources/microsoft-ads.js';
 import { toDaily as toLinkedinDaily } from './sources/linkedin-ads.js';
 import { toRedditDaily } from './sources/reddit-ads.js';
 import { localDate, toSnapDaily } from './sources/snapchat-ads.js';
+import { toDaily as toTiktokDaily } from './sources/tiktok-ads.js';
+import { clampSince as clampPinterestSince, toDaily as toPinterestDaily } from './sources/pinterest-ads.js';
 import { aggregateCharges, aggregateSubscriptions } from './sources/stripe.js';
 import { aggregateContacts, aggregateDeals, uniqueCount } from './sources/hubspot.js';
 import { isNoReportData, reportsVerified } from './sources/klaviyo.js';
@@ -451,7 +453,7 @@ export async function syncGoogleAds(db, load, opts) {
     });
 }
 // Merchant Center restates recent days too, so every sync replaces the whole performance window in one
-const windowStart = (until, days) => new Date(Date.parse(`${until}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10);
+const windowStart = (until, days) => new Date(Date.parse(`${until}T00:00:00Z`) - (days ?? settingValue('metrics.default_days')) * 86400000).toISOString().slice(0, 10);
 async function writeAdDaily(db, table, rows, since, account, currency) {
     const at = now();
     await db.transaction(async (tx) => {
@@ -525,9 +527,10 @@ export async function syncMerchantCenter(db, load, opts) {
         return { status: 'ok', rows };
     });
 }
-// Reddit Ads and Snapchat Ads restate recent days as late conversions arrive, like Google, so every sync replaces the
-// whole window in one transaction and older days keep what the last sync that covered them saw. Rows from any other
-// ad account are removed, so switching accounts never mixes two accounts' history. Days follow the account's time zone.
+// Reddit Ads, Snapchat Ads, TikTok Ads and Pinterest Ads restate recent days as late conversions arrive, like Google,
+// so every sync replaces the whole window in one transaction and older days keep what the last sync that covered them
+// saw. Rows from any other ad account are removed, so switching accounts never mixes two accounts' history. Reddit and
+// Snapchat days follow the account's time zone.
 export async function writeAdsDaily(db, table, rows, since, currency, account) {
     const at = now();
     await db.transaction(async (tx) => {
@@ -562,5 +565,32 @@ export async function syncSnapchatAds(db, load, opts) {
         const rows = await writeAdsDaily(db, 'fact_snapchat_ads_daily', daily, since, opts.currency ?? '', opts.account);
         await setTotal(db, 'snapchat-ads', 'rows_pulled', daily.length);
         return rows ? { status: 'ok', rows } : { status: 'warning', rows, detail: `Snapchat Ads returned no campaign activity from ${since} to ${until}.` };
+    });
+}
+export async function writeTiktokAds(db, raw, since, currency, account) {
+    return writeAdsDaily(db, 'fact_tiktok_ads_daily', toTiktokDaily(raw), since, currency, account);
+}
+export async function syncTiktokAds(db, load, opts) {
+    return recordRun(db, 'tiktok-ads', async () => {
+        const until = opts.today ?? now().slice(0, 10);
+        const since = windowStart(until, opts.days);
+        const raw = await load(since, until);
+        const rows = await writeTiktokAds(db, raw, since, opts.currency ?? '', opts.account);
+        await setTotal(db, 'tiktok-ads', 'rows_pulled', raw.length);
+        return rows ? { status: 'ok', rows } : { status: 'warning', rows, detail: `TikTok returned no campaign activity from ${since} to ${until}.` };
+    });
+}
+export async function writePinterestAds(db, data, since, currency, account) {
+    return writeAdsDaily(db, 'fact_pinterest_ads_daily', toPinterestDaily(data.rows, data.names), since, currency, account);
+}
+// Pinterest's daily report reaches only 90 days back, so the window never starts earlier than that.
+export async function syncPinterestAds(db, load, opts) {
+    return recordRun(db, 'pinterest-ads', async () => {
+        const until = opts.today ?? now().slice(0, 10);
+        const since = clampPinterestSince(windowStart(until, opts.days), until);
+        const data = await load(since, until);
+        const rows = await writePinterestAds(db, data, since, opts.currency ?? '', opts.account);
+        await setTotal(db, 'pinterest-ads', 'rows_pulled', data.rows.length);
+        return rows ? { status: 'ok', rows } : { status: 'warning', rows, detail: `Pinterest returned no campaign activity from ${since} to ${until}.` };
     });
 }

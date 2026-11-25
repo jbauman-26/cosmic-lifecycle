@@ -14,6 +14,9 @@ const Config = z
     'google-ads': z.object({ customer: z.string(), loginCustomer: z.string().optional(), clientId: z.string(), name: z.string(), currency: z.string(), timezone: z.string(), testAccount: z.boolean() }).optional(),
     'reddit-ads': z.object({ account: z.string(), clientId: z.string(), name: z.string(), currency: z.string(), timezone: z.string() }).optional(),
     'snapchat-ads': z.object({ account: z.string(), clientId: z.string(), name: z.string(), currency: z.string(), timezone: z.string(), organizationId: z.string().optional() }).optional(),
+    // clientId is the TikTok app id. The access token is in the keychain, never here.
+    'tiktok-ads': z.object({ account: z.string(), clientId: z.string(), name: z.string(), currency: z.string(), timezone: z.string() }).optional(),
+    'pinterest-ads': z.object({ account: z.string(), clientId: z.string(), name: z.string(), currency: z.string(), timezone: z.string() }).optional(),
     hubspot: z.object({ portal: z.string(), currency: z.string() }).optional(),
     'google-merchant-center': z.object({ account: z.string(), clientId: z.string(), name: z.string() }).optional(),
     // customer is the manager account (CustomerId header) the user reaches the ad account through.

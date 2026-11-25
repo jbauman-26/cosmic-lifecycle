@@ -1,0 +1,12 @@
+{
+  "code": 0,
+  "message": "OK",
+  "request_id": "2026112510000000000000000000000002",
+  "data": {
+    "page_info": { "page": 1, "page_size": 1000, "total_number": 3, "total_page": 2 },
+    "list": [
+      { "dimensions": { "campaign_id": "1800000000000001", "stat_time_day": "2026-11-22 00:00:00" }, "metrics": { "campaign_name": "Spark Ads Prospecting", "spend": "40.25", "impressions": "12000", "clicks": "180", "complete_payment": "6", "total_complete_payment_rate": "512.40" } },
+      { "dimensions": { "campaign_id": "1800000000000002", "stat_time_day": "2026-11-22 00:00:00" }, "metrics": { "campaign_name": "Retargeting", "spend": "12.00", "impressions": "3100", "clicks": "44", "complete_payment": "0", "total_complete_payment_rate": "0.00" } }
+    ]
+  }
+}

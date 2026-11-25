@@ -1,0 +1,11 @@
+{
+  "code": 0,
+  "message": "OK",
+  "request_id": "2026112510000000000000000000000003",
+  "data": {
+    "page_info": { "page": 2, "page_size": 1000, "total_number": 3, "total_page": 2 },
+    "list": [
+      { "dimensions": { "campaign_id": "1800000000000001", "stat_time_day": "2026-11-23 00:00:00" }, "metrics": { "campaign_name": "Spark Ads Prospecting", "spend": "41", "impressions": "12500", "clicks": "190", "complete_payment": "7", "total_complete_payment_rate": "600" } }
+    ]
+  }
+}

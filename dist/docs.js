@@ -113,6 +113,26 @@ Snapchat Ads, about 10 minutes (optional, for ad spend next to revenue):
 5. lifecycle connect snapchat-ads --account AD_ACCOUNT_ID --client-id ID --secret-env SNAPCHAT_ADS_CLIENT_SECRET --refresh-token-env SNAPCHAT_ADS_REFRESH_TOKEN
 Only read calls are made, even though Snap's scope also allows changes.
 
+TikTok Ads, about 10 minutes (optional, for ad spend next to revenue):
+1. You need an app in the TikTok API for Business developer portal with the Reporting permission.
+   The Cosmic AI app does this sign-in for you. These steps are for doing it by hand.
+2. The advertiser opens the app's authorization link and approves it. TikTok sends back an
+   auth_code, which trades for a long-term access token that does not expire unless revoked.
+3. Copy the advertiser id from under the account name in TikTok Ads Manager.
+4. export TIKTOK_ADS_ACCESS_TOKEN=...
+5. lifecycle connect tiktok-ads --account ADVERTISER_ID --app-id APP_ID --token-env TIKTOK_ADS_ACCESS_TOKEN
+Only read calls are made: the account details and the campaign report.
+
+Pinterest Ads, about 10 minutes (optional, for ad spend next to revenue):
+1. You need a Pinterest app (developers.pinterest.com) with its app id and secret.
+   The Cosmic AI app does this sign-in for you. These steps are for doing it by hand.
+2. Sign in with Pinterest for a refresh token with the ads:read scope.
+3. Copy the ad account id from the Pinterest Ads Manager address.
+4. export PINTEREST_ADS_CLIENT_SECRET=... PINTEREST_ADS_REFRESH_TOKEN=...
+5. lifecycle connect pinterest-ads --account AD_ACCOUNT_ID --client-id APP_ID --secret-env PINTEREST_ADS_CLIENT_SECRET --refresh-token-env PINTEREST_ADS_REFRESH_TOKEN
+Only read calls are made. Pinterest gives a new refresh token each time one is used, good for
+60 days. With a keychain the CLI keeps the newest; from the environment, keep it current yourself.
+
 Then:
   lifecycle sync
   lifecycle reconcile
@@ -223,7 +243,8 @@ Rules:
 - fact_merchant_products_daily is one snapshot per sync day of how many products Merchant Center holds and how many are eligible, eligible_limited, pending or disapproved. A day with no sync has no row. There are no product ids or titles.
 - Conversions and conversion_value in fact_microsoft_ads_daily and fact_linkedin_ads_daily are what Microsoft Advertising and LinkedIn attribute to their own ads, by their own rules (for Microsoft, the account's conversion goals; for LinkedIn, post-click and post-view website conversions). They are claims, not orders, and they overlap with every other network's claims. Never add them to Shopify revenue, to CRM revenue, to email revenue or to another network's conversions. spend is in the account currency. LinkedIn days are UTC days.
 - conversions and conversion_value in fact_reddit_ads_daily and fact_snapchat_ads_daily are the purchases Reddit and Snapchat attribute to their own ads (Reddit: click-through plus view-through; Snapchat: its default 28-day swipe and 1-day view windows). They are a claim, not orders, and they overlap with Meta's and Google's claims. Never add them to Shopify revenue, to email revenue or to another network's claims. spend is in the account currency. clicks in fact_snapchat_ads_daily are swipe-ups. Days follow each ad account's own time zone.
-- Nothing in this tool sends a message, and nothing changes an ad account or a product feed. Meta Ads, Google Ads, Google Merchant Center, Microsoft Advertising, LinkedIn Ads, Reddit Ads and Snapchat Ads are read only.
+- Conversions and conversion_value in fact_tiktok_ads_daily are website purchases and their value as TikTok attributes them to its own ads. In fact_pinterest_ads_daily they are checkouts and their value as Pinterest attributes them. Both are claims, not orders, and they overlap with Meta's and Google's claims. Never add them to Shopify revenue, to email revenue or to each other. spend is in the account currency.
+- Nothing in this tool sends a message, and nothing changes an ad account or a product feed. Meta Ads, Google Ads, Google Merchant Center, Microsoft Advertising, LinkedIn Ads, Reddit Ads, Snapchat Ads, TikTok Ads and Pinterest Ads are read only.
 - If a command fails with code \`busy\`, another lifecycle command is writing to the store. Wait and run it again. Do not delete files to get past it.
 - \`--cloud\` on a read command asks Cosmic Cloud instead of this machine. Use it only when the user is logged in (\`lifecycle cloud status --format json\`). Code \`not_built\` means Cloud does not have that route yet: run the command without \`--cloud\`, and do not retry. See \`lifecycle docs cloud\`.
 `,
@@ -320,7 +341,7 @@ Without either, the workspace is ~/.lifecycle, as before 0.14.0.
 ## Sources for each type
 
 Built in, with reconcile checks: shopify, klaviyo, ga4, stripe, meta, hubspot.
-Built in, read only, not yet run on a live account: google-ads, google-merchant-center, microsoft-ads, linkedin-ads, reddit-ads, snapchat-ads.
+Built in, read only, not yet run on a live account: google-ads, google-merchant-center, microsoft-ads, linkedin-ads, reddit-ads, snapchat-ads, tiktok-ads, pinterest-ads.
 Warehouse connectors written from the vendor docs and not yet run on a real
 account: hubspot-records, pipedrive, woocommerce, bigcommerce, customer-io.
 Planned: salesforce, google-search-console, posthog, mixpanel.
@@ -388,6 +409,8 @@ lifecycle connect microsoft-ads --account ID --client-id ID --secret-env NAME --
 lifecycle connect linkedin-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
 lifecycle connect reddit-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
 lifecycle connect snapchat-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
+lifecycle connect tiktok-ads --account ID --app-id ID --token-env NAME
+lifecycle connect pinterest-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
 lifecycle sync [--since DATE] [--only SOURCE[,SOURCE]] [--cloud]
 lifecycle disconnect SOURCE [--delete-data]
 lifecycle schema [TABLE] [--cloud]
@@ -593,7 +616,7 @@ Find and connect a source:
   lifecycle warehouse list | disconnect SLUG
 
 Readiness, said plainly:
-  native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads, Google Ads, Google Merchant Center, Microsoft Advertising, LinkedIn Ads, Reddit Ads, Snapchat Ads). Shopify, Klaviyo and GA4 have reconcile checks
+  native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads, Google Ads, Google Merchant Center, Microsoft Advertising, LinkedIn Ads, Reddit Ads, Snapchat Ads, TikTok Ads, Pinterest Ads). Shopify, Klaviyo and GA4 have reconcile checks
   tested   a warehouse connector that has synced a real account
   built    written from the vendor's API docs, not yet run on a real account.
            Expect the first sync to need a fix. Report it: lifecycle feedback
@@ -766,6 +789,17 @@ Reddit Ads or Snapchat Ads says the account cannot be read:
 Reddit Ads or Snapchat Ads numbers change for recent days:
   Both restate recent days as late conversions arrive. Each sync pulls the last 90 days
   (metrics.default_days) again, so the numbers settle after a few syncs.
+
+TikTok says the token is invalid, or that it cannot read the ad account:
+  The long-term token stops working only when the advertiser revokes the app. Ask the advertiser
+  to open the app's authorization link again, then lifecycle connect tiktok-ads. If it says there
+  is no permission, the app needs the Reporting permission and that advertiser's authorization.
+
+Pinterest says the sign-in was refused:
+  A refresh token lasts 60 days, and each use gives a new one. If the saved one came from the
+  environment and was not updated, it runs out. Sign in with Pinterest again for a new one, then
+  lifecycle connect pinterest-ads. A user needs Owner, Admin, Analyst or Campaign Manager access
+  on the ad account.
 
 Meta spend looks low for the last few days:
   Meta restates recent days as late conversions arrive. Each sync pulls the last 90 days

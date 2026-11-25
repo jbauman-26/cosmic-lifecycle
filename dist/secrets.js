@@ -33,6 +33,10 @@ const ENV = {
     'reddit-ads-refresh-token': 'LIFECYCLE_REDDIT_ADS_REFRESH_TOKEN',
     'snapchat-ads-client-secret': 'LIFECYCLE_SNAPCHAT_ADS_CLIENT_SECRET',
     'snapchat-ads-refresh-token': 'LIFECYCLE_SNAPCHAT_ADS_REFRESH_TOKEN',
+    // TikTok's long-term advertiser token. It does not expire, so there is no refresh token or secret to keep.
+    'tiktok-ads-access-token': 'LIFECYCLE_TIKTOK_ADS_ACCESS_TOKEN',
+    'pinterest-ads-client-secret': 'LIFECYCLE_PINTEREST_ADS_CLIENT_SECRET',
+    'pinterest-ads-refresh-token': 'LIFECYCLE_PINTEREST_ADS_REFRESH_TOKEN',
     'kie-api-key': 'LIFECYCLE_KIE_API_KEY',
     'fal-key': 'LIFECYCLE_FAL_KEY',
     'apify-token': 'LIFECYCLE_APIFY_TOKEN',

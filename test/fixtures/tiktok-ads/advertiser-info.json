@@ -1,0 +1,10 @@
+{
+  "code": 0,
+  "message": "OK",
+  "request_id": "2026112510000000000000000000000001",
+  "data": {
+    "list": [
+      { "advertiser_id": "7123456789012345678", "name": "Northwind TikTok", "currency": "USD", "timezone": "Etc/GMT+8", "display_timezone": "America/Los_Angeles" }
+    ]
+  }
+}

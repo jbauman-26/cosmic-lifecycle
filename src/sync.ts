@@ -13,6 +13,8 @@ import { toDaily as toMicrosoftDaily, type RawReportRow } from './sources/micros
 import { toDaily as toLinkedinDaily, type RawAnalytics } from './sources/linkedin-ads.js'
 import { toRedditDaily, type AdsDaily, type RawRedditRow } from './sources/reddit-ads.js'
 import { localDate, toSnapDaily, type RawSnapCampaign } from './sources/snapchat-ads.js'
+import { toDaily as toTiktokDaily, type RawReportRow as RawTiktokRow } from './sources/tiktok-ads.js'
+import { clampSince as clampPinterestSince, toDaily as toPinterestDaily, type RawAnalyticsRow as RawPinterestRow } from './sources/pinterest-ads.js'
 import { aggregateCharges, aggregateSubscriptions, type RawCharge, type RawSubscription } from './sources/stripe.js'
 import { aggregateContacts, aggregateDeals, uniqueCount, type RawContact, type RawDeal } from './sources/hubspot.js'
 import { Klaviyo, isNoReportData, reportsVerified, type FlowDailyRow } from './sources/klaviyo.js'
@@ -537,7 +539,8 @@ export async function syncGoogleAds(
 
 // Merchant Center restates recent days too, so every sync replaces the whole performance window in one
 
-const windowStart = (until: string, days: number) => new Date(Date.parse(`${until}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10)
+const windowStart = (until: string, days?: number) =>
+  new Date(Date.parse(`${until}T00:00:00Z`) - (days ?? settingValue('metrics.default_days')) * 86400000).toISOString().slice(0, 10)
 
 // Microsoft and LinkedIn restate recent days as late conversions come in, like Google, so each sync replaces the
 // whole window in one transaction and older days keep what the last sync that covered them saw. Rows from any
@@ -636,10 +639,11 @@ export async function syncMerchantCenter(
   })
 }
 
-// Reddit Ads and Snapchat Ads restate recent days as late conversions arrive, like Google, so every sync replaces the
-// whole window in one transaction and older days keep what the last sync that covered them saw. Rows from any other
-// ad account are removed, so switching accounts never mixes two accounts' history. Days follow the account's time zone.
-export async function writeAdsDaily(db: Db, table: 'fact_reddit_ads_daily' | 'fact_snapchat_ads_daily', rows: AdsDaily[], since: string, currency: string, account: string) {
+// Reddit Ads, Snapchat Ads, TikTok Ads and Pinterest Ads restate recent days as late conversions arrive, like Google,
+// so every sync replaces the whole window in one transaction and older days keep what the last sync that covered them
+// saw. Rows from any other ad account are removed, so switching accounts never mixes two accounts' history. Reddit and
+// Snapchat days follow the account's time zone.
+export async function writeAdsDaily(db: Db, table: 'fact_reddit_ads_daily' | 'fact_snapchat_ads_daily' | 'fact_tiktok_ads_daily' | 'fact_pinterest_ads_daily', rows: AdsDaily[], since: string, currency: string, account: string) {
   const at = now()
   await db.transaction(async (tx: Tx) => {
     await tx.query(`DELETE FROM ${table} WHERE date >= $1 OR account_id <> $2`, [since, account])
@@ -681,5 +685,36 @@ export async function syncSnapchatAds(db: Db, load: { names: () => Promise<Map<s
     const rows = await writeAdsDaily(db, 'fact_snapchat_ads_daily', daily, since, opts.currency ?? '', opts.account)
     await setTotal(db, 'snapchat-ads', 'rows_pulled', daily.length)
     return rows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Snapchat Ads returned no campaign activity from ${since} to ${until}.` }
+  })
+}
+
+export async function writeTiktokAds(db: Db, raw: RawTiktokRow[], since: string, currency: string, account: string) {
+  return writeAdsDaily(db, 'fact_tiktok_ads_daily', toTiktokDaily(raw), since, currency, account)
+}
+
+export async function syncTiktokAds(db: Db, load: (since: string, until: string) => Promise<RawTiktokRow[]>, opts: { account: string; currency?: string; days?: number; today?: string }) {
+  return recordRun(db, 'tiktok-ads', async () => {
+    const until = opts.today ?? now().slice(0, 10)
+    const since = windowStart(until, opts.days)
+    const raw = await load(since, until)
+    const rows = await writeTiktokAds(db, raw, since, opts.currency ?? '', opts.account)
+    await setTotal(db, 'tiktok-ads', 'rows_pulled', raw.length)
+    return rows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `TikTok returned no campaign activity from ${since} to ${until}.` }
+  })
+}
+
+export async function writePinterestAds(db: Db, data: { rows: RawPinterestRow[]; names: Map<string, string> }, since: string, currency: string, account: string) {
+  return writeAdsDaily(db, 'fact_pinterest_ads_daily', toPinterestDaily(data.rows, data.names), since, currency, account)
+}
+
+// Pinterest's daily report reaches only 90 days back, so the window never starts earlier than that.
+export async function syncPinterestAds(db: Db, load: (since: string, until: string) => Promise<{ rows: RawPinterestRow[]; names: Map<string, string> }>, opts: { account: string; currency?: string; days?: number; today?: string }) {
+  return recordRun(db, 'pinterest-ads', async () => {
+    const until = opts.today ?? now().slice(0, 10)
+    const since = clampPinterestSince(windowStart(until, opts.days), until)
+    const data = await load(since, until)
+    const rows = await writePinterestAds(db, data, since, opts.currency ?? '', opts.account)
+    await setTotal(db, 'pinterest-ads', 'rows_pulled', data.rows.length)
+    return rows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Pinterest returned no campaign activity from ${since} to ${until}.` }
   })
 }
