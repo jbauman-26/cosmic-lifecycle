@@ -36,6 +36,30 @@ describe('reconcile', () => {
     expect(c.orders_complete?.detail).toContain('Do not trust')
   })
 
+  it('fails when the daily totals are missing days, even though the two stored totals agree', async () => {
+    await syncShopify(db, async () => orders, async () => 3)
+    await db.query(`DELETE FROM fact_orders_daily`)
+    await db.query(`INSERT INTO fact_orders_daily (date, orders, gross_revenue, net_revenue, discounts, new_orders, returning_orders, guest_orders, source_synced_at) VALUES (current_date - 3, 2, 200, 200, 0, 2, 0, 0, now())`)
+    const c = await byName(db)
+    expect(c.orders_complete).toMatchObject({ status: 'fail', expected: 3, actual: 2 })
+    expect(c.orders_complete?.detail).toContain('daily totals')
+  })
+
+  it('leaves cancelled orders out of the daily count it expects', async () => {
+    const cancelled = { ...order('d'), cancelledAt: day }
+    await syncShopify(db, async () => [...orders, cancelled], async () => 4)
+    expect((await byName(db)).orders_complete?.status).toBe('pass')
+  })
+
+  it('checks a store synced before orders_kept existed against everything pulled', async () => {
+    await syncShopify(db, async () => orders, async () => 3)
+    await db.query(`DELETE FROM meta_source_total WHERE metric = 'orders_kept'`)
+    await db.query(`UPDATE fact_orders_daily SET orders = orders - 1`)
+    const c = await byName(db)
+    expect(c.orders_complete?.status).toBe('fail')
+    expect(c.orders_complete?.detail).toContain('sync Shopify again')
+  })
+
   it('catches a number changed after sync', async () => {
     await syncShopify(db, async () => orders, async () => 3)
     await db.query(`UPDATE fact_orders_daily SET new_orders = new_orders + 7`)

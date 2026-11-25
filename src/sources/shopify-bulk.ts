@@ -106,6 +106,8 @@ export class CompactOrders {
   pulled = 0
   // Orders created at or before the cutoff, so they can be checked against Shopify's count for the same moment.
   pulledBefore = 0
+  // Cancelled orders are counted but not added to the daily totals, so reconcile knows how many days should hold.
+  cancelled = 0
   size = 0
   private time = new Float64Array(1024)
   private day = new Int32Array(1024)
@@ -133,7 +135,7 @@ export class CompactOrders {
     this.pulled++
     this.state?.add(o)
     if (o.createdAt && Date.parse(o.createdAt) <= this.cutoff) this.pulledBefore++
-    if (o.cancelledAt) return
+    if (o.cancelledAt) { this.cancelled++; return }
     if (this.size === this.time.length) this.grow()
     const i = this.size++
     const date = o.processedAt.slice(0, 10)
