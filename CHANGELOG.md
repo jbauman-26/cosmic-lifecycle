@@ -20,7 +20,8 @@ A privacy fix. The promise is that customer names, emails, phone numbers and str
 - **`query` refuses a personal column**, with code `personal_column`. This covers `lifecycle query`, `lifecycle warehouse query`, saved metrics and the MCP `query` tool. It catches an alias, a quoted or mixed case name, a star, `t.*`, a subquery, a CTE, a cast, a function, a filter or sort on the column, and a whole row (`row_to_json(u)`, `to_jsonb(u)`, `SELECT u`, `u::text`). Forms the check cannot read exactly are refused as well.
 - **`lifecycle warehouse scrub [--confirm]`.** Empties personal columns an older version stored. Without `--confirm` it only counts. The report holds table names, column names and row counts, never a value. It also removes the loader's leftover row copies, and rebuilds a local warehouse file so the old values are gone from the bytes of the file, not only from queries.
 - **`warehouse.free_text`**, a setting with the values `keep` (the default, as before) and `drop`. Free text is ticket subjects, message bodies, review text and notes. With `keep` it is loaded with email addresses and phone numbers replaced by `[removed]`. With `drop` it is not loaded.
-- **Phone numbers are taken out of kept free text.** Email addresses already were.
+- **Phone numbers are taken out of kept free text.** Email addresses already were. A value that is nothing but a phone number starting with `+` is removed under any key.
+- Open-ended fields (`custom_fields`, `metadata`, `properties`) are free text as a whole, and are removed when they sit inside a person. `created_by`, `updated_by`, `assigned_to` and the like hold a person.
 - More functions are blocked in every query with `blocked_object`, because they run SQL given as text or read the database's statistics: `query_to_xml`, `ts_stat`, `query()`, `query_table()`, and any name starting `pg_` or `duckdb_`.
 
 ### Changed
@@ -48,13 +49,15 @@ The Mac app can stop adding name keys to the loader job once it bundles this ver
 ### What is proven and what is not
 
 - Typecheck and the full test suite pass.
-- The loader and the CLI are run over the same 224,400 table and key combinations and agree on every one.
+- The loader and the CLI are run over the same 341,880 table and key combinations and agree on every one.
 - Every catalog table that holds people has a made-up row in the vendor's documented shape, and the test proves the person is gone and the useful fields stay. No connector has run on a real account, so a field a vendor names in a way the docs do not show can still get through.
 - The query check is tested with more than 60 ways to read a personal column, on Postgres (PGlite) and on a local DuckDB warehouse. It is a token check, not a full SQL parser. It refuses what it cannot prove safe, so a safe statement can be refused.
 - `warehouse scrub` is tested on Postgres (PGlite) and on a local DuckDB file. It was not run on a hosted Postgres.
 - After a local scrub the test reads the bytes of every file under the store's home and finds none of the made-up name, email or alias. On Postgres old row versions stay until the table is vacuumed, and that was not measured.
 - The query check found two real ways through while it was being tested, both now refused and covered: `u.row_to_json` (Postgres reads it as a function on the whole row) and a no-break space in place of a space (DuckDB reads it as a space).
 - A name inside kept free text is not found. That is what `warehouse.free_text drop` is for.
+- A phone number inside text that is not free text, such as a status line, is not found unless it is the whole value and starts with `+`.
+- Until `warehouse scrub --confirm` is run, free text an older version stored can still return phone numbers: `query` does not refuse free text columns.
 - The end to end loader tests need uv, so they run on a developer machine and are skipped in CI.
 
 ## 0.13.1 (2026-11-24)

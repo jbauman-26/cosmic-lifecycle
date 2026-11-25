@@ -427,6 +427,8 @@ Personal data:
         A name inside the text stays.
     lifecycle config set warehouse.free_text drop   free text is not loaded.
   Text the store wrote itself (campaigns, flows, segments) is not free text.
+  Open-ended fields (custom_fields, metadata, properties) are free text as a
+  whole, and are removed when they sit inside a person.
 
   lifecycle schema and lifecycle warehouse schema mark every column:
     { "column": "name", "type": "VARCHAR", "personal": true, "freeText": false }

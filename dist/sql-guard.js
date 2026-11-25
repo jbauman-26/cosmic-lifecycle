@@ -156,6 +156,8 @@ export function assertNoPersonalColumns(sql, catalog) {
             open.push(tokens[i - 1]);
         else if (is(t, 'op', ')') && open.length > 1)
             open.pop();
+        else if (t.kind === 'string' && (is(tokens[i - 1], 'op', '.') || is(tokens[i + 1], 'op', '.')))
+            refuse('It uses a string as part of a table or column name.');
         else if (t.kind === 'string' && (word(tokens[i - 1], 'from') || word(tokens[i - 1], 'join'))) {
             const inFunction = FROM_FUNCTIONS.has(open[open.length - 1]?.value ?? '');
             if (!inFunction && !word(tokens[i - 2], 'distinct'))

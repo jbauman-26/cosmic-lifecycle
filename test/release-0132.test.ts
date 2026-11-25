@@ -84,6 +84,18 @@ describe('the rule list', () => {
     expect(kind('meta_saved_metric', 'title')).toBe('keep')
   })
 
+  it('treats open-ended fields as free text, removes them inside a person, and knows created_by is a person', () => {
+    for (const c of ['custom_fields', 'customAttributes', 'metadata', 'properties', 'custom_fields__value', 'metadata__order_note', 'line_items__properties__engraving']) expect(kind('orders', c), c).toBe('free_text')
+    expect(kind('orders', 'custom_fields__gift_count', 'bigint')).toBe('free_text')
+    expect(kind('orders', 'metadata__email')).toBe('personal')
+    expect(kind('orders', 'metadata__customer__name')).toBe('personal')
+    for (const c of ['custom_fields', 'metadata', 'properties', 'traits', 'merge_fields', 'custom_fields__shoe_size']) expect(kind('customers', c), c).toBe('personal')
+    expect(kind('campaigns', 'metadata__note')).toBe('keep')
+    for (const c of ['created_by', 'updatedBy', 'assigned_to', 'created_by__name', 'approved_by__display_name']) expect(kind('orders', c), c).toBe('personal')
+    expect(kind('orders', 'created_by', 'bigint')).toBe('keep')
+    expect(kind('orders', 'created_by__id', 'bigint')).toBe('keep')
+  })
+
   it('applies a per-source decision before the general rules', () => {
     expect(kind('customers', 'hash', 'text', 'recharge')).toBe('personal')
     expect(kind('customers', 'hash', 'text')).toBe('keep')
@@ -138,10 +150,11 @@ describe('the loader and the CLI agree', () => {
     'message_id', 'comment', 'comments', 'comment_count', 'note', 'notes', 'description', 'description_text', 'content', 'content_type', 'excerpt', 'preview', 'summary', 'feedback', 'details', 'answer', 'reply',
     'instructions', 'gift_message', 'status', 'created_at', 'total', 'score', 'rating', 'sku', 'product_name', 'product_title', 'company', 'company_name', 'job_title', 'tags', 'hash', 'token', 'password',
     'custom_fields', 'user_fields', 'data', 'meta', 'metadata', 'properties', 'identifiers', 'label_url', 'signed_by', 'smses', 'ship_to', 'shipTo', 'billing', 'shipping', 'other_response', 'response',
+    'customAttributes', 'custom_attributes', 'note_properties', 'created_by', 'createdBy', 'assigned_to', 'updated_by', 'merge_fields', 'traits', 'msisdn', 'value', 'key',
   ]
   const TABLES = ['orders', 'tickets', 'users', 'customers', 'contacts', 'reviews', 'product_reviews', 'campaigns', 'questions', 'messages', 'conversations', 'trackings', 'labels', 'responses', 'dim_flow']
   const SOURCES = [undefined, 'zendesk', 'gorgias', 'recharge', 'freshdesk', 'kustomer', 'omnisend', 'yotpo-reviews', 'fairing', 'shippo', 'aftership-tracking']
-  const PARENTS = [[], ['customer'], ['reviewer'], ['product'], ['ship_to'], ['attributes'], ['via', 'source'], ['billing_address'], ['author'], ['message']]
+  const PARENTS = [[], ['customer'], ['reviewer'], ['product'], ['ship_to'], ['attributes'], ['via', 'source'], ['billing_address'], ['author'], ['message'], ['custom_fields'], ['metadata', 'customer'], ['created_by'], ['line_items', 'properties']]
 
   it('classifies every key the same way in Python and in TypeScript', () => {
     const cases: { source?: string; table: string; path: string[] }[] = []
@@ -193,6 +206,16 @@ print(json.dumps([run.scrub_free_text(t) for t in json.loads(sys.stdin.read())])
       expect(out[t], t).not.toMatch(/\d{4}|@/)
     }
     for (const t of texts.slice(9)) expect(out[t], t).toBe(t)
+  })
+
+  it('removes a value that is nothing but a phone number with a country code, under any key, and leaves ids alone', () => {
+    const got = python(`
+import json, sys
+sys.path.insert(0, 'connectors')
+import run
+print(json.dumps(run.strip_personal(json.loads(sys.stdin.read()), table='messages')))
+`, { id: '5550100142', from: '+15550100142', to: '+44 20 7946 0958', order_number: '100-200-3000', external_id: '4155550123', sent_at: '2026-11-24T10:30:00+01:00', offset: '+0100', channel: 'sms', line: 'Sent to +15550100142 today' })
+    expect(got).toEqual({ id: '5550100142', from: '[removed]', to: '[removed]', order_number: '100-200-3000', external_id: '4155550123', sent_at: '2026-11-24T10:30:00+01:00', offset: '+0100', channel: 'sms', line: 'Sent to +15550100142 today' })
   })
 })
 
@@ -399,6 +422,7 @@ describe('the query check, statement by statement', () => {
     // DuckDB reads a string after FROM as a table name, whatever the string holds.
     expect(await codeOf(() => assertNoPersonalColumns(`select * from 'users'`, two))).toBe('personal_column')
     expect(await codeOf(() => assertNoPersonalColumns(`select * from src_new_desk.users n join 'x' on true`, two))).toBe('personal_column')
+    expect(await codeOf(() => assertNoPersonalColumns(`select id from src_zendesk.'users'`, two))).toBe('personal_column')
   })
 
   it('refuses multiplication beside a table with personal columns, because it cannot tell it from a star', async () => {

@@ -37,8 +37,11 @@
 //                   campaigns, flows, segments ...). Free text can hold anything a customer typed,
 //                   including a name. `warehouse.free_text keep` (the default) keeps it with email
 //                   addresses and phone numbers replaced by [removed]. `drop` removes the field.
+//     A key with a word from `freeTextContainers` (custom_fields, metadata, properties) holds open-ended
+//     fields: everything under it is free text. Inside a person such a key is removed (rule 4).
 //  9. Everything else is kept: ids, counts, amounts, timestamps, statuses, product and campaign names.
-//     An email address inside any kept text is still replaced by [removed].
+//     An email address inside any kept text is still replaced by [removed], and so is a value that is
+//     nothing but a phone number starting with +.
 export const PERSONAL_RULES = {
     version: 1,
     always: [
@@ -46,7 +49,7 @@ export const PERSONAL_RULES = {
         'givenname', 'familyname', 'middlename', 'maidenname', 'nickname', 'username', 'screenname', 'signedby',
         'address', 'address1', 'address2', 'address3', 'street', 'street1', 'street2', 'zip', 'zipcode', 'postcode', 'postal',
         'birthday', 'birthdate', 'birth', 'dob', 'ssn', 'ip', 'ipaddress', 'latitude', 'longitude', 'lat', 'lng', 'lon', 'geolocation',
-        'smses', 'password', 'token', 'secret',
+        'smses', 'msisdn', 'cellphone', 'landline', 'password', 'token', 'secret',
     ],
     nameOwners: [
         'first', 'last', 'full', 'middle', 'given', 'family', 'legal', 'maiden', 'nick', 'screen', 'customer', 'billing', 'shipping',
@@ -59,7 +62,10 @@ export const PERSONAL_RULES = {
         'receiver', 'addressee', 'consignee', 'cardholder', 'payer', 'asker',
     ],
     // Whole keys that hold a person, written without separators: ship_to is shipto.
-    personKeys: ['shipto', 'shipfrom', 'returnto', 'billto', 'soldto', 'sendto', 'deliverto'],
+    personKeys: [
+        'shipto', 'shipfrom', 'returnto', 'billto', 'soldto', 'sendto', 'deliverto', 'createdby', 'updatedby', 'modifiedby', 'deletedby', 'approvedby',
+        'closedby', 'assignedto', 'assignedby', 'repliedby', 'submittedby', 'postedby', 'writtenby', 'reportedby', 'requestedby', 'ownedby',
+    ],
     peopleTables: [
         'user', 'customer', 'contact', 'member', 'subscriber', 'profile', 'people', 'person', 'recipient', 'agent', 'reviewer',
         'shopper', 'buyer', 'author', 'requester', 'assignee', 'respondent', 'lead',
@@ -68,11 +74,15 @@ export const PERSONAL_RULES = {
     inPersonWords: [
         'name', 'alias', 'handle', 'initials', 'signature', 'avatar', 'photo', 'picture', 'gravatar', 'bio',
         'twitter', 'facebook', 'instagram', 'linkedin', 'tiktok', 'whatsapp', 'telegram', 'skype', 'social',
+        // Open-ended fields about the person: anything can be in them.
+        'custom', 'metadata', 'properties', 'traits', 'fields', 'extra',
     ],
     inPersonKeys: ['first', 'last', 'line1', 'line2', 'line3'],
     personScalars: [
         'customer', 'contact', 'recipient', 'sender', 'author', 'reviewer', 'buyer', 'user', 'person', 'subscriber', 'member',
         'owner', 'assignee', 'requester', 'submitter', 'agent', 'shopper', 'respondent', 'receiver', 'addressee', 'consignee', 'asker',
+        'createdby', 'updatedby', 'modifiedby', 'deletedby', 'approvedby', 'closedby', 'assignedto', 'assignedby', 'repliedby', 'submittedby',
+        'postedby', 'writtenby', 'reportedby', 'requestedby', 'ownedby',
     ],
     authoredKeys: ['name', 'nickname', 'displayname'],
     authoredFreeText: ['title'],
@@ -84,6 +94,9 @@ export const PERSONAL_RULES = {
         'subject', 'body', 'message', 'comment', 'comments', 'note', 'notes', 'description', 'content', 'excerpt', 'preview',
         'snippet', 'summary', 'feedback', 'transcript', 'details', 'reply', 'answer', 'instructions',
     ],
+    // A key with one of these words holds open-ended fields (custom_fields, metadata, properties). Everything
+    // under it is free text, whatever its type.
+    freeTextContainers: ['custom', 'metadata', 'properties'],
     // A last word that says "this is text" when another word is a free text word: body_html, description_text.
     freeTextTails: ['html', 'text', 'plain', 'raw'],
     storeTables: [
@@ -163,6 +176,7 @@ const AUTHORED_FREE_TEXT = set(PERSONAL_RULES.authoredFreeText);
 const REGION = set(PERSONAL_RULES.region);
 const FREE_TEXT_WORDS = set(PERSONAL_RULES.freeTextWords);
 const FREE_TEXT_TAILS = set(PERSONAL_RULES.freeTextTails);
+const FREE_TEXT_CONTAINERS = set(PERSONAL_RULES.freeTextContainers);
 const STORE_TABLES = set(PERSONAL_RULES.storeTables);
 /** A key as lowercase words: firstName, first_name and first-name are all [first, name]. */
 export function words(key) {
@@ -195,6 +209,7 @@ export function freeTextKey(key) {
         return false;
     return FREE_TEXT_WORDS.has(last) || (FREE_TEXT_TAILS.has(last) && ws.some((w) => FREE_TEXT_WORDS.has(w)));
 }
+export const freeTextContainer = (key) => words(key).some((w) => FREE_TEXT_CONTAINERS.has(w));
 const lastWord = (table) => words(table).at(-1) ?? '';
 /** The table a child table hangs from: customers__addresses is customers. */
 export const rootTable = (table) => table.split('__')[0] ?? table;
@@ -224,35 +239,48 @@ export function classifyColumn(c) {
         return 'keep';
     const overrides = overridesFor(c.source, c.table);
     let inPerson = isPeopleTable(c.table);
+    const store = isStoreTable(c.table);
+    // Inside open-ended fields everything is free text, unless a rule below says personal.
+    let free = false;
     const path = [];
     for (let i = 0; i < segs.length; i++) {
         const seg = segs[i];
+        const leaf = i === segs.length - 1;
         path.push(norm(seg));
         const o = overrides[path.join('__')];
-        if (o === 'personal' || o === 'free_text')
-            return o;
-        if (o !== 'keep') {
+        if (o === 'personal')
+            return 'personal';
+        if (o === 'free_text') {
+            if (leaf)
+                return 'free_text';
+            free = true;
+        }
+        else if (o === 'keep') {
+            if (leaf)
+                return free ? 'free_text' : 'keep';
+        }
+        else {
             if (isPersonalKey(seg))
                 return 'personal';
             if (inPerson && inPersonKey(seg))
                 return 'personal';
+            if (!store && freeTextContainer(seg))
+                free = true;
         }
-        else if (i === segs.length - 1)
-            return 'keep';
-        if (i < segs.length - 1)
+        if (!leaf)
             inPerson = inPerson || ownsPerson(seg);
     }
     const leaf = segs.at(-1);
     const texty = c.type === undefined || TEXT_TYPE.test(c.type);
-    if (!texty)
-        return 'keep';
-    if (personScalarKey(leaf))
-        return 'personal';
     const top = segs.length === 1;
     const authored = isAuthoredTable(c.table);
-    if (authored && top && AUTHORED_KEYS.has(norm(leaf)))
+    if (texty && personScalarKey(leaf))
         return 'personal';
-    if (!isStoreTable(c.table) && (freeTextKey(leaf) || (authored && top && AUTHORED_FREE_TEXT.has(norm(leaf)))))
+    if (texty && authored && top && AUTHORED_KEYS.has(norm(leaf)))
+        return 'personal';
+    if (free)
+        return 'free_text';
+    if (texty && !store && (freeTextKey(leaf) || (authored && top && AUTHORED_FREE_TEXT.has(norm(leaf)))))
         return 'free_text';
     return 'keep';
 }

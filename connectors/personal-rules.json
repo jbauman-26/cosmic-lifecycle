@@ -46,6 +46,9 @@
     "lon",
     "geolocation",
     "smses",
+    "msisdn",
+    "cellphone",
+    "landline",
     "password",
     "token",
     "secret"
@@ -123,7 +126,22 @@
     "billto",
     "soldto",
     "sendto",
-    "deliverto"
+    "deliverto",
+    "createdby",
+    "updatedby",
+    "modifiedby",
+    "deletedby",
+    "approvedby",
+    "closedby",
+    "assignedto",
+    "assignedby",
+    "repliedby",
+    "submittedby",
+    "postedby",
+    "writtenby",
+    "reportedby",
+    "requestedby",
+    "ownedby"
   ],
   "peopleTables": [
     "user",
@@ -168,7 +186,13 @@
     "whatsapp",
     "telegram",
     "skype",
-    "social"
+    "social",
+    "custom",
+    "metadata",
+    "properties",
+    "traits",
+    "fields",
+    "extra"
   ],
   "inPersonKeys": [
     "first",
@@ -199,7 +223,22 @@
     "receiver",
     "addressee",
     "consignee",
-    "asker"
+    "asker",
+    "createdby",
+    "updatedby",
+    "modifiedby",
+    "deletedby",
+    "approvedby",
+    "closedby",
+    "assignedto",
+    "assignedby",
+    "repliedby",
+    "submittedby",
+    "postedby",
+    "writtenby",
+    "reportedby",
+    "requestedby",
+    "ownedby"
   ],
   "authoredKeys": [
     "name",
@@ -250,6 +289,11 @@
     "reply",
     "answer",
     "instructions"
+  ],
+  "freeTextContainers": [
+    "custom",
+    "metadata",
+    "properties"
   ],
   "freeTextTails": [
     "html",

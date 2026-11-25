@@ -50,6 +50,7 @@ class Rules:
         self.in_person_words, self.in_person_keys, self.person_scalars = g("inPersonWords"), g("inPersonKeys"), g("personScalars")
         self.authored_keys, self.authored_free_text, self.region = g("authoredKeys"), g("authoredFreeText"), g("region")
         self.free_text_words, self.free_text_tails, self.store_tables = g("freeTextWords"), g("freeTextTails"), g("storeTables")
+        self.free_text_containers = g("freeTextContainers")
         self.store_prefixes = tuple(data["storePrefixes"])
         self.sources = data.get("sources") or {}
 
@@ -137,25 +138,26 @@ def overrides_for(source: str | None, table: str) -> dict[str, str]:
     return {"__".join(norm(p) for p in path.split("__")): v for path, v in mine.items()}
 
 
+def free_text_container(key: str) -> bool:
+    r = rules()
+    return any(w in r.free_text_containers for w in words(key))
+
+
 def textish(v: Any) -> bool:
     """Text, or a list of text: what a name or a comment is stored as. A number under `author` is an id."""
     return isinstance(v, str) or (isinstance(v, list) and len(v) > 0 and all(isinstance(x, str) for x in v))
 
 
+# A value that is nothing but a phone number written with its country code. An id never starts with +.
+WHOLE_PHONE = re.compile(r"\s*\+\d[\d ().-]{6,}\d\s*", re.ASCII)
+
+
 def scrub_emails(text: str) -> str:
-    return EMAIL_VALUE.sub(REMOVED, text)
+    return REMOVED if WHOLE_PHONE.fullmatch(text) else EMAIL_VALUE.sub(REMOVED, text)
 
 
 def scrub_free_text(text: str) -> str:
     return PHONE_VALUE.sub(REMOVED, EMAIL_VALUE.sub(REMOVED, text))
-
-
-def deep_scrub(v: Any) -> Any:
-    if isinstance(v, dict):
-        return {k: deep_scrub(x) for k, x in v.items() if not is_personal(str(k))}
-    if isinstance(v, list):
-        return [deep_scrub(x) for x in v]
-    return scrub_free_text(v) if isinstance(v, str) else v
 
 
 class Walk:
@@ -170,9 +172,10 @@ class Walk:
         self.overrides = overrides_for(source, table) if table else {}
 
     def run(self, item: Any, in_person: bool | None = None) -> Any:
-        return self.walk(item, (), self.people if in_person is None else in_person)
+        return self.walk(item, (), self.people if in_person is None else in_person, False)
 
-    def walk(self, item: Any, path: tuple[str, ...], in_person: bool) -> Any:
+    def walk(self, item: Any, path: tuple[str, ...], in_person: bool, free: bool) -> Any:
+        """`free` is set inside free text: there, phone numbers go from every string as well as emails."""
         if isinstance(item, dict):
             out = {}
             for k, v in item.items():
@@ -183,27 +186,27 @@ class Walk:
                 o = self.overrides.get("__".join(here))
                 if o == "personal":
                     continue
+                inside = free
                 if o == "free_text":
-                    if not self.drop_text:
-                        out[k] = deep_scrub(v)
-                    continue
-                if o != "keep":
+                    inside = True
+                elif o != "keep":
                     if is_personal(key) or (in_person and in_person_key(key)):
                         continue
-                    if textish(v):
-                        top = len(here) == 1
-                        if person_scalar_key(key) or (self.authored and top and norm(key) in rules().authored_keys):
-                            continue
-                        if not self.store and (free_text_key(key) or (self.authored and top and norm(key) in rules().authored_free_text)):
-                            if not self.drop_text:
-                                out[k] = deep_scrub(v)
-                            continue
-                out[k] = self.walk(v, here, in_person or owns_person(key))
+                    top = len(here) == 1
+                    if textish(v) and (person_scalar_key(key) or (self.authored and top and norm(key) in rules().authored_keys)):
+                        continue
+                    if not self.store and free_text_container(key):
+                        inside = True
+                    elif textish(v) and not self.store and (free_text_key(key) or (self.authored and top and norm(key) in rules().authored_free_text)):
+                        inside = True
+                if inside and not free and self.drop_text:
+                    continue
+                out[k] = self.walk(v, here, in_person or owns_person(key), inside)
             return out
         if isinstance(item, list):
-            return [self.walk(v, path, in_person) for v in item]
-        if isinstance(item, str) and EMAIL_VALUE.search(item):
-            return scrub_emails(item)
+            return [self.walk(v, path, in_person, free) for v in item]
+        if isinstance(item, str):
+            return scrub_free_text(item) if free else scrub_emails(item)
         return item
 
 

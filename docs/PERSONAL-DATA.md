@@ -20,13 +20,13 @@ A field is a key in a row (the loader) or a column in a table (schema, query, sc
 1. **Per source.** A source in the catalog can name a table and a key and say `personal`, `free_text` or `keep`. This is for fields a vendor names in its own way: Recharge's customer `hash`, Zendesk's `user_fields`, Shippo's `label_url`. The list is `PERSONAL_RULES.sources`.
 2. **Always personal.** A key with one of these words, wherever it sits: email, phone, mobile, telephone, fax, address, street, zip, postal, postcode, birthday, birth, dob, ssn, ip, latitude, longitude, lat, lng, password, token, secret. Also first name, last name, full name, given name, family name, nickname and username written as one word. Plurals count.
 3. **A named person.** A key with the word `name` and one of: first, last, full, middle, given, family, legal, display, nick, customer, billing, shipping, contact, recipient, sender, author, reviewer, buyer, user, person, profile, subscriber, member, owner, assignee, requester, submitter, agent. So `reviewer_name`, `authorName`, `requester_name` and `assignee_name` are personal. An assignee is usually staff. Their name is removed too, because the rule cannot tell staff from a customer.
-4. **People.** A table whose rows are people (users, customers, contacts, members, subscribers, profiles, recipients, agents, reviewers, buyers, authors, leads), and a nested object that holds a person (customer, reviewer, author, recipient, ship_to, bill_to and the like). Inside either, these are personal: name, alias, handle, initials, signature, avatar, photo, picture, social handles, street lines. A product, tier or company name inside a person is removed as well. Losing a label is the safe direction.
+4. **People.** A table whose rows are people (users, customers, contacts, members, subscribers, profiles, recipients, agents, reviewers, buyers, authors, leads), and a nested object that holds a person (customer, reviewer, author, recipient, ship_to, bill_to, created_by, assigned_to and the like). Inside either, these are personal: name, alias, handle, initials, signature, avatar, photo, picture, social handles, street lines. A product, tier or company name inside a person is removed as well. Losing a label is the safe direction.
 5. **A person as text.** Text stored directly under `author`, `reviewer`, `customer`, `recipient`, `user`, `owner`, `agent` and the like is that person's name or handle. A number there is an id and is kept.
 6. **A review's writer.** In a reviews table, a top-level `name` or `nickname` is the writer.
 7. **Kept.** Ids, counts, amounts, timestamps, statuses, product and campaign names. Region is kept, also inside a person: country, state, province, region, city, time zone, locale, language, currency. A whole address object is removed, city and country with it.
 8. **Free text.** See below.
 
-An email address inside any kept text is replaced by `[removed]`, whatever the field is called.
+An email address inside any kept text is replaced by `[removed]`, whatever the field is called. So is a value that is nothing but a phone number starting with `+`.
 
 ## Free text
 
@@ -41,6 +41,8 @@ lifecycle config set warehouse.free_text drop
 - `drop`: free text is not loaded at all.
 
 A field is free text when it holds text and its last word is one of: subject, body, message, comment, comments, note, notes, description, content, excerpt, preview, snippet, summary, feedback, transcript, details, reply, answer, instructions. So are `body_html` and `description_text`, and a review's `title`. Text the store wrote itself is not free text: campaigns, flows, automations, lists, segments, coupons and the CLI's own tables.
+
+Open-ended fields are free text as a whole: any key with the word custom, metadata or properties (`custom_fields`, `customAttributes`, `metadata`, line item `properties`). With `keep`, every text inside has emails and phone numbers replaced, and keys that are personal by the rules above are still removed. Inside a person these fields are removed outright, along with `traits`, `fields` and `extra`.
 
 A phone number is `+` followed by at least eight digits in groups, or ten digits written as 3-3-4 with spaces, dots, dashes or brackets. A date, a time, a price and a 13 digit timestamp are left alone. A bare ten digit number is replaced. A seven digit local number is not found.
 
@@ -92,6 +94,8 @@ lifecycle warehouse scrub --confirm    # empties them
 ## What this does not cover
 
 - A name inside free text that is kept.
+- A phone number inside text that is not free text, unless it is the whole value and starts with `+`.
+- Free text an older version stored, until `warehouse scrub --confirm` is run. `query` refuses personal columns, not free text columns.
 - A field a vendor names in a way no rule expects. The 25 connectors were written from API docs and none has run on a real account. Report one with `lifecycle feedback`.
 - A view someone made in the database by hand over a personal column.
 - A source connected with `--keep-personal-data`. That is the owner's choice. Its columns are marked personal and `query` refuses them.
