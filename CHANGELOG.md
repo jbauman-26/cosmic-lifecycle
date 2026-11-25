@@ -22,6 +22,10 @@ Incremental Shopify sync. After the first full pull, a daily sync asks Shopify o
 - `lifecycle disconnect shopify` also deletes the store key and both state tables, even when the totals are kept.
 - The Shopify order queries also ask for `id` and `updatedAt`. Both are hashed or used as a time; no personal field is asked for.
 
+### Fixed
+
+- **Large amounts are no longer scrubbed as phone numbers.** In free text, a number with ten or more digits before a dot and cents (1234567890.00, a billion-dollar total) matched the phone rule and came back as `[removed].00`. A number followed by a dot and digits is now an amount, the same rule as the Cosmic AI app's. The pattern is the same in TypeScript, the Python loader and Postgres, and a test checks they agree.
+
 ### Kept as before
 
 - Without a key (no keychain and nothing passed in), Shopify syncs in full every time as in 0.14.1, and any stored state is cleared so it can never go stale.
