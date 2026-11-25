@@ -817,6 +817,15 @@ describe.skipIf(!uvAvailable())('a local warehouse, end to end', () => {
     const again = await scrubWarehouse()
     expect(again.totals.values).toBe(0)
     expect(again.loaderFiles.files).toBe(0)
+    // A load that did not finish is counted and left alone: removing it could lose rows.
+    const half = join(home, 'dlt', 'lifecycle_old_desk', 'load', 'normalized', '1700000001.1', 'new_jobs')
+    mkdirSync(half, { recursive: true })
+    writeFileSync(join(half, 'users.x.0.insert_values'), '2')
+    const withPending = await scrubWarehouse({ confirm: true })
+    expect(withPending.loaderFiles).toEqual({ files: 0, removed: false, pending: 1 })
+    expect(withPending.note).toMatch(/did not finish/)
+    expect(existsSync(join(half, 'users.x.0.insert_values'))).toBe(true)
+    rmSync(join(home, 'dlt', 'lifecycle_old_desk', 'load', 'normalized', '1700000001.1'), { recursive: true, force: true })
     // The rebuilt file still takes a load: the source that removes personal data syncs into it again.
     expect((await syncSources(['new-desk']))[0]).toMatchObject({ status: 'ok', rows: 4 })
     expect((await duckQuery('select count(*) as n from src_new_desk.users')).rows).toEqual([{ n: 2 }])

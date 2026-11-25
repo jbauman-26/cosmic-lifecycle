@@ -361,11 +361,14 @@ export function scrubPlan(cols, mode) {
     }
     return plan;
 }
-const LOADER_DATA_DIRS = [['load', 'loaded'], ['load', 'normalized'], ['load', 'new'], ['normalize', 'extracted']];
+const FINISHED_LOADS = ['load', 'loaded'];
+const UNFINISHED_LOADS = [['load', 'normalized'], ['load', 'new'], ['normalize', 'extracted']];
 /**
  * The loader's working folder keeps load packages. Before 0.13.2 each finished one held a copy of every
- * row it loaded, so a name stored then is still there. They are history only: removing them changes no
- * table. Returns how many files hold row data, and removes the packages when `apply` is set.
+ * row it loaded, so a name stored then is still there. Finished packages are history only: removing them
+ * changes no table. Returns how many files they hold, and removes them when `apply` is set.
+ * A load that did not finish is left alone, because removing it could lose rows: it is counted in
+ * `pending`, and the next sync loads it.
  */
 export function loaderLeftovers(apply, dir = pipelinesDir()) {
     let files = 0;
@@ -378,27 +381,22 @@ export function loaderLeftovers(apply, dir = pipelinesDir()) {
                 files++;
         }
     };
+    const packagesIn = (base) => (existsSync(base) && statSync(base).isDirectory() ? readdirSync(base).map((n) => join(base, n)).filter((p) => statSync(p).isDirectory()) : []);
     if (!existsSync(dir))
-        return { files: 0, removed: false };
-    const packages = [];
+        return { files: 0, removed: false, pending: 0 };
+    const finished = [];
+    let pending = 0;
     for (const pipeline of readdirSync(dir)) {
-        for (const parts of LOADER_DATA_DIRS) {
-            const base = join(dir, pipeline, ...parts);
-            if (!existsSync(base) || !statSync(base).isDirectory())
-                continue;
-            for (const name of readdirSync(base)) {
-                const p = join(base, name);
-                if (statSync(p).isDirectory())
-                    packages.push(p);
-            }
-        }
+        finished.push(...packagesIn(join(dir, pipeline, ...FINISHED_LOADS)));
+        for (const parts of UNFINISHED_LOADS)
+            pending += packagesIn(join(dir, pipeline, ...parts)).length;
     }
-    for (const p of packages)
+    for (const p of finished)
         count(p);
     if (apply)
-        for (const p of packages)
+        for (const p of finished)
             rmSync(p, { recursive: true, force: true });
-    return { files, removed: apply && packages.length > 0 };
+    return { files, removed: apply && finished.length > 0, pending };
 }
 function scrubReport(steps, applied, database, mode, extra) {
     const byTable = new Map();
@@ -420,6 +418,7 @@ function scrubReport(steps, applied, database, mode, extra) {
         note: [
             applied ? `Emptied or rewrote ${values} stored values.` : `Dry run: nothing was changed. ${values} stored values would be emptied or rewritten.`,
             files ? (applied ? `Removed ${files} file(s) of finished loads from the loader's folder, where copies of loaded rows were kept.` : `${files} file(s) of finished loads are in the loader's folder, where copies of loaded rows were kept. They would be removed.`) : '',
+            extra.loaderFiles.pending ? `${extra.loaderFiles.pending} load(s) did not finish and still hold rows in the loader's folder. Run lifecycle warehouse sync to finish them, then scrub again.` : '',
             blocked ? `${blocked} column(s) may not be empty and have no row id to stand in, so they were left alone.` : '',
             applied && extra.rebuilt === true ? 'The database file was rebuilt, so the old values are gone from the file as well.' : '',
             applied && extra.rebuilt === false ? 'Queries no longer return the old values, but the database file could not be rebuilt and can still hold old bytes.' : '',

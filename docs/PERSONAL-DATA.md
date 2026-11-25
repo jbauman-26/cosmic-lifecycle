@@ -89,7 +89,7 @@ lifecycle warehouse scrub --confirm    # empties them
 - Free text: with `warehouse.free_text drop` it is emptied. With `keep`, email addresses and phone numbers inside it are replaced.
 - The report holds table names, column names and counts. It never holds a stored value.
 - The columns stay, empty, so `schema` still marks them and `query` still refuses them.
-- The loader's own folder is cleaned too. Before 0.13.2 the loader kept a copy of every row it loaded under `~/.lifecycle/dlt/*/load/loaded`, so a name stored then is still in those files. `scrub` counts them, and `--confirm` removes them. From 0.13.2 on the loader keeps no copy.
+- The loader's own folder is cleaned too. Before 0.13.2 the loader kept a copy of every row it loaded under `~/.lifecycle/dlt/*/load/loaded`, so a name stored then is still in those files. `scrub` counts them, and `--confirm` removes them. From 0.13.2 on the loader keeps no copy. A load that did not finish is left alone, because removing it could lose rows. It is counted as `pending`: run `lifecycle warehouse sync` to finish it, then scrub again.
 - A local warehouse file is rebuilt after the columns are emptied, so the old values are gone from the bytes of the file and not only from queries. The report says `rebuilt: true`. If the copy fails the emptied warehouse stays in place and the report says `rebuilt: false`.
 - On Postgres the values are gone from every query. Postgres keeps old row versions until it vacuums the table.
 

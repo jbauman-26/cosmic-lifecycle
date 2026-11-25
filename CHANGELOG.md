@@ -40,7 +40,7 @@ A privacy fix. The promise is that customer names, emails, phone numbers and str
 | New error code | `personal_column`: "That query was refused because it could return personal details." plus the reason, with a next step in `next`. |
 | New error code | `scrub_failed`: `warehouse scrub` could not read or change the warehouse. |
 | New setting | `warehouse.free_text`: `keep` or `drop`. `lifecycle config set warehouse.free_text drop`. |
-| New command | `lifecycle warehouse scrub [--confirm] --format json`: `{ applied, database, freeText, tables: [{ table, rows, columns: [{ column, why, action, rows, status }] }], totals, loaderFiles: { files, removed }, rebuilt, note, next }`. Run it once per store home with `--confirm`. |
+| New command | `lifecycle warehouse scrub [--confirm] --format json`: `{ applied, database, freeText, tables: [{ table, rows, columns: [{ column, why, action, rows, status }] }], totals, loaderFiles: { files, removed, pending }, rebuilt, note, next }`. Run it once per store home with `--confirm`. |
 | Query | `query` and `warehouse query` JSON may carry `redacted: N` when text in the answer had an email address or phone number replaced. |
 | Schema | `personal: boolean` and `freeText: boolean` on every column of `schema` and `warehouse schema`. `warehouse schema` is now objects, not strings. |
 | Loader job | Gains `rules` and `free_text`. A job that passes through another program must keep both. |

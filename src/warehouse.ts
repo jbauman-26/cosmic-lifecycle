@@ -384,7 +384,7 @@ export type ScrubReport = {
   tables: { table: string; columns: { column: string; why: 'personal' | 'free_text'; action: ScrubStep['action']; rows: number; status: ScrubStep['status'] }[]; rows: number }[]
   totals: { tables: number; columns: number; values: number; blocked: number; failed: number }
   // Files of finished loads in the loader's working folder. Older versions kept a copy of every loaded row there.
-  loaderFiles: { files: number; removed: boolean }
+  loaderFiles: LoaderFiles
   // Local only: true when the database file was rebuilt, so the old values are gone from its bytes too.
   rebuilt: boolean | null
   note: string
@@ -417,14 +417,19 @@ export function scrubPlan(cols: RawColumn[], mode: FreeTextMode): Omit<ScrubStep
   return plan
 }
 
-const LOADER_DATA_DIRS = [['load', 'loaded'], ['load', 'normalized'], ['load', 'new'], ['normalize', 'extracted']]
+const FINISHED_LOADS = ['load', 'loaded']
+const UNFINISHED_LOADS = [['load', 'normalized'], ['load', 'new'], ['normalize', 'extracted']]
+
+export type LoaderFiles = { files: number; removed: boolean; pending: number }
 
 /**
  * The loader's working folder keeps load packages. Before 0.13.2 each finished one held a copy of every
- * row it loaded, so a name stored then is still there. They are history only: removing them changes no
- * table. Returns how many files hold row data, and removes the packages when `apply` is set.
+ * row it loaded, so a name stored then is still there. Finished packages are history only: removing them
+ * changes no table. Returns how many files they hold, and removes them when `apply` is set.
+ * A load that did not finish is left alone, because removing it could lose rows: it is counted in
+ * `pending`, and the next sync loads it.
  */
-export function loaderLeftovers(apply: boolean, dir = pipelinesDir()): { files: number; removed: boolean } {
+export function loaderLeftovers(apply: boolean, dir = pipelinesDir()): LoaderFiles {
   let files = 0
   const count = (path: string) => {
     for (const name of readdirSync(path)) {
@@ -433,24 +438,20 @@ export function loaderLeftovers(apply: boolean, dir = pipelinesDir()): { files: 
       else files++
     }
   }
-  if (!existsSync(dir)) return { files: 0, removed: false }
-  const packages: string[] = []
+  const packagesIn = (base: string) => (existsSync(base) && statSync(base).isDirectory() ? readdirSync(base).map((n) => join(base, n)).filter((p) => statSync(p).isDirectory()) : [])
+  if (!existsSync(dir)) return { files: 0, removed: false, pending: 0 }
+  const finished: string[] = []
+  let pending = 0
   for (const pipeline of readdirSync(dir)) {
-    for (const parts of LOADER_DATA_DIRS) {
-      const base = join(dir, pipeline, ...parts)
-      if (!existsSync(base) || !statSync(base).isDirectory()) continue
-      for (const name of readdirSync(base)) {
-        const p = join(base, name)
-        if (statSync(p).isDirectory()) packages.push(p)
-      }
-    }
+    finished.push(...packagesIn(join(dir, pipeline, ...FINISHED_LOADS)))
+    for (const parts of UNFINISHED_LOADS) pending += packagesIn(join(dir, pipeline, ...parts)).length
   }
-  for (const p of packages) count(p)
-  if (apply) for (const p of packages) rmSync(p, { recursive: true, force: true })
-  return { files, removed: apply && packages.length > 0 }
+  for (const p of finished) count(p)
+  if (apply) for (const p of finished) rmSync(p, { recursive: true, force: true })
+  return { files, removed: apply && finished.length > 0, pending }
 }
 
-function scrubReport(steps: ScrubStep[], applied: boolean, database: 'local' | 'postgres', mode: FreeTextMode, extra: { loaderFiles: { files: number; removed: boolean }; rebuilt: boolean | null }): ScrubReport {
+function scrubReport(steps: ScrubStep[], applied: boolean, database: 'local' | 'postgres', mode: FreeTextMode, extra: { loaderFiles: LoaderFiles; rebuilt: boolean | null }): ScrubReport {
   const byTable = new Map<string, ScrubStep[]>()
   for (const s of steps) byTable.set(`${s.schema}.${s.table}`, [...(byTable.get(`${s.schema}.${s.table}`) ?? []), s])
   const tables = [...byTable].map(([table, list]) => ({ table, columns: list.map((s) => ({ column: s.column, why: s.why, action: s.action, rows: s.rows, status: s.status })), rows: list.reduce((n, s) => n + s.rows, 0) }))
@@ -469,6 +470,7 @@ function scrubReport(steps: ScrubStep[], applied: boolean, database: 'local' | '
     note: [
       applied ? `Emptied or rewrote ${values} stored values.` : `Dry run: nothing was changed. ${values} stored values would be emptied or rewritten.`,
       files ? (applied ? `Removed ${files} file(s) of finished loads from the loader's folder, where copies of loaded rows were kept.` : `${files} file(s) of finished loads are in the loader's folder, where copies of loaded rows were kept. They would be removed.`) : '',
+      extra.loaderFiles.pending ? `${extra.loaderFiles.pending} load(s) did not finish and still hold rows in the loader's folder. Run lifecycle warehouse sync to finish them, then scrub again.` : '',
       blocked ? `${blocked} column(s) may not be empty and have no row id to stand in, so they were left alone.` : '',
       applied && extra.rebuilt === true ? 'The database file was rebuilt, so the old values are gone from the file as well.' : '',
       applied && extra.rebuilt === false ? 'Queries no longer return the old values, but the database file could not be rebuilt and can still hold old bytes.' : '',
