@@ -566,3 +566,19 @@ describe('0.14.0', () => {
     for (const f of ['docs/WORKSPACES.md', 'CHANGELOG.md', 'README.md']) expect(readFileSync(f, 'utf8')).not.toMatch(/[–—]/)
   })
 })
+
+describe('doctor and deploy outside a store', () => {
+  it('asks a SaaS workspace for Stripe, not Klaviyo and Shopify, and plans its daily sync with only its own keys', async () => {
+    writeConfig({ database: { kind: 'local' }, workspace: { type: 'saas' }, stripe: { mode: 'test', subscriptions: true }, hubspot: { portal: '1', currency: 'usd' } })
+    const { doctor } = await import('../src/commands/doctor.js')
+    const r = await doctor()
+    expect(r.checks.map((c) => c.name)).not.toContain('klaviyo')
+    expect(r.checks.map((c) => c.name)).not.toContain('shopify')
+    expect(r.checks.find((c) => c.name === 'reference')).toMatchObject({ ok: true })
+    const { deployPlan, workflowYaml } = await import('../src/deploy.js')
+    const plan = deployPlan(JSON.parse(readFileSync(join(home, 'config.json'), 'utf8')), 'me/sync')
+    expect(plan.secrets).toEqual(['LIFECYCLE_DATABASE_URL', 'LIFECYCLE_HUBSPOT_TOKEN', 'LIFECYCLE_STRIPE_READ_KEY'])
+    expect(workflowYaml(false, true, [], false, false, true)).toContain('LIFECYCLE_HUBSPOT_TOKEN: ${{ secrets.LIFECYCLE_HUBSPOT_TOKEN }}')
+    expect(workflowYaml(false)).toBe(workflowYaml(false, false, [], false, false, false))
+  })
+})
