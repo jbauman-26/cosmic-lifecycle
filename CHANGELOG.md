@@ -2,6 +2,32 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.13.1 (2026-11-24)
+
+The first release checked against the real Cosmic Cloud: a contract test runs this CLI against Cloud's own handlers and a local Postgres.
+
+### Fixed
+
+- **A token without an address is not sent anywhere.** After `logout`, a `LIFECYCLE_CLOUD_TOKEN` left in the environment made `--cloud` commands, and the tool run record, fall back to the public Cloud address. Now, with no saved address and no `LIFECYCLE_CLOUD_URL`, every `--cloud` command stops with `not_logged_in` before anything is sent, `cloud status` says `loggedIn: false` with a note, and tool runs post nothing. `login` still defaults to the public address. Setting both `LIFECYCLE_CLOUD_URL` and `LIFECYCLE_CLOUD_TOKEN` still works without `login`.
+- **`skills sync` installs the store's skills from the real Cloud.** Cloud's `GET /skills` lists file paths and sizes without the file text, so 0.13.0 skipped every store skill. The CLI now reads each skill whole with `GET /skills/:slug`. A skill deleted between the two calls is left out. `CloudClient` gains `skill(slug)` and `skillsWithFiles()`.
+- `logout`'s note no longer says `--cloud` still works when only the token is left in the environment.
+
+### Changed
+
+- The command map is now `docs/COMMANDS.md` (was `docs/PARITY.md`), arranged by job, and names no other product. Code comments that named one were rewritten.
+- The stand-in Cloud in the tests now answers in Cloud's real shapes: typed query columns, skill lists without text, `unknown_skill`, `unknown_connection`, `limit` up to 200 on `/runs`, and a repeated tool run id as an update. `test/cloud-contract.test.ts` replays replies recorded from the real Cloud handlers.
+
+### Needs Cosmic Cloud from 2026-11-24 or later
+
+Cloud now answers 404 `not_found` only for a route it does not have, so `not_built` means just that. A missing skill is `unknown_skill`, a missing connection `unknown_connection`, a missing metric `unknown_metric`. Against an older Cloud, `skills delete` of a missing skill still says `unknown_skill` (the CLI lists first), and `logs --cloud --limit` above 100 is refused.
+
+### What is proven and what is not
+
+- Typecheck and the full test suite pass. The Cloud contract test passes against this build (13 tests) and the replay test here (7 tests).
+- The run against production Cosmic Cloud happens after this file ships, so it is recorded in the GitHub release notes, not here.
+- `sync --cloud` was tested only against Cloud's handlers with a stand-in runner, never against production, so no source was called.
+- The keychain path was not run again for this release.
+
 ## 0.13.0 (2026-11-24)
 
 Sign in to Cosmic Cloud, ask Cloud instead of this machine, keep the store's own skills there, and stop a running tool job.

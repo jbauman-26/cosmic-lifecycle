@@ -5,7 +5,7 @@ import { appHome } from './paths.js';
 import { CliError } from './errors.js';
 // Files: every report, dashboard and plan the CLI writes is also kept here, by date,
 // so an agent can find last week's audit. `files pull` downloads the dashboard the daily
-// GitHub Actions sync builds, from your own private repo. Graphed keeps files on its servers;
+// GitHub Actions sync builds, from your own private repo. Nothing is kept on a server of ours;
 // these stay on your machine and in your GitHub account.
 export const filesDir = () => join(appHome(), 'files');
 function safePath(rel) {

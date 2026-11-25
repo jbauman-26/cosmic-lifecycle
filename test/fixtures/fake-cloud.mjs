@@ -1,5 +1,7 @@
 // A stand-in for Cosmic Cloud API v1, for tests and for trying commands by hand.
-// It holds invented data only and listens on this machine only.
+// It holds invented data only and listens on this machine only. Its shapes and codes follow the real
+// Cloud (docs/API.md in cosmic-cloud), checked by test/cloud-contract.test.ts against replies recorded
+// from the real handlers.
 //   node test/fixtures/fake-cloud.mjs [port] [token] [missing,routes]
 import { createServer } from 'node:http'
 
@@ -57,7 +59,9 @@ export function startFakeCloud(opts = {}) {
       if (m === 'POST' && path === '/query') {
         if (typeof body?.sql !== 'string') return error(res, 400, 'invalid_request', 'sql must be a string.')
         if (!/^\s*(select|with)\b/i.test(body.sql)) return error(res, 422, 'read_only', 'Only SELECT queries are allowed.')
-        return send(res, 200, { columns: ['date', 'orders'], rows: [['2026-11-23', 14], ['2026-11-24', 9]], truncated: false })
+        // Cloud sends columns as { name, type } and rows as objects. opts.arrayRows sends the older array shape.
+        if (opts.arrayRows) return send(res, 200, { columns: ['date', 'orders'], rows: [['2026-11-23', 14], ['2026-11-24', 9]], truncated: false })
+        return send(res, 200, { columns: [{ name: 'date', type: 'date' }, { name: 'orders', type: 'integer' }], rows: [{ date: '2026-11-23', orders: 14 }, { date: '2026-11-24', orders: 9 }], truncated: false, row_cap: 1000 })
       }
       if (m === 'GET' && path === '/metrics') return send(res, 200, { metrics: METRICS })
       if (m === 'GET' && path.startsWith('/metrics/')) {
@@ -68,31 +72,46 @@ export function startFakeCloud(opts = {}) {
         return send(res, 200, { metric: name, title: def.title, unit: def.unit, days, value: 412, notes: [], saved: def.saved, trust: { status: 'passed', line: 'Numbers passed reconciliation, with 4 checks skipped.' }, status: 'ok', detail: '' })
       }
       if (m === 'GET' && path === '/runs') {
+        const limit = url.searchParams.get('limit')
+        if (limit !== null && !(/^\d{1,3}$/.test(limit) && Number(limit) >= 1 && Number(limit) <= 200)) return error(res, 400, 'invalid_request', 'limit must be a whole number from 1 to 200.')
         const runs = [
           { source_id: 'klaviyo', started_at: '2026-11-24T14:00:32.100Z', finished_at: '2026-11-24T14:00:41.512Z', status: 'ok', rows: 412, code: null },
           { source_id: 'meta', started_at: '2026-11-24T14:00:02.000Z', finished_at: '2026-11-24T14:00:03.300Z', status: 'failed', rows: 0, code: 'key_rejected' },
         ]
         return send(res, 200, { runs: runs.slice(0, Number(url.searchParams.get('limit') ?? 20)) })
       }
-      if (m === 'POST' && path === '/sync') return send(res, 202, { started: body?.connection_id ? [body.connection_id] : STORE.connections.map((c) => c.id), already_running: [] })
-      if (m === 'GET' && path === '/skills') return send(res, 200, { skills: [...skills.entries()].map(([slug, files]) => ({ slug, files })) })
+      if (m === 'POST' && path === '/sync') {
+        if (body?.connection_id !== undefined && !STORE.connections.some((c) => c.id === body.connection_id)) return error(res, 404, 'unknown_connection', 'This store has no connection with that id.')
+        return send(res, 202, { started: body?.connection_id ? [body.connection_id] : STORE.connections.map((c) => c.id), already_running: [] })
+      }
+      // As on Cloud: the list names each skill's files and sizes, without the file text.
+      const bytes = (files) => files.reduce((n, f) => n + Buffer.byteLength(String(f.path ?? '')) + Buffer.byteLength(String(f.content ?? '')), 0)
+      const listed = (slug, files) => ({ slug, bytes: bytes(files), files: files.map((f) => ({ path: f.path, bytes: Buffer.byteLength(String(f.content ?? '')) })) })
+      if (m === 'GET' && path === '/skills') return send(res, 200, { skills: [...skills.entries()].map(([slug, files]) => (opts.skillsWithContent ? { slug, files } : listed(slug, files))) })
       if (path.startsWith('/skills/')) {
         const slug = decodeURIComponent(path.slice('/skills/'.length))
+        if (m === 'GET') {
+          if (!skills.has(slug)) return error(res, 404, 'unknown_skill', 'This store has no skill of that name.')
+          return send(res, 200, { skill: { slug, bytes: bytes(skills.get(slug)), files: skills.get(slug) } })
+        }
         if (m === 'PUT') {
           if (!Array.isArray(body?.files)) return error(res, 400, 'invalid_request', 'files must be a list.')
           const created = !skills.has(slug)
           skills.set(slug, body.files)
-          return send(res, created ? 201 : 200, { slug, files: body.files.length, created })
+          return send(res, created ? 201 : 200, { created, skill: listed(slug, body.files) })
         }
         if (m === 'DELETE') {
-          if (!skills.delete(slug)) return error(res, 404, 'not_found', 'No such skill.')
-          return send(res, 200, { deleted: true })
+          if (!skills.delete(slug)) return error(res, 404, 'unknown_skill', 'This store has no skill of that name.')
+          return send(res, 200, { slug, deleted: true })
         }
       }
       if (m === 'GET' && path === '/tools/runs') return send(res, 200, { runs: toolRuns })
       if (m === 'POST' && path === '/tools/runs') {
-        toolRuns.push(body)
-        return send(res, 201, { saved: true })
+        // As on Cloud: posting the same id again updates that run.
+        const at = toolRuns.findIndex((r) => r.id === body?.id)
+        if (at >= 0) toolRuns[at] = body
+        else toolRuns.push(body)
+        return send(res, at >= 0 ? 200 : 201, { created: at < 0, run: body })
       }
       return error(res, 404, 'not_found', 'No such route.')
     })

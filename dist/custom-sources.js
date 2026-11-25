@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { CliError } from './errors.js';
 // Custom sources: bring any other tool's daily totals in from a CSV export.
-// Graphed connects 750+ sources into its warehouse. Cosmic connects three natively and
+// Cosmic connects a few sources natively and
 // takes the long tail as daily totals you export, which keeps the no-customer-records
 // rule: a column that looks personal, or any value that is not a number, is refused.
 export const PII_COLUMN = /(e-?mail|phone|mobile|first.?name|last.?name|full.?name|^name$|customer.?name|address|street|city|zip|postal|postcode|ip.?addr|birth|dob|ssn)/i;

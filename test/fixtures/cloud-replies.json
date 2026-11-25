@@ -1,0 +1,3042 @@
+{
+  "cli": "0.13.1",
+  "recorded": "2026-11-25",
+  "replies": [
+    {
+      "method": "GET",
+      "path": "/api/v1/store",
+      "status": 200,
+      "body": {
+        "contract_version": "1.2.0",
+        "store": {
+          "id": "cc_mwvfh7op",
+          "name": "Contract store",
+          "domain": null,
+          "keep_syncing_when_closed": true,
+          "created_at": "2026-11-25T01:11:33.686Z",
+          "time_zone": "America/Los_Angeles"
+        },
+        "connections": [
+          {
+            "id": "c_nnk4iisdj4pe",
+            "source_id": "klaviyo",
+            "store_ids": [
+              "cc_mwvfh7op"
+            ],
+            "account_label": "Klaviyo account",
+            "access": "ask",
+            "schedule": {
+              "frequency": "daily",
+              "time_local": "06:00"
+            },
+            "status": "unverified",
+            "last_success_at": null,
+            "recent_runs": [],
+            "connected_at": "2026-11-25T01:11:33.686Z",
+            "source_name": "Klaviyo",
+            "freshness": "never",
+            "next_sync_at": "2026-11-25T02:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/store",
+      "status": 200,
+      "body": {
+        "contract_version": "1.2.0",
+        "store": {
+          "id": "cc_mwvfh7op",
+          "name": "Contract store",
+          "domain": null,
+          "keep_syncing_when_closed": true,
+          "created_at": "2026-11-25T01:11:33.686Z",
+          "time_zone": "America/Los_Angeles"
+        },
+        "connections": [
+          {
+            "id": "c_nnk4iisdj4pe",
+            "source_id": "klaviyo",
+            "store_ids": [
+              "cc_mwvfh7op"
+            ],
+            "account_label": "Klaviyo account",
+            "access": "ask",
+            "schedule": {
+              "frequency": "daily",
+              "time_local": "06:00"
+            },
+            "status": "unverified",
+            "last_success_at": null,
+            "recent_runs": [],
+            "connected_at": "2026-11-25T01:11:33.686Z",
+            "source_name": "Klaviyo",
+            "freshness": "never",
+            "next_sync_at": "2026-11-25T02:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/store",
+      "status": 200,
+      "body": {
+        "contract_version": "1.2.0",
+        "store": {
+          "id": "cc_mwvfh7op",
+          "name": "Contract store",
+          "domain": null,
+          "keep_syncing_when_closed": true,
+          "created_at": "2026-11-25T01:11:33.686Z",
+          "time_zone": "America/Los_Angeles"
+        },
+        "connections": [
+          {
+            "id": "c_nnk4iisdj4pe",
+            "source_id": "klaviyo",
+            "store_ids": [
+              "cc_mwvfh7op"
+            ],
+            "account_label": "Klaviyo account",
+            "access": "ask",
+            "schedule": {
+              "frequency": "daily",
+              "time_local": "06:00"
+            },
+            "status": "unverified",
+            "last_success_at": null,
+            "recent_runs": [],
+            "connected_at": "2026-11-25T01:11:33.686Z",
+            "source_name": "Klaviyo",
+            "freshness": "never",
+            "next_sync_at": "2026-11-25T02:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sync",
+      "status": 202,
+      "body": {
+        "started": [
+          "c_nnk4iisdj4pe"
+        ],
+        "already_running": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/store",
+      "status": 200,
+      "body": {
+        "contract_version": "1.2.0",
+        "store": {
+          "id": "cc_mwvfh7op",
+          "name": "Contract store",
+          "domain": null,
+          "keep_syncing_when_closed": true,
+          "created_at": "2026-11-25T01:11:33.686Z",
+          "time_zone": "America/Los_Angeles"
+        },
+        "connections": [
+          {
+            "id": "c_nnk4iisdj4pe",
+            "source_id": "klaviyo",
+            "store_ids": [
+              "cc_mwvfh7op"
+            ],
+            "account_label": "Klaviyo account",
+            "access": "ask",
+            "schedule": {
+              "frequency": "daily",
+              "time_local": "06:00"
+            },
+            "status": "working",
+            "last_success_at": "2026-11-25T01:11:34.324Z",
+            "recent_runs": [
+              {
+                "started_at": "2026-11-25T01:11:34.322Z",
+                "finished_at": "2026-11-25T01:11:34.324Z",
+                "status": "ok",
+                "rows": 9,
+                "tables_loaded": null,
+                "tables_total": null,
+                "code": null
+              }
+            ],
+            "connected_at": "2026-11-25T01:11:33.686Z",
+            "source_name": "Klaviyo",
+            "freshness": "fresh",
+            "next_sync_at": "2026-11-25T14:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sync",
+      "status": 202,
+      "body": {
+        "started": [
+          "c_nnk4iisdj4pe"
+        ],
+        "already_running": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/store",
+      "status": 200,
+      "body": {
+        "contract_version": "1.2.0",
+        "store": {
+          "id": "cc_mwvfh7op",
+          "name": "Contract store",
+          "domain": null,
+          "keep_syncing_when_closed": true,
+          "created_at": "2026-11-25T01:11:33.686Z",
+          "time_zone": "America/Los_Angeles"
+        },
+        "connections": [
+          {
+            "id": "c_nnk4iisdj4pe",
+            "source_id": "klaviyo",
+            "store_ids": [
+              "cc_mwvfh7op"
+            ],
+            "account_label": "Klaviyo account",
+            "access": "ask",
+            "schedule": {
+              "frequency": "daily",
+              "time_local": "06:00"
+            },
+            "status": "working",
+            "last_success_at": "2026-11-25T01:11:34.445Z",
+            "recent_runs": [
+              {
+                "started_at": "2026-11-25T01:11:34.444Z",
+                "finished_at": "2026-11-25T01:11:34.445Z",
+                "status": "ok",
+                "rows": 9,
+                "tables_loaded": null,
+                "tables_total": null,
+                "code": null
+              },
+              {
+                "started_at": "2026-11-25T01:11:34.322Z",
+                "finished_at": "2026-11-25T01:11:34.324Z",
+                "status": "ok",
+                "rows": 9,
+                "tables_loaded": null,
+                "tables_total": null,
+                "code": null
+              }
+            ],
+            "connected_at": "2026-11-25T01:11:33.686Z",
+            "source_name": "Klaviyo",
+            "freshness": "fresh",
+            "next_sync_at": "2026-11-25T14:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/runs?limit=10",
+      "status": 200,
+      "body": {
+        "runs": [
+          {
+            "id": 317,
+            "connection_id": "c_nnk4iisdj4pe",
+            "source_id": "klaviyo",
+            "source_name": "Klaviyo",
+            "started_at": "2026-11-25T01:11:34.444Z",
+            "finished_at": "2026-11-25T01:11:34.445Z",
+            "status": "ok",
+            "rows": 9,
+            "tables_loaded": null,
+            "tables_total": null,
+            "code": null
+          },
+          {
+            "id": 316,
+            "connection_id": "c_nnk4iisdj4pe",
+            "source_id": "klaviyo",
+            "source_name": "Klaviyo",
+            "started_at": "2026-11-25T01:11:34.322Z",
+            "finished_at": "2026-11-25T01:11:34.324Z",
+            "status": "ok",
+            "rows": 9,
+            "tables_loaded": null,
+            "tables_total": null,
+            "code": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/runs?limit=200",
+      "status": 200,
+      "body": {
+        "runs": [
+          {
+            "id": 317,
+            "connection_id": "c_nnk4iisdj4pe",
+            "source_id": "klaviyo",
+            "source_name": "Klaviyo",
+            "started_at": "2026-11-25T01:11:34.444Z",
+            "finished_at": "2026-11-25T01:11:34.445Z",
+            "status": "ok",
+            "rows": 9,
+            "tables_loaded": null,
+            "tables_total": null,
+            "code": null
+          },
+          {
+            "id": 316,
+            "connection_id": "c_nnk4iisdj4pe",
+            "source_id": "klaviyo",
+            "source_name": "Klaviyo",
+            "started_at": "2026-11-25T01:11:34.322Z",
+            "finished_at": "2026-11-25T01:11:34.324Z",
+            "status": "ok",
+            "rows": 9,
+            "tables_loaded": null,
+            "tables_total": null,
+            "code": null
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/schema",
+      "status": 200,
+      "body": {
+        "schemas": [
+          {
+            "name": "t_cc_mwvfh7op",
+            "tables": [
+              {
+                "name": "dim_campaign",
+                "columns": [
+                  {
+                    "name": "campaign_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "status",
+                    "type": "text"
+                  },
+                  {
+                    "name": "send_time",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "archived",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "dim_flow",
+                "columns": [
+                  {
+                    "name": "flow_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "status",
+                    "type": "text"
+                  },
+                  {
+                    "name": "trigger_type",
+                    "type": "text"
+                  },
+                  {
+                    "name": "archived",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "created_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "updated_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "dim_segment",
+                "columns": [
+                  {
+                    "name": "segment_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "is_active",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "created_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_cohort_monthly",
+                "columns": [
+                  {
+                    "name": "cohort_month",
+                    "type": "text"
+                  },
+                  {
+                    "name": "months_since",
+                    "type": "integer"
+                  },
+                  {
+                    "name": "customers",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_flow_daily",
+                "columns": [
+                  {
+                    "name": "flow_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "flow_message_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "channel",
+                    "type": "text"
+                  },
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "recipients",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "opens_unique",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "clicks_unique",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "conversions",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "unsubscribes",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "spam_complaints",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "bounces",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_flow_window",
+                "columns": [
+                  {
+                    "name": "flow_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "window_start",
+                    "type": "date"
+                  },
+                  {
+                    "name": "window_end",
+                    "type": "date"
+                  },
+                  {
+                    "name": "recipients",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_ga4_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "channel",
+                    "type": "text"
+                  },
+                  {
+                    "name": "sessions",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "purchases",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_klaviyo_orders_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "placed_orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "placed_value",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_meta_ads_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "campaign_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "campaign_name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "spend",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "impressions",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "clicks",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "purchases",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "purchase_value",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "currency",
+                    "type": "text"
+                  },
+                  {
+                    "name": "account_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_orders_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "gross_revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "net_revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "discounts",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "new_orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "returning_orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "guest_orders",
+                    "type": "bigint"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_stripe_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "currency",
+                    "type": "text"
+                  },
+                  {
+                    "name": "charges",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "gross",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "refunded",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "net",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "failed_charges",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "new_customers",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "returning_charges",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "guest_charges",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_stripe_mrr",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "currency",
+                    "type": "text"
+                  },
+                  {
+                    "name": "active_subscriptions",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "mrr",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "unpriced_items",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_stripe_subscriptions_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "currency",
+                    "type": "text"
+                  },
+                  {
+                    "name": "started",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "ended",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_custom_query",
+                "columns": [
+                  {
+                    "name": "sql_hash",
+                    "type": "text"
+                  },
+                  {
+                    "name": "sql",
+                    "type": "text"
+                  },
+                  {
+                    "name": "runs",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "first_seen",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "last_seen",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_reconcile_result",
+                "columns": [
+                  {
+                    "name": "check_name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "status",
+                    "type": "text"
+                  },
+                  {
+                    "name": "expected",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "actual",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "diff_pct",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "detail",
+                    "type": "text"
+                  },
+                  {
+                    "name": "checked_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 7
+              },
+              {
+                "name": "meta_saved_metric",
+                "columns": [
+                  {
+                    "name": "metric",
+                    "type": "text"
+                  },
+                  {
+                    "name": "title",
+                    "type": "text"
+                  },
+                  {
+                    "name": "unit",
+                    "type": "text"
+                  },
+                  {
+                    "name": "sql",
+                    "type": "text"
+                  },
+                  {
+                    "name": "created_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "updated_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_source_total",
+                "columns": [
+                  {
+                    "name": "source",
+                    "type": "text"
+                  },
+                  {
+                    "name": "metric",
+                    "type": "text"
+                  },
+                  {
+                    "name": "value",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "recorded_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_source_window",
+                "columns": [
+                  {
+                    "name": "source",
+                    "type": "text"
+                  },
+                  {
+                    "name": "metric",
+                    "type": "text"
+                  },
+                  {
+                    "name": "window_start",
+                    "type": "date"
+                  },
+                  {
+                    "name": "window_end",
+                    "type": "date"
+                  },
+                  {
+                    "name": "recorded_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_sync_run",
+                "columns": [
+                  {
+                    "name": "run_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "source",
+                    "type": "text"
+                  },
+                  {
+                    "name": "started_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "finished_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "status",
+                    "type": "text"
+                  },
+                  {
+                    "name": "rows_written",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "detail",
+                    "type": "text"
+                  },
+                  {
+                    "name": "code",
+                    "type": "text"
+                  }
+                ],
+                "rows": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/schema",
+      "status": 200,
+      "body": {
+        "schemas": [
+          {
+            "name": "t_cc_mwvfh7op",
+            "tables": [
+              {
+                "name": "dim_campaign",
+                "columns": [
+                  {
+                    "name": "campaign_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "status",
+                    "type": "text"
+                  },
+                  {
+                    "name": "send_time",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "archived",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "dim_flow",
+                "columns": [
+                  {
+                    "name": "flow_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "status",
+                    "type": "text"
+                  },
+                  {
+                    "name": "trigger_type",
+                    "type": "text"
+                  },
+                  {
+                    "name": "archived",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "created_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "updated_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "dim_segment",
+                "columns": [
+                  {
+                    "name": "segment_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "is_active",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "created_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_cohort_monthly",
+                "columns": [
+                  {
+                    "name": "cohort_month",
+                    "type": "text"
+                  },
+                  {
+                    "name": "months_since",
+                    "type": "integer"
+                  },
+                  {
+                    "name": "customers",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_flow_daily",
+                "columns": [
+                  {
+                    "name": "flow_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "flow_message_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "channel",
+                    "type": "text"
+                  },
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "recipients",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "opens_unique",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "clicks_unique",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "conversions",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "unsubscribes",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "spam_complaints",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "bounces",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_flow_window",
+                "columns": [
+                  {
+                    "name": "flow_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "window_start",
+                    "type": "date"
+                  },
+                  {
+                    "name": "window_end",
+                    "type": "date"
+                  },
+                  {
+                    "name": "recipients",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_ga4_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "channel",
+                    "type": "text"
+                  },
+                  {
+                    "name": "sessions",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "purchases",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_klaviyo_orders_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "placed_orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "placed_value",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_meta_ads_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "campaign_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "campaign_name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "spend",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "impressions",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "clicks",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "purchases",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "purchase_value",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "currency",
+                    "type": "text"
+                  },
+                  {
+                    "name": "account_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_orders_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "gross_revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "net_revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "discounts",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "new_orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "returning_orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "guest_orders",
+                    "type": "bigint"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_stripe_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "currency",
+                    "type": "text"
+                  },
+                  {
+                    "name": "charges",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "gross",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "refunded",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "net",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "failed_charges",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "new_customers",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "returning_charges",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "guest_charges",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_stripe_mrr",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "currency",
+                    "type": "text"
+                  },
+                  {
+                    "name": "active_subscriptions",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "mrr",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "unpriced_items",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_stripe_subscriptions_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "currency",
+                    "type": "text"
+                  },
+                  {
+                    "name": "started",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "ended",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_custom_query",
+                "columns": [
+                  {
+                    "name": "sql_hash",
+                    "type": "text"
+                  },
+                  {
+                    "name": "sql",
+                    "type": "text"
+                  },
+                  {
+                    "name": "runs",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "first_seen",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "last_seen",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_reconcile_result",
+                "columns": [
+                  {
+                    "name": "check_name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "status",
+                    "type": "text"
+                  },
+                  {
+                    "name": "expected",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "actual",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "diff_pct",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "detail",
+                    "type": "text"
+                  },
+                  {
+                    "name": "checked_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 7
+              },
+              {
+                "name": "meta_saved_metric",
+                "columns": [
+                  {
+                    "name": "metric",
+                    "type": "text"
+                  },
+                  {
+                    "name": "title",
+                    "type": "text"
+                  },
+                  {
+                    "name": "unit",
+                    "type": "text"
+                  },
+                  {
+                    "name": "sql",
+                    "type": "text"
+                  },
+                  {
+                    "name": "created_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "updated_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_source_total",
+                "columns": [
+                  {
+                    "name": "source",
+                    "type": "text"
+                  },
+                  {
+                    "name": "metric",
+                    "type": "text"
+                  },
+                  {
+                    "name": "value",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "recorded_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_source_window",
+                "columns": [
+                  {
+                    "name": "source",
+                    "type": "text"
+                  },
+                  {
+                    "name": "metric",
+                    "type": "text"
+                  },
+                  {
+                    "name": "window_start",
+                    "type": "date"
+                  },
+                  {
+                    "name": "window_end",
+                    "type": "date"
+                  },
+                  {
+                    "name": "recorded_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_sync_run",
+                "columns": [
+                  {
+                    "name": "run_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "source",
+                    "type": "text"
+                  },
+                  {
+                    "name": "started_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "finished_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "status",
+                    "type": "text"
+                  },
+                  {
+                    "name": "rows_written",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "detail",
+                    "type": "text"
+                  },
+                  {
+                    "name": "code",
+                    "type": "text"
+                  }
+                ],
+                "rows": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/schema",
+      "status": 200,
+      "body": {
+        "schemas": [
+          {
+            "name": "t_cc_mwvfh7op",
+            "tables": [
+              {
+                "name": "dim_campaign",
+                "columns": [
+                  {
+                    "name": "campaign_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "status",
+                    "type": "text"
+                  },
+                  {
+                    "name": "send_time",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "archived",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "dim_flow",
+                "columns": [
+                  {
+                    "name": "flow_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "status",
+                    "type": "text"
+                  },
+                  {
+                    "name": "trigger_type",
+                    "type": "text"
+                  },
+                  {
+                    "name": "archived",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "created_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "updated_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "dim_segment",
+                "columns": [
+                  {
+                    "name": "segment_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "is_active",
+                    "type": "boolean"
+                  },
+                  {
+                    "name": "created_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_cohort_monthly",
+                "columns": [
+                  {
+                    "name": "cohort_month",
+                    "type": "text"
+                  },
+                  {
+                    "name": "months_since",
+                    "type": "integer"
+                  },
+                  {
+                    "name": "customers",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_flow_daily",
+                "columns": [
+                  {
+                    "name": "flow_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "flow_message_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "channel",
+                    "type": "text"
+                  },
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "recipients",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "opens_unique",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "clicks_unique",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "conversions",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "unsubscribes",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "spam_complaints",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "bounces",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_flow_window",
+                "columns": [
+                  {
+                    "name": "flow_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "window_start",
+                    "type": "date"
+                  },
+                  {
+                    "name": "window_end",
+                    "type": "date"
+                  },
+                  {
+                    "name": "recipients",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_ga4_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "channel",
+                    "type": "text"
+                  },
+                  {
+                    "name": "sessions",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "purchases",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_klaviyo_orders_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "placed_orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "placed_value",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_meta_ads_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "campaign_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "campaign_name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "spend",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "impressions",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "clicks",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "purchases",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "purchase_value",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "currency",
+                    "type": "text"
+                  },
+                  {
+                    "name": "account_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_orders_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "gross_revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "net_revenue",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "discounts",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "new_orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "returning_orders",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "guest_orders",
+                    "type": "bigint"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_stripe_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "currency",
+                    "type": "text"
+                  },
+                  {
+                    "name": "charges",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "gross",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "refunded",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "net",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "failed_charges",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "new_customers",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "returning_charges",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "guest_charges",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_stripe_mrr",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "currency",
+                    "type": "text"
+                  },
+                  {
+                    "name": "active_subscriptions",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "mrr",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "unpriced_items",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "fact_stripe_subscriptions_daily",
+                "columns": [
+                  {
+                    "name": "date",
+                    "type": "date"
+                  },
+                  {
+                    "name": "currency",
+                    "type": "text"
+                  },
+                  {
+                    "name": "started",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "ended",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "source_synced_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_custom_query",
+                "columns": [
+                  {
+                    "name": "sql_hash",
+                    "type": "text"
+                  },
+                  {
+                    "name": "sql",
+                    "type": "text"
+                  },
+                  {
+                    "name": "runs",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "first_seen",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "last_seen",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_reconcile_result",
+                "columns": [
+                  {
+                    "name": "check_name",
+                    "type": "text"
+                  },
+                  {
+                    "name": "status",
+                    "type": "text"
+                  },
+                  {
+                    "name": "expected",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "actual",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "diff_pct",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "detail",
+                    "type": "text"
+                  },
+                  {
+                    "name": "checked_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 7
+              },
+              {
+                "name": "meta_saved_metric",
+                "columns": [
+                  {
+                    "name": "metric",
+                    "type": "text"
+                  },
+                  {
+                    "name": "title",
+                    "type": "text"
+                  },
+                  {
+                    "name": "unit",
+                    "type": "text"
+                  },
+                  {
+                    "name": "sql",
+                    "type": "text"
+                  },
+                  {
+                    "name": "created_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "updated_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_source_total",
+                "columns": [
+                  {
+                    "name": "source",
+                    "type": "text"
+                  },
+                  {
+                    "name": "metric",
+                    "type": "text"
+                  },
+                  {
+                    "name": "value",
+                    "type": "numeric"
+                  },
+                  {
+                    "name": "recorded_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_source_window",
+                "columns": [
+                  {
+                    "name": "source",
+                    "type": "text"
+                  },
+                  {
+                    "name": "metric",
+                    "type": "text"
+                  },
+                  {
+                    "name": "window_start",
+                    "type": "date"
+                  },
+                  {
+                    "name": "window_end",
+                    "type": "date"
+                  },
+                  {
+                    "name": "recorded_at",
+                    "type": "timestamp with time zone"
+                  }
+                ],
+                "rows": 0
+              },
+              {
+                "name": "meta_sync_run",
+                "columns": [
+                  {
+                    "name": "run_id",
+                    "type": "text"
+                  },
+                  {
+                    "name": "source",
+                    "type": "text"
+                  },
+                  {
+                    "name": "started_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "finished_at",
+                    "type": "timestamp with time zone"
+                  },
+                  {
+                    "name": "status",
+                    "type": "text"
+                  },
+                  {
+                    "name": "rows_written",
+                    "type": "bigint"
+                  },
+                  {
+                    "name": "detail",
+                    "type": "text"
+                  },
+                  {
+                    "name": "code",
+                    "type": "text"
+                  }
+                ],
+                "rows": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/query",
+      "status": 200,
+      "body": {
+        "columns": [
+          {
+            "name": "?column?",
+            "type": "integer"
+          }
+        ],
+        "rows": [
+          {
+            "?column?": 1
+          }
+        ],
+        "truncated": false,
+        "row_cap": 1000
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/query",
+      "status": 200,
+      "body": {
+        "columns": [
+          {
+            "name": "days",
+            "type": "bigint"
+          },
+          {
+            "name": "orders",
+            "type": "integer"
+          }
+        ],
+        "rows": [
+          {
+            "days": "0",
+            "orders": null
+          }
+        ],
+        "truncated": false,
+        "row_cap": 1000
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/query",
+      "status": 422,
+      "body": {
+        "error": {
+          "code": "blocked_object",
+          "message": "That table is not one of this store's."
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/query",
+      "status": 422,
+      "body": {
+        "error": {
+          "code": "query_failed",
+          "message": "Query failed: column \"nope\" does not exist"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/metrics",
+      "status": 200,
+      "body": {
+        "metrics": [
+          {
+            "name": "shopify_orders",
+            "title": "Shopify orders",
+            "unit": "count",
+            "description": "Orders placed in Shopify in the window.",
+            "needs": [
+              "shopify"
+            ],
+            "saved": false
+          },
+          {
+            "name": "shopify_net_revenue",
+            "title": "Shopify net revenue",
+            "unit": "usd",
+            "description": "Sum of each order's current total in Shopify, after discounts, edits and refunds, for orders in the window. Cancelled orders are left out.",
+            "needs": [
+              "shopify"
+            ],
+            "saved": false
+          },
+          {
+            "name": "average_order_value",
+            "title": "Average order value",
+            "unit": "usd",
+            "description": "Shopify net revenue divided by Shopify orders.",
+            "needs": [
+              "shopify"
+            ],
+            "saved": false
+          },
+          {
+            "name": "returning_order_share",
+            "title": "Returning order share",
+            "unit": "percent",
+            "description": "Share of Shopify orders placed by customers who had ordered before.",
+            "needs": [
+              "shopify"
+            ],
+            "saved": false
+          },
+          {
+            "name": "flow_attributed_revenue",
+            "title": "Flow attributed revenue",
+            "unit": "usd",
+            "description": "Revenue Klaviyo attributes to all flows in the window.",
+            "needs": [
+              "klaviyo"
+            ],
+            "saved": false
+          },
+          {
+            "name": "flow_revenue_share",
+            "title": "Flow share of revenue",
+            "unit": "percent",
+            "description": "Flow attributed revenue as a share of Shopify net revenue.",
+            "needs": [
+              "klaviyo",
+              "shopify"
+            ],
+            "saved": false
+          },
+          {
+            "name": "flow_revenue_per_recipient",
+            "title": "Revenue per flow recipient",
+            "unit": "usd_per_recipient",
+            "description": "Flow attributed revenue divided by flow recipients, across all flows.",
+            "needs": [
+              "klaviyo"
+            ],
+            "saved": false
+          },
+          {
+            "name": "flow_unsubscribe_rate",
+            "title": "Flow unsubscribe rate",
+            "unit": "percent",
+            "description": "Unsubscribes divided by flow recipients.",
+            "needs": [
+              "klaviyo"
+            ],
+            "saved": false
+          },
+          {
+            "name": "flow_spam_rate",
+            "title": "Flow spam complaint rate",
+            "unit": "percent",
+            "description": "Spam complaints divided by flow recipients.",
+            "needs": [
+              "klaviyo"
+            ],
+            "saved": false
+          },
+          {
+            "name": "klaviyo_placed_orders",
+            "title": "Klaviyo Placed Order count",
+            "unit": "count",
+            "description": "Placed Order events Klaviyo recorded in the window. Compare with shopify_orders: they should be close.",
+            "needs": [
+              "klaviyo"
+            ],
+            "saved": false
+          },
+          {
+            "name": "ga4_sessions",
+            "title": "GA4 sessions",
+            "unit": "count",
+            "description": "Sessions GA4 recorded in the window, all channels.",
+            "needs": [
+              "ga4"
+            ],
+            "saved": false
+          },
+          {
+            "name": "stripe_net_revenue",
+            "title": "Stripe net revenue",
+            "unit": "usd",
+            "description": "Successful Stripe charges minus amounts refunded on them, for charges made in the window.",
+            "needs": [
+              "stripe"
+            ],
+            "saved": false
+          },
+          {
+            "name": "stripe_repeat_charge_share",
+            "title": "Stripe repeat charge share",
+            "unit": "percent",
+            "description": "Share of successful Stripe charges from customers who had paid before.",
+            "needs": [
+              "stripe"
+            ],
+            "saved": false
+          },
+          {
+            "name": "stripe_failed_payment_rate",
+            "title": "Stripe failed payment rate",
+            "unit": "percent",
+            "description": "Failed Stripe charges divided by all attempted charges.",
+            "needs": [
+              "stripe"
+            ],
+            "saved": false
+          },
+          {
+            "name": "stripe_subscriptions_started",
+            "title": "Subscriptions started",
+            "unit": "count",
+            "description": "Stripe subscriptions created in the window.",
+            "needs": [
+              "stripe"
+            ],
+            "saved": false
+          },
+          {
+            "name": "stripe_subscriptions_ended",
+            "title": "Subscriptions ended",
+            "unit": "count",
+            "description": "Stripe subscriptions that ended in the window: canceled and gone, not just set to cancel later.",
+            "needs": [
+              "stripe"
+            ],
+            "saved": false
+          },
+          {
+            "name": "stripe_mrr",
+            "title": "Stripe MRR",
+            "unit": "usd",
+            "description": "Monthly recurring revenue at the last sync: active and past_due subscriptions at list price, scaled to a month. Ignores the window.",
+            "needs": [
+              "stripe"
+            ],
+            "saved": false
+          },
+          {
+            "name": "meta_ad_spend",
+            "title": "Meta ad spend",
+            "unit": "usd",
+            "description": "What the Meta ad account spent in the window.",
+            "needs": [
+              "meta"
+            ],
+            "saved": false
+          },
+          {
+            "name": "meta_attributed_purchases",
+            "title": "Meta attributed purchases",
+            "unit": "count",
+            "description": "Purchases Meta attributes to its ads in the window.",
+            "needs": [
+              "meta"
+            ],
+            "saved": false
+          },
+          {
+            "name": "meta_reported_roas",
+            "title": "Meta reported ROAS",
+            "unit": "ratio",
+            "description": "Purchase value Meta attributes to its ads, divided by spend. Meta's own claim.",
+            "needs": [
+              "meta"
+            ],
+            "saved": false
+          },
+          {
+            "name": "marketing_efficiency_ratio",
+            "title": "Marketing efficiency ratio",
+            "unit": "ratio",
+            "description": "Shopify net revenue divided by Meta ad spend. All store revenue over ad spend, with no attribution at all.",
+            "needs": [
+              "shopify",
+              "meta"
+            ],
+            "saved": false
+          },
+          {
+            "name": "ga4_purchase_rate",
+            "title": "GA4 purchase rate",
+            "unit": "percent",
+            "description": "GA4 purchases divided by GA4 sessions.",
+            "needs": [
+              "ga4"
+            ],
+            "saved": false
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/metrics/shopify_orders?days=30",
+      "status": 200,
+      "body": {
+        "metric": "shopify_orders",
+        "title": "Shopify orders",
+        "unit": "count",
+        "days": 30,
+        "since": "2026-10-26",
+        "sql": "SELECT (SELECT coalesce(sum(orders), 0) FROM fact_orders_daily WHERE date >= $1) AS value, NULL::numeric AS numerator, NULL::numeric AS denominator",
+        "notes": [],
+        "saved": false,
+        "value": null,
+        "numerator": null,
+        "denominator": null,
+        "missing": [
+          "shopify"
+        ],
+        "trust": {
+          "status": "passed",
+          "line": "Numbers passed reconciliation, with 7 checks skipped."
+        },
+        "status": "no_data",
+        "detail": "No shopify data synced. Connect it, then lifecycle sync."
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/metrics/shopify_orders",
+      "status": 200,
+      "body": {
+        "metric": "shopify_orders",
+        "title": "Shopify orders",
+        "unit": "count",
+        "days": 90,
+        "since": "2026-08-27",
+        "sql": "SELECT (SELECT coalesce(sum(orders), 0) FROM fact_orders_daily WHERE date >= $1) AS value, NULL::numeric AS numerator, NULL::numeric AS denominator",
+        "notes": [],
+        "saved": false,
+        "value": null,
+        "numerator": null,
+        "denominator": null,
+        "missing": [
+          "shopify"
+        ],
+        "trust": {
+          "status": "passed",
+          "line": "Numbers passed reconciliation, with 7 checks skipped."
+        },
+        "status": "no_data",
+        "detail": "No shopify data synced. Connect it, then lifecycle sync."
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/metrics/ga4_sessions",
+      "status": 200,
+      "body": {
+        "metric": "ga4_sessions",
+        "title": "GA4 sessions",
+        "unit": "count",
+        "days": 90,
+        "since": "2026-08-27",
+        "sql": "SELECT (SELECT coalesce(sum(sessions), 0) FROM fact_ga4_daily WHERE date >= $1) AS value, NULL::numeric AS numerator, NULL::numeric AS denominator",
+        "notes": [],
+        "saved": false,
+        "value": null,
+        "numerator": null,
+        "denominator": null,
+        "missing": [
+          "ga4"
+        ],
+        "trust": {
+          "status": "passed",
+          "line": "Numbers passed reconciliation, with 7 checks skipped."
+        },
+        "status": "no_data",
+        "detail": "No ga4 data synced. Connect it, then lifecycle sync."
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/metrics/not_a_metric",
+      "status": 404,
+      "body": {
+        "error": {
+          "code": "unknown_metric",
+          "message": "No verified metric has that name."
+        }
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/skills/weekly-look",
+      "status": 201,
+      "body": {
+        "created": true,
+        "skill": {
+          "slug": "weekly-look",
+          "bytes": 148,
+          "created_at": "2026-11-25T01:11:37.092Z",
+          "updated_at": "2026-11-25T01:11:37.092Z",
+          "files": [
+            {
+              "path": "refs/notes.md",
+              "bytes": 7
+            },
+            {
+              "path": "SKILL.md",
+              "bytes": 120
+            }
+          ]
+        }
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/skills/weekly-look",
+      "status": 200,
+      "body": {
+        "created": false,
+        "skill": {
+          "slug": "weekly-look",
+          "bytes": 148,
+          "created_at": "2026-11-25T01:11:37.092Z",
+          "updated_at": "2026-11-25T01:11:37.210Z",
+          "files": [
+            {
+              "path": "refs/notes.md",
+              "bytes": 7
+            },
+            {
+              "path": "SKILL.md",
+              "bytes": 120
+            }
+          ]
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/skills",
+      "status": 200,
+      "body": {
+        "skills": [
+          {
+            "slug": "weekly-look",
+            "bytes": 148,
+            "created_at": "2026-11-25T01:11:37.092Z",
+            "updated_at": "2026-11-25T01:11:37.210Z",
+            "files": [
+              {
+                "path": "refs/notes.md",
+                "bytes": 7
+              },
+              {
+                "path": "SKILL.md",
+                "bytes": 120
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/skills",
+      "status": 200,
+      "body": {
+        "skills": [
+          {
+            "slug": "weekly-look",
+            "bytes": 148,
+            "created_at": "2026-11-25T01:11:37.092Z",
+            "updated_at": "2026-11-25T01:11:37.210Z",
+            "files": [
+              {
+                "path": "refs/notes.md",
+                "bytes": 7
+              },
+              {
+                "path": "SKILL.md",
+                "bytes": 120
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/skills/weekly-look",
+      "status": 200,
+      "body": {
+        "skill": {
+          "slug": "weekly-look",
+          "bytes": 148,
+          "created_at": "2026-11-25T01:11:37.092Z",
+          "updated_at": "2026-11-25T01:11:37.210Z",
+          "files": [
+            {
+              "path": "refs/notes.md",
+              "content": "Notes.\n"
+            },
+            {
+              "path": "SKILL.md",
+              "content": "---\nname: weekly-look\ndescription: A weekly look at the numbers.\n---\n\nRun lifecycle metrics run shopify_orders --cloud.\n"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/skills",
+      "status": 200,
+      "body": {
+        "skills": [
+          {
+            "slug": "weekly-look",
+            "bytes": 148,
+            "created_at": "2026-11-25T01:11:37.092Z",
+            "updated_at": "2026-11-25T01:11:37.210Z",
+            "files": [
+              {
+                "path": "refs/notes.md",
+                "bytes": 7
+              },
+              {
+                "path": "SKILL.md",
+                "bytes": 120
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/skills/weekly-look",
+      "status": 200,
+      "body": {
+        "slug": "weekly-look",
+        "deleted": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/skills",
+      "status": 200,
+      "body": {
+        "skills": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tools/runs",
+      "status": 201,
+      "body": {
+        "created": true,
+        "run": {
+          "id": "819d2f57",
+          "tool": "klaviyo.flows",
+          "provider": "klaviyo",
+          "status": "failed",
+          "request": {
+            "input": {},
+            "model": "klaviyo.flows",
+            "provider": "klaviyo"
+          },
+          "cost": null,
+          "started_at": "2026-11-25T01:11:37.810Z",
+          "finished_at": "2026-11-25T01:11:37.810Z",
+          "recorded_at": "2026-11-25T01:11:37.818Z"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tools/runs",
+      "status": 201,
+      "body": {
+        "created": true,
+        "run": {
+          "id": "run_contract1",
+          "tool": "apify:apimaestro~linkedin-profile-posts",
+          "provider": "apify",
+          "status": "running",
+          "request": {
+            "input": {
+              "notify": "[email removed]",
+              "api_key": "[removed]",
+              "username": "someone"
+            },
+            "model": "apify:apimaestro~linkedin-profile-posts",
+            "provider": "apify"
+          },
+          "cost": null,
+          "started_at": "2026-11-25T01:11:37.858Z",
+          "finished_at": null,
+          "recorded_at": "2026-11-25T01:11:37.864Z"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tools/runs",
+      "status": 200,
+      "body": {
+        "created": false,
+        "run": {
+          "id": "run_contract1",
+          "tool": "apify:apimaestro~linkedin-profile-posts",
+          "provider": "apify",
+          "status": "succeeded",
+          "request": {
+            "input": {
+              "username": "someone"
+            },
+            "model": "apify:apimaestro~linkedin-profile-posts",
+            "provider": "apify"
+          },
+          "cost": {
+            "amount": 0.25,
+            "unit": "usd"
+          },
+          "started_at": "2026-11-25T01:11:37.858Z",
+          "finished_at": "2026-11-25T01:11:37.866Z",
+          "recorded_at": "2026-11-25T01:11:37.868Z"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tools/runs",
+      "status": 200,
+      "body": {
+        "runs": [
+          {
+            "id": "run_contract1",
+            "tool": "apify:apimaestro~linkedin-profile-posts",
+            "provider": "apify",
+            "status": "succeeded",
+            "request": {
+              "input": {
+                "username": "someone"
+              },
+              "model": "apify:apimaestro~linkedin-profile-posts",
+              "provider": "apify"
+            },
+            "cost": {
+              "amount": 0.25,
+              "unit": "usd"
+            },
+            "started_at": "2026-11-25T01:11:37.858Z",
+            "finished_at": "2026-11-25T01:11:37.866Z",
+            "recorded_at": "2026-11-25T01:11:37.868Z"
+          },
+          {
+            "id": "819d2f57",
+            "tool": "klaviyo.flows",
+            "provider": "klaviyo",
+            "status": "failed",
+            "request": {
+              "input": {},
+              "model": "klaviyo.flows",
+              "provider": "klaviyo"
+            },
+            "cost": null,
+            "started_at": "2026-11-25T01:11:37.810Z",
+            "finished_at": "2026-11-25T01:11:37.810Z",
+            "recorded_at": "2026-11-25T01:11:37.818Z"
+          }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/tools/runs",
+      "status": 201,
+      "body": {
+        "created": true,
+        "run": {
+          "id": "run_contract2",
+          "tool": "kie:gpt-image-2-text-to-image",
+          "provider": "kie",
+          "status": "succeeded",
+          "request": {
+            "input": {
+              "prompt": "a lamp"
+            },
+            "model": "kie:gpt-image-2-text-to-image",
+            "provider": "kie"
+          },
+          "cost": {
+            "amount": 12,
+            "unit": "credits"
+          },
+          "started_at": "2026-11-25T01:11:37.858Z",
+          "finished_at": "2026-11-25T01:11:37.858Z",
+          "recorded_at": "2026-11-25T01:11:37.872Z"
+        }
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/skills/not-there",
+      "status": 404,
+      "body": {
+        "error": {
+          "code": "unknown_skill",
+          "message": "This store has no skill of that name."
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sync",
+      "status": 404,
+      "body": {
+        "error": {
+          "code": "unknown_connection",
+          "message": "This store has no connection with that id."
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/no-such-route",
+      "status": 404,
+      "body": {
+        "error": {
+          "code": "not_found",
+          "message": "Cosmic Cloud has no such route."
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/no-such-route",
+      "status": 404,
+      "body": {
+        "error": {
+          "code": "not_found",
+          "message": "Cosmic Cloud has no such route."
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/query",
+      "status": 401,
+      "body": {
+        "error": {
+          "code": "unauthorized",
+          "message": "Send a Cosmic Cloud API token as Authorization: Bearer. The store owner creates one in Settings."
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/store",
+      "status": 401,
+      "body": {
+        "error": {
+          "code": "unauthorized",
+          "message": "Send a Cosmic Cloud API token as Authorization: Bearer. The store owner creates one in Settings."
+        }
+      }
+    }
+  ]
+}

@@ -6,7 +6,7 @@ import { trustLine } from './reconcile.js';
 import { VERSION } from './version.js';
 // A local, read-only web service: the dashboard at / and a JSON API under /api.
 // It binds to 127.0.0.1 only, accepts GET only, and reruns nothing that writes.
-// This is Cosmic's answer to Graphed's hosted services: the same live view, on your machine.
+// A live view of the store, served on your machine instead of a hosted service.
 const json = (res, status, body) => {
     res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify(body, null, 2));

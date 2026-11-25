@@ -198,7 +198,7 @@ lifecycle files ls                               # every saved report, dashboard
 lifecycle files pull                             # the dashboard from the last daily sync
 ```
 
-How each command lines up with the Graphed CLI: [docs/PARITY.md](docs/PARITY.md).
+Every command by the job it does: [docs/COMMANDS.md](docs/COMMANDS.md).
 
 ## Cosmic Cloud
 
@@ -219,7 +219,7 @@ lifecycle skills delete my-skill
 lifecycle logout
 ```
 
-- The token is never printed, logged or written to a file. Without a keychain, set `LIFECYCLE_CLOUD_TOKEN`. `LIFECYCLE_CLOUD_URL` sets the address.
+- The token is never printed, logged or written to a file. Without a keychain, set `LIFECYCLE_CLOUD_TOKEN`. `LIFECYCLE_CLOUD_URL` sets the address. With no saved address and no `LIFECYCLE_CLOUD_URL` (after `logout`), `--cloud` stops with `not_logged_in` and sends nothing.
 - Cloud is being built route by route. A route it does not have yet fails with code `not_built` and a plain sentence. Run the command without `--cloud` meanwhile.
 - `skills push` sends nothing if a file looks like it holds a key. `skills sync` installs the store's own skills beside the kit skills.
 - `lifecycle tools abort RUN` stops an Apify or fal job that is still going. Every tool run keeps the request it sent, and `lifecycle tools get RUN` shows it.
@@ -241,6 +241,7 @@ This is an early release. Here is what has and has not been tested.
 - The write lock, with two real CLI processes on one Mac: the second fails with `busy` while a read still answers.
 - Saved numbers on a local database and on a local Postgres 16 server, through the CLI and the MCP `metric` tool.
 - `login`, `cloud status`, a `--cloud` query and `logout` on a Mac with the keychain, against a local stand-in for Cosmic Cloud: the token went into the keychain, was read back, and was gone after `logout`.
+- Since 0.13.1, every `--cloud` command, `login`, `cloud status`, `logout`, `skills push/status/sync/delete` and tool run records against the real Cosmic Cloud handlers and a local Postgres (the contract test in cosmic-cloud).
 - A store in its own Postgres schema, on a local Postgres 16 server: `query` and saved numbers read the store's schema, by the role's search path and by `LIFECYCLE_DB_SCHEMA`.
 
 **Not tested yet**
