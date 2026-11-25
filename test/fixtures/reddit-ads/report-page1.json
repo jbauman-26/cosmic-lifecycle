@@ -1,0 +1,10 @@
+{
+  "data": {
+    "metrics": [
+      { "campaign_id": "579922433862993631", "date": "2026-11-22", "spend": 25120000, "impressions": 50000, "clicks": 150, "conversion_purchase_clicks": 3, "conversion_purchase_views": 2, "conversion_purchase_total_value": 41235 },
+      { "campaign_id": "1822122159046060063", "date": "2026-11-22", "spend": 10000000, "impressions": 31000, "clicks": 12, "conversion_purchase_clicks": null, "conversion_purchase_views": null, "conversion_purchase_total_value": null }
+    ],
+    "metrics_updated_at": "2026-11-24T21:50:54.167000+00:00"
+  },
+  "pagination": { "next_url": "https://ads-api.reddit.com/api/v3/ad_accounts/a2_bzv32cgqp/reports?page.token=nextToken", "previous_url": null, "page_index": 0, "total_count": 3 }
+}

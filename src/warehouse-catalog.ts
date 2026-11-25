@@ -2594,17 +2594,6 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "notes": "API is partner-only or needs vendor approval. CSV import meanwhile."
   },
   {
-    "slug": "snapchat-ads",
-    "name": "Snapchat Ads",
-    "category": "ads",
-    "readiness": "planned",
-    "why": "#70 of 100 tools Shopify stores use. Ranking position is judgment. StoreLeads: Snapchat account on 7,171 Shopify stores; pixel page not found. Smaller paid channel for DTC. Source: https://storeleads.app/reports/shopify",
-    "docs": "https://developers.snap.com/api/marketing-api/Ads-API/introduction",
-    "credentials": [],
-    "params": [],
-    "notes": "Needs an OAuth sign-in flow, not built yet. CSV import meanwhile."
-  },
-  {
     "slug": "tiktok-shop",
     "name": "TikTok Shop",
     "category": "marketplaces",

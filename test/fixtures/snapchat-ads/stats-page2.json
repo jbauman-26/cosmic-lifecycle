@@ -1,0 +1,28 @@
+{
+  "request_status": "SUCCESS",
+  "request_id": "5813ccf400ff07b016a837c09f0001737e616473617069736300016275696c642d65373832323966352d73746174732d322d7465737400010134",
+  "timeseries_stats": [
+    {
+      "sub_request_status": "SUCCESS",
+      "timeseries_stat": {
+        "id": "8adc3db7-8148-4fbf-999c-8d2266369d74",
+        "type": "AD_ACCOUNT",
+        "granularity": "DAY",
+        "start_time": "2026-11-22T08:00:00.000Z",
+        "end_time": "2026-11-24T08:00:00.000Z",
+        "breakdown_stats": {
+          "campaign": [
+            {
+              "id": "11162f29-85c7-4d43-a037-62d540487e29",
+              "type": "CAMPAIGN",
+              "granularity": "DAY",
+              "timeseries": [
+                { "start_time": "2026-11-23T08:00:00.000Z", "end_time": "2026-11-24T08:00:00.000Z", "stats": { "spend": 5000000, "impressions": 900, "swipes": 4, "conversion_purchases": 1, "conversion_purchases_value": 25000000 } }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

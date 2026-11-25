@@ -1,0 +1,17 @@
+{
+  "data": {
+    "admin_approval": "VALID",
+    "attribution_type": "CLICK_THROUGH_CONVERSION",
+    "business_id": "1e200a0b-4e98-32cc-dd47-3006e4c85bb2",
+    "click_attribution_window": "DAY",
+    "created_at": "2023-03-27T21:18:39Z",
+    "currency": "USD",
+    "id": "a2_bzv32cgqp",
+    "modified_at": "2023-03-27T21:18:39Z",
+    "name": "Northwind Reddit Ads",
+    "suspension_reason": null,
+    "time_zone_id": "America/New_York",
+    "type": "SELF_SERVE",
+    "view_attribution_window": "DAY"
+  }
+}

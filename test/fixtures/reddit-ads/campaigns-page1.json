@@ -1,0 +1,6 @@
+{
+  "data": [
+    { "ad_account_id": "a2_bzv32cgqp", "configured_status": "ACTIVE", "effective_status": "ACTIVE", "id": "579922433862993631", "name": "Spring Sale", "objective": "CONVERSIONS" }
+  ],
+  "pagination": { "next_url": "https://ads-api.reddit.com/api/v3/ad_accounts/a2_bzv32cgqp/campaigns?page.token=nextToken", "previous_url": null }
+}

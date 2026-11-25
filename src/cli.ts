@@ -2,7 +2,7 @@
 import { Command } from 'commander'
 import { emit, emitError, type Format } from './output.js'
 import { init } from './commands/init.js'
-import { connectGa4, connectGoogleAds, connectHubspot, connectKlaviyo, connectMerchantCenter, connectMeta, connectShopify, connectStripe } from './commands/connect.js'
+import { connectGa4, connectGoogleAds, connectHubspot, connectKlaviyo, connectMerchantCenter, connectMeta, connectRedditAds, connectShopify, connectSnapchatAds, connectStripe } from './commands/connect.js'
 import { doctor } from './commands/doctor.js'
 import { openDb, migrate, type Db } from './db.js'
 import { readConfig, settingValue, writeConfig } from './config.js'
@@ -17,8 +17,10 @@ import { Stripe } from './sources/stripe.js'
 import { MetaAds } from './sources/meta.js'
 import { GoogleAds, googleAdsAccessToken } from './sources/google-ads.js'
 import { MerchantCenter, merchantAccessToken } from './sources/google-merchant-center.js'
+import { RedditAds, redditAccessToken } from './sources/reddit-ads.js'
+import { SnapchatAds, snapAccessToken } from './sources/snapchat-ads.js'
 import { HubSpot } from './sources/hubspot.js'
-import { exportProgress, syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncMerchantCenter, syncMeta, syncShopify, syncShopifyBulk, syncShopifyChanges, syncStripe, type SourceResult } from './sync.js'
+import { exportProgress, syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncMerchantCenter, syncMeta, syncRedditAds, syncShopify, syncShopifyBulk, syncShopifyChanges, syncSnapchatAds, syncStripe, type SourceResult } from './sync.js'
 import { shopifyGql } from './sources/shopify-bulk.js'
 import { runQuery } from './query.js'
 import { PUBLIC_TABLES } from './schema.js'
@@ -268,6 +270,24 @@ connect.command('google-merchant-center').description('Read-only: daily clicks a
     const r = await connectMerchantCenter(opts)
     emit(format(), r, () => `Connected to Merchant Center account ${r.name || r.account}.${keyNote(r)}\nNext: lifecycle sync`)
   }))
+connect.command('reddit-ads').description('Read-only: daily spend and results by campaign. No audiences, communities, keywords, people or creative.')
+  .option('--account <id>', 'Reddit ad account id, such as a2_abc123, from Accounts in Ads Manager')
+  .option('--client-id <id>', 'app id of the developer application in Reddit Ads')
+  .option('--secret-env <name>', 'environment variable holding the app secret')
+  .option('--refresh-token-env <name>', 'environment variable holding a refresh token with the adsread scope')
+  .action(write('connect reddit-ads', async (opts) => {
+    const r = await connectRedditAds(opts)
+    emit(format(), r, () => `Connected to Reddit ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: lifecycle sync`)
+  }))
+connect.command('snapchat-ads').description('Read-only: daily spend and results by campaign. No audiences, creatives, people or pixel events.')
+  .option('--account <id>', 'Snapchat ad account id from Ads Manager')
+  .option('--client-id <id>', 'OAuth client id from Snap Business Manager')
+  .option('--secret-env <name>', 'environment variable holding the OAuth client secret')
+  .option('--refresh-token-env <name>', 'environment variable holding a refresh token with the snapchat-marketing-api scope')
+  .action(write('connect snapchat-ads', async (opts) => {
+    const r = await connectSnapchatAds(opts)
+    emit(format(), r, () => `Connected to Snapchat ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: lifecycle sync`)
+  }))
 
 const collectList = (v: string, prev: string[] = []) => [...prev, v]
 
@@ -326,6 +346,10 @@ program.command('sync').description('Pull fresh totals from connected sources, t
   const gadsRefresh = getSecret('google-ads-refresh-token')
   const gmcSecret = getSecret('google-merchant-center-client-secret')
   const gmcRefresh = getSecret('google-merchant-center-refresh-token')
+  const radsSecret = getSecret('reddit-ads-client-secret')
+  const radsRefresh = getSecret('reddit-ads-refresh-token')
+  const sadsSecret = getSecret('snapchat-ads-client-secret')
+  const sadsRefresh = getSecret('snapchat-ads-refresh-token')
   const chosen = chooseSources(only, {
     shopify: Boolean(config.shopify && shopifySecret),
     klaviyo: Boolean(key),
@@ -335,6 +359,8 @@ program.command('sync').description('Pull fresh totals from connected sources, t
     hubspot: Boolean(config.hubspot && hubspotToken),
     'google-ads': Boolean(config['google-ads'] && gadsSecret && gadsRefresh),
     'google-merchant-center': Boolean(config['google-merchant-center'] && gmcSecret && gmcRefresh),
+    'reddit-ads': Boolean(config['reddit-ads'] && radsSecret && radsRefresh),
+    'snapchat-ads': Boolean(config['snapchat-ads'] && sadsSecret && sadsRefresh),
   })
   if (!chosen.length) throw new CliError('No sources connected.', readWorkspace().type === 'shopify' ? 'lifecycle connect klaviyo --key-env NAME' : `lifecycle connect ${TYPES[readWorkspace().type].sources[0]}`, 'not_connected')
   const db = await openDb()
@@ -410,6 +436,16 @@ program.command('sync').description('Pull fresh totals from connected sources, t
         let mc: MerchantCenter | undefined
         const api = async () => (mc ??= new MerchantCenter(await merchantAccessToken(g.clientId, gmcSecret!, gmcRefresh!), g.account))
         results.push(await syncMerchantCenter(db, { performance: async (s, u) => (await api()).performance(s, u), products: async () => (await api()).products() }, { account: g.account }))
+      } else if (source === 'reddit-ads') {
+        const r = config['reddit-ads']!
+        let api: RedditAds | undefined
+        const client = async () => (api ??= new RedditAds(await redditAccessToken(r.clientId, radsSecret!, radsRefresh!), r.account))
+        results.push(await syncRedditAds(db, { names: async () => (await client()).campaignNames(), report: async (s, u) => (await client()).report(s, u, r.timezone) }, { account: r.account, currency: r.currency, timezone: r.timezone }))
+      } else if (source === 'snapchat-ads') {
+        const sc = config['snapchat-ads']!
+        let api: SnapchatAds | undefined
+        const client = async () => (api ??= new SnapchatAds(await snapAccessToken(sc.clientId, sadsSecret!, sadsRefresh!), sc.account))
+        results.push(await syncSnapchatAds(db, { names: async () => (await client()).campaignNames(), stats: async (s, u) => (await client()).stats(s, u, sc.timezone) }, { account: sc.account, currency: sc.currency, timezone: sc.timezone }))
       } else {
         const g = config['google-ads']!
         let ads: GoogleAds | undefined
@@ -907,7 +943,7 @@ program.command('deploy').description('Run the daily sync from your own GitHub a
     emit(format(), plan, () => [`This would create:`, ...plan.creates.map((c) => `  ${c}`), `Secrets to set: ${plan.secrets.join(', ')}`, `Cost: ${plan.expectedCost}`, `Nothing was created. Add --yes to go ahead.`].join('\n'))
     return
   }
-  const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_SHOPIFY_CUSTOMER_KEY: 'shopify-customer-key', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token', LIFECYCLE_HUBSPOT_TOKEN: 'hubspot-token', LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET: 'google-ads-client-secret', LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN: 'google-ads-refresh-token', LIFECYCLE_GOOGLE_MERCHANT_CENTER_CLIENT_SECRET: 'google-merchant-center-client-secret', LIFECYCLE_GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN: 'google-merchant-center-refresh-token' } as const
+  const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_SHOPIFY_CUSTOMER_KEY: 'shopify-customer-key', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token', LIFECYCLE_HUBSPOT_TOKEN: 'hubspot-token', LIFECYCLE_GOOGLE_ADS_CLIENT_SECRET: 'google-ads-client-secret', LIFECYCLE_GOOGLE_ADS_REFRESH_TOKEN: 'google-ads-refresh-token', LIFECYCLE_GOOGLE_MERCHANT_CENTER_CLIENT_SECRET: 'google-merchant-center-client-secret', LIFECYCLE_GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN: 'google-merchant-center-refresh-token', LIFECYCLE_REDDIT_ADS_CLIENT_SECRET: 'reddit-ads-client-secret', LIFECYCLE_REDDIT_ADS_REFRESH_TOKEN: 'reddit-ads-refresh-token', LIFECYCLE_SNAPCHAT_ADS_CLIENT_SECRET: 'snapchat-ads-client-secret', LIFECYCLE_SNAPCHAT_ADS_REFRESH_TOKEN: 'snapchat-ads-refresh-token' } as const
   const secrets: Record<string, string> = {}
   // The daily sync in GitHub Actions uses the same store key as this machine, so both keep the same scrambled ids.
   if (plan.secrets.includes('LIFECYCLE_SHOPIFY_CUSTOMER_KEY')) storeKeyer()

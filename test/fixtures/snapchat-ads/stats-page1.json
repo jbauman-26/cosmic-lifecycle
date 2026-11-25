@@ -1,0 +1,33 @@
+{
+  "request_status": "SUCCESS",
+  "request_id": "5813ccf400ff07b016a837c09f0001737e616473617069736300016275696c642d65373832323966352d73746174732d322d7465737400010133",
+  "paging": { "next_link": "https://adsapi.snapchat.com/v1/adaccounts/8adc3db7-8148-4fbf-999c-8d2266369d74/stats?cursor=abc&limit=200" },
+  "timeseries_stats": [
+    {
+      "sub_request_status": "SUCCESS",
+      "timeseries_stat": {
+        "id": "8adc3db7-8148-4fbf-999c-8d2266369d74",
+        "type": "AD_ACCOUNT",
+        "granularity": "DAY",
+        "start_time": "2026-11-22T08:00:00.000Z",
+        "end_time": "2026-11-24T08:00:00.000Z",
+        "finalized_data_end_time": "2026-11-23T08:00:00.000Z",
+        "breakdown_stats": {
+          "campaign": [
+            {
+              "id": "c6a9e09a-7126-48e1-96e0-4dbf9ab8d3c2",
+              "type": "CAMPAIGN",
+              "granularity": "DAY",
+              "start_time": "2026-11-22T00:00:00.000-08:00",
+              "end_time": "2026-11-24T00:00:00.000-08:00",
+              "timeseries": [
+                { "start_time": "2026-11-22T00:00:00.000-08:00", "end_time": "2026-11-23T00:00:00.000-08:00", "stats": { "spend": 144213617, "impressions": 18294, "swipes": 120, "conversion_purchases": 3, "conversion_purchases_value": 89990000 } },
+                { "start_time": "2026-11-23T00:00:00.000-08:00", "end_time": "2026-11-24T00:00:00.000-08:00", "stats": { "spend": 120978178, "impressions": 15377, "swipes": 98, "conversion_purchases": 0, "conversion_purchases_value": 0 } }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

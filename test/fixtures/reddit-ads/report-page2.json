@@ -1,0 +1,9 @@
+{
+  "data": {
+    "metrics": [
+      { "campaign_id": "579922433862993631", "date": "2026-11-23", "spend": 26000000, "impressions": 52000, "clicks": 160, "conversion_purchase_clicks": 4, "conversion_purchase_views": 0, "conversion_purchase_total_value": 50000 }
+    ],
+    "metrics_updated_at": "2026-11-24T21:50:54.167000+00:00"
+  },
+  "pagination": { "next_url": null, "previous_url": "https://ads-api.reddit.com/api/v3/ad_accounts/a2_bzv32cgqp/reports?page.token=previousToken", "page_index": 1, "total_count": 3 }
+}

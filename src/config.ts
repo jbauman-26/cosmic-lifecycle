@@ -13,6 +13,8 @@ const Config = z
     stripe: z.object({ mode: z.enum(['test', 'live']), subscriptions: z.boolean() }).optional(),
     meta: z.object({ account: z.string(), name: z.string(), currency: z.string(), timezone: z.string() }).optional(),
     'google-ads': z.object({ customer: z.string(), loginCustomer: z.string().optional(), clientId: z.string(), name: z.string(), currency: z.string(), timezone: z.string(), testAccount: z.boolean() }).optional(),
+    'reddit-ads': z.object({ account: z.string(), clientId: z.string(), name: z.string(), currency: z.string(), timezone: z.string() }).optional(),
+    'snapchat-ads': z.object({ account: z.string(), clientId: z.string(), name: z.string(), currency: z.string(), timezone: z.string(), organizationId: z.string().optional() }).optional(),
     hubspot: z.object({ portal: z.string(), currency: z.string() }).optional(),
     'google-merchant-center': z.object({ account: z.string(), clientId: z.string(), name: z.string() }).optional(),
     // What kind of business this is, and which source the trust gate checks against. Missing means shopify.

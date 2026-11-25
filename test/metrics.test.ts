@@ -106,7 +106,7 @@ describe('verified metrics', () => {
 
 describe('source catalog and setup prompts', () => {
   it('lists only sources with a working connector', () => {
-    expect(CATALOG.map((s) => s.slug)).toEqual(['klaviyo', 'shopify', 'ga4', 'stripe', 'meta', 'google-ads', 'google-merchant-center'])
+    expect(CATALOG.map((s) => s.slug)).toEqual(['klaviyo', 'shopify', 'ga4', 'stripe', 'meta', 'google-ads', 'google-merchant-center', 'reddit-ads', 'snapchat-ads'])
   })
 
   it('reports connected sources and the next step for the rest', async () => {

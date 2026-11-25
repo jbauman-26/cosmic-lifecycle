@@ -11,6 +11,8 @@ import { HubSpot } from '../sources/hubspot.js';
 import { readWorkspace, REFERENCE_NAME } from '../workspace.js';
 import { GoogleAds, googleAdsAccessToken } from '../sources/google-ads.js';
 import { MerchantCenter, merchantAccessToken } from '../sources/google-merchant-center.js';
+import { RedditAds, redditAccessToken } from '../sources/reddit-ads.js';
+import { SnapchatAds, snapAccessToken } from '../sources/snapchat-ads.js';
 import { CliError } from '../errors.js';
 export async function doctor() {
     const checks = [];
@@ -88,6 +90,34 @@ export async function doctor() {
         }
         catch (e) {
             checks.push({ name: 'google-ads', ok: false, detail: e instanceof Error ? e.message : 'Sign-in was refused.', next: e instanceof CliError ? e.next : 'lifecycle connect google-ads' });
+        }
+    }
+    const rads = config['reddit-ads'];
+    const radsSecret = getSecret('reddit-ads-client-secret');
+    const radsRefresh = getSecret('reddit-ads-refresh-token');
+    if (rads && (!radsSecret || !radsRefresh))
+        checks.push({ name: 'reddit-ads', ok: false, detail: 'Connected, but the app secret or refresh token is missing.', next: 'lifecycle connect reddit-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME' });
+    else if (rads && radsSecret && radsRefresh) {
+        try {
+            const a = await new RedditAds(await redditAccessToken(rads.clientId, radsSecret, radsRefresh), rads.account).check();
+            checks.push({ name: 'reddit-ads', ok: true, detail: `Sign-in reads ${a.name || a.account} in ${a.currency}` });
+        }
+        catch (e) {
+            checks.push({ name: 'reddit-ads', ok: false, detail: e instanceof Error ? e.message : 'Sign-in was refused.', next: e instanceof CliError ? e.next : 'lifecycle connect reddit-ads' });
+        }
+    }
+    const sads = config['snapchat-ads'];
+    const sadsSecret = getSecret('snapchat-ads-client-secret');
+    const sadsRefresh = getSecret('snapchat-ads-refresh-token');
+    if (sads && (!sadsSecret || !sadsRefresh))
+        checks.push({ name: 'snapchat-ads', ok: false, detail: 'Connected, but the client secret or refresh token is missing.', next: 'lifecycle connect snapchat-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME' });
+    else if (sads && sadsSecret && sadsRefresh) {
+        try {
+            const a = await new SnapchatAds(await snapAccessToken(sads.clientId, sadsSecret, sadsRefresh), sads.account).check();
+            checks.push({ name: 'snapchat-ads', ok: true, detail: `Sign-in reads ${a.name || a.account} in ${a.currency}` });
+        }
+        catch (e) {
+            checks.push({ name: 'snapchat-ads', ok: false, detail: e instanceof Error ? e.message : 'Sign-in was refused.', next: e instanceof CliError ? e.next : 'lifecycle connect snapchat-ads' });
         }
     }
     const stripeKey = getSecret('stripe-read-key');

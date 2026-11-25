@@ -63,6 +63,24 @@ export const CATALOG = [
         connect: 'lifecycle connect google-merchant-center --account 123456789 --client-id ID --secret-env NAME --refresh-token-env NAME',
         tested: 'Written from the Merchant API Reports v1 docs and tested against recorded answers. Not yet run on a live account.',
     },
+    {
+        slug: 'reddit-ads',
+        name: 'Reddit Ads',
+        syncs: 'Daily spend, impressions, clicks, and the purchases and purchase value Reddit attributes to its ads, by campaign. No audiences, communities, keywords, people or creative.',
+        credential: 'Developer app id and secret, plus a refresh token from Reddit sign-in with the adsread scope. Only read calls are made.',
+        setupMinutes: 10,
+        connect: 'lifecycle connect reddit-ads --account a2_abc123 --client-id ID --secret-env NAME --refresh-token-env NAME',
+        tested: 'Written from the Reddit Ads API docs (v3) and tested against recorded answers. Not yet run on a live ad account.',
+    },
+    {
+        slug: 'snapchat-ads',
+        name: 'Snapchat Ads',
+        syncs: 'Daily spend, impressions, swipe-ups, and the purchases and purchase value Snapchat attributes to its ads, by campaign. No audiences, creatives, people or pixel events.',
+        credential: 'OAuth client id and secret, plus a refresh token from Snapchat sign-in with the snapchat-marketing-api scope. Only read calls are made.',
+        setupMinutes: 10,
+        connect: 'lifecycle connect snapchat-ads --account AD_ACCOUNT_ID --client-id ID --secret-env NAME --refresh-token-env NAME',
+        tested: 'Written from the Snapchat Marketing API docs (v1) and tested against recorded answers. Not yet run on a live ad account.',
+    },
 ];
 // Built in from 0.14.0. Kept out of CATALOG, the list Shopify stores have always seen first,
 // and shown after it everywhere: sources catalog, sources list, the MCP catalog.
