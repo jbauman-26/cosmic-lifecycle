@@ -559,8 +559,9 @@ describe('0.14.0', () => {
   it('is version 0.14.0 everywhere a version is written, and documents workspaces', async () => {
     const { VERSION } = await import('../src/version.js')
     const { DOCS } = await import('../src/docs.js')
-    expect(VERSION).toBe('0.14.0')
-    expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe('0.14.0')
+    // 0.14.1: was toBe('0.14.0'); a version bump has to change it. package.json and the lock must still agree.
+    expect(VERSION).toMatch(/^0\.14\.\d+$/)
+    expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe(VERSION)
     expect(readFileSync('CHANGELOG.md', 'utf8')).toMatch(/^## 0\.14\.0 \(2026-11-24\)/m)
     expect(DOCS.workspaces).toMatch(/unreferenced/)
     for (const f of ['docs/WORKSPACES.md', 'CHANGELOG.md', 'README.md']) expect(readFileSync(f, 'utf8')).not.toMatch(/[–—]/)
@@ -580,5 +581,17 @@ describe('doctor and deploy outside a store', () => {
     expect(plan.secrets).toEqual(['LIFECYCLE_DATABASE_URL', 'LIFECYCLE_HUBSPOT_TOKEN', 'LIFECYCLE_STRIPE_READ_KEY'])
     expect(workflowYaml(false, true, [], false, false, true)).toContain('LIFECYCLE_HUBSPOT_TOKEN: ${{ secrets.LIFECYCLE_HUBSPOT_TOKEN }}')
     expect(workflowYaml(false)).toBe(workflowYaml(false, false, [], false, false, false))
+  })
+})
+
+describe('0.14.1', () => {
+  it('is version 0.14.1 everywhere a version is written, and its changelog has no dash a person would not type', async () => {
+    const { VERSION } = await import('../src/version.js')
+    expect(VERSION).toBe('0.14.1')
+    expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe('0.14.1')
+    const log = readFileSync('CHANGELOG.md', 'utf8')
+    expect(log).toMatch(/^## 0\.14\.1 \(2026-11-25\)/m)
+    expect(log).not.toMatch(/^## Unreleased/m)
+    expect(log).not.toMatch(/[–—]/)
   })
 })
