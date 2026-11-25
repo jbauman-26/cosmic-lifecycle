@@ -97,9 +97,10 @@ export async function runChecks(db: Tx, t: Tolerances = tolerances()): Promise<C
   }
 
   // 7. Is anything stale? A source whose latest entry is a disconnect is left out,
-  // so removing a source never turns into a stale warning two days later.
+  // so removing a source never turns into a stale warning two days later. A Shopify run that only
+  // waited on an order export brought nothing new, so it does not count as fresh.
   const last = await db.query(
-    `SELECT source, max(finished_at) AS at FROM meta_sync_run r WHERE status NOT IN ('failed', 'disconnected', 'running')
+    `SELECT source, max(finished_at) AS at FROM meta_sync_run r WHERE status NOT IN ('failed', 'disconnected', 'running') AND coalesce(code, '') <> 'export_running'
        AND NOT EXISTS (SELECT 1 FROM meta_sync_run d WHERE d.source = r.source AND d.status = 'disconnected'
          AND d.started_at >= (SELECT max(x.started_at) FROM meta_sync_run x WHERE x.source = r.source))
      GROUP BY source`,

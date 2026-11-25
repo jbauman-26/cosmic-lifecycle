@@ -5,7 +5,7 @@ import { init } from './commands/init.js'
 import { connectGa4, connectKlaviyo, connectMeta, connectShopify, connectStripe } from './commands/connect.js'
 import { doctor } from './commands/doctor.js'
 import { openDb, migrate, type Db } from './db.js'
-import { readConfig } from './config.js'
+import { readConfig, settingValue } from './config.js'
 import { getSecret, getSourceSecret } from './secrets.js'
 import { CliError } from './errors.js'
 import { fetchOrderCount, fetchOrders, shopifyToken } from './sources/shopify.js'
@@ -14,7 +14,8 @@ import { reconcile } from './reconcile.js'
 import { Klaviyo } from './sources/klaviyo.js'
 import { Stripe } from './sources/stripe.js'
 import { MetaAds } from './sources/meta.js'
-import { syncGa4, syncKlaviyo, syncMeta, syncShopify, syncStripe, type SourceResult } from './sync.js'
+import { syncGa4, syncKlaviyo, syncMeta, syncShopify, syncShopifyBulk, syncStripe, type SourceResult } from './sync.js'
+import { shopifyGql } from './sources/shopify-bulk.js'
 import { runQuery } from './query.js'
 import { PUBLIC_TABLES } from './schema.js'
 import { VERSION } from './version.js'
@@ -191,7 +192,11 @@ program.command('sync').description('Pull fresh totals from connected sources, t
   .option('--since <date>', 'start of the Klaviyo report window')
   .option('--only <source>', `sync only this built-in source: ${NATIVE.join(', ')} (repeatable, or a comma list)`, collectList)
   .option('--cloud', 'start the sync on Cosmic Cloud instead of on this machine. It returns at once. Needs lifecycle login')
+  .option('--export-wait <seconds>', 'for a large Shopify store, seconds to wait for its bulk export before leaving it for the next sync')
   .action(run(async (opts) => {
+  if (opts.exportWait !== undefined && !(Number.isInteger(Number(opts.exportWait)) && Number(opts.exportWait) >= 0 && Number(opts.exportWait) <= 3600)) {
+    throw new CliError('Use a whole number of seconds from 0 to 3600.', 'lifecycle sync --only shopify --export-wait 120', 'bad_value')
+  }
   if (opts.cloud) {
     const client = new CloudClient()
     const only = parseOnly(opts.only)
@@ -238,7 +243,20 @@ program.command('sync').description('Pull fresh totals from connected sources, t
         const { store, clientId } = config.shopify!
         let token: string | undefined
         const tok = async () => (token ??= await shopifyToken(store, clientId, shopifySecret!))
-        results.push(await syncShopify(db, async () => fetchOrders(store, await tok()), async () => fetchOrderCount(store, await tok())))
+        // A big store goes through one bulk export, picked up across syncs, instead of one request per 250 orders.
+        // When Shopify gives no exact count the export is used too, because the store may be large.
+        // A failure here (a bad key, a missing scope) falls through to the paged path, which records it as this run's error.
+        const total = await (async () => fetchOrderCount(store, await tok()))().catch(() => undefined)
+        const minOrders = settingValue('shopify.bulk_min_orders')
+        if (total !== undefined && (total === null || total >= minOrders)) {
+          results.push(await syncShopifyBulk(db, {
+            gql: shopifyGql(store, await tok()),
+            reportedCount: async (before) => fetchOrderCount(store, await tok(), before ?? undefined),
+            waitMs: (opts.exportWait !== undefined ? Number(opts.exportWait) : settingValue('shopify.export_wait_seconds')) * 1000,
+          }))
+        } else {
+          results.push(await syncShopify(db, async () => fetchOrders(store, await tok()), async () => fetchOrderCount(store, await tok())))
+        }
       } else if (source === 'klaviyo') {
         results.push(await syncKlaviyo(db, new Klaviyo(key!), opts))
       } else if (source === 'ga4') {

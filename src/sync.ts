@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type { Db, Tx } from './db.js'
 import { CliError } from './errors.js'
 import { settingValue } from './config.js'
-import { aggregateOrders, type RawOrder } from './sources/shopify.js'
+import { aggregateOrders, type CohortMonthly, type OrdersDaily, type RawOrder } from './sources/shopify.js'
+import { CompactOrders, isDone, pollExport, readExport, startOrdersExport, waitForExport, type BulkOperation, type Gql } from './sources/shopify-bulk.js'
 import type { Ga4Day } from './sources/ga4.js'
 import { toDaily, type RawInsight } from './sources/meta.js'
 import { aggregateCharges, aggregateSubscriptions, type RawCharge, type RawSubscription } from './sources/stripe.js'
@@ -16,7 +17,7 @@ async function recordRun(db: Db, source: string, fn: () => Promise<Omit<SourceRe
   await db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, status) VALUES ($1, $2, $3, 'running')`, [runId, source, now()])
   try {
     const r = await fn()
-    await db.query(`UPDATE meta_sync_run SET finished_at = $2, status = $3, rows_written = $4, detail = $5 WHERE run_id = $1`, [runId, now(), r.status, r.rows, r.detail ?? null])
+    await db.query(`UPDATE meta_sync_run SET finished_at = $2, status = $3, rows_written = $4, detail = $5, code = $6 WHERE run_id = $1`, [runId, now(), r.status, r.rows, r.detail ?? null, r.code ?? null])
     return { source, ...r }
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e)
@@ -29,7 +30,10 @@ async function recordRun(db: Db, source: string, fn: () => Promise<Omit<SourceRe
 // Recomputes from the full order history inside one transaction, so a re-run
 // cannot double count and a failed run leaves yesterday's numbers in place.
 export async function writeShopify(db: Db, orders: RawOrder[]) {
-  const { daily, cohorts } = aggregateOrders(orders)
+  return writeShopifyTotals(db, aggregateOrders(orders))
+}
+
+export async function writeShopifyTotals(db: Db, { daily, cohorts }: { daily: OrdersDaily[]; cohorts: CohortMonthly[] }) {
   const at = now()
   await db.transaction(async (tx: Tx) => {
     await tx.query('DELETE FROM fact_orders_daily')
@@ -79,6 +83,75 @@ export async function syncShopify(db: Db, loadOrders: () => Promise<RawOrder[]>,
     if (reported === null) await db.query(`DELETE FROM meta_source_total WHERE source = 'shopify' AND metric = 'orders_reported'`)
     else await setTotal(db, 'shopify', 'orders_reported', reported)
     return { status: 'ok', rows }
+  })
+}
+
+export type BulkDeps = {
+  gql: Gql
+  download?: typeof fetch
+  // Shopify's own count of orders created up to the given moment (the export's start), or all orders when null.
+  reportedCount?: (createdBefore: string | null) => Promise<number | null>
+  // How long this sync waits for Shopify to finish the export before leaving it for the next sync.
+  waitMs: number
+  sleep?: (ms: number) => Promise<void>
+  today?: string
+}
+
+const RUNNING_DETAIL = 'Shopify is still building the full order export. The totals from the last finished export stay in place, and the next sync reads the new one.'
+
+// Large stores: one Shopify bulk operation instead of thousands of pages. The operation id is saved, so a
+// sync that stops (a time limit, a closed laptop, a dropped download) loses nothing: the next one polls the
+// same operation, or reads the same finished file again, which Shopify keeps for a week. Totals are only
+// replaced once a whole file has been read and its line count matches Shopify's own count of objects.
+export async function syncShopifyBulk(db: Db, deps: BulkDeps) {
+  return recordRun(db, 'shopify', async () => {
+    const at = now()
+    const mark = (op: BulkOperation, consumed: boolean) =>
+      db.query(`UPDATE meta_shopify_bulk SET status = $2, checked_at = $3, objects = $4, error_code = $5, consumed_at = CASE WHEN $6 THEN $3::timestamptz ELSE consumed_at END WHERE op_id = $1`,
+        [op.id, op.status, now(), op.objectCount, op.errorCode, consumed])
+    const open = (await db.query(`SELECT op_id FROM meta_shopify_bulk WHERE consumed_at IS NULL ORDER BY started_at DESC LIMIT 1`))[0]
+    let op: BulkOperation | null = open ? await pollExport(deps.gql, String(open.op_id)) : null
+    if (open && !op) await db.query(`UPDATE meta_shopify_bulk SET status = 'MISSING', consumed_at = $2 WHERE op_id = $1`, [open.op_id, at])
+    if (!op) {
+      op = await startOrdersExport(deps.gql)
+      await db.query(`INSERT INTO meta_shopify_bulk (op_id, status, started_at) VALUES ($1, $2, $3) ON CONFLICT (op_id) DO NOTHING`, [op.id, op.status, at])
+    }
+    if (!isDone(op.status)) op = (await waitForExport(deps.gql, op.id, deps.waitMs, { sleep: deps.sleep })) ?? op
+    await mark(op, false)
+    if (!isDone(op.status)) return { status: 'warning' as const, rows: 0, detail: RUNNING_DETAIL, code: 'export_running' }
+    if (op.status !== 'COMPLETED') {
+      await mark(op, true)
+      throw new CliError(`Shopify's order export ended as ${op.status.toLowerCase()}${op.errorCode ? ` (${op.errorCode})` : ''}.`, 'Run lifecycle sync again to start a new export.', 'export_failed')
+    }
+    const cutoff = op.createdAt ? Date.parse(op.createdAt) : Infinity
+    const buf = new CompactOrders(cutoff)
+    if (op.url) {
+      try {
+        await readExport(op.url, buf, deps.download)
+      } catch (e) {
+        // An expired file cannot be read again, so the next sync starts a new export. Any other failure keeps it.
+        if (e instanceof CliError && e.code === 'export_expired') await mark(op, true)
+        throw e
+      }
+    }
+    if (buf.pulled !== op.objectCount) {
+      throw new CliError(`The Shopify export file had ${buf.pulled} orders, and Shopify says it holds ${op.objectCount}.`, 'Run lifecycle sync again. It reads the same file again.', 'export_incomplete')
+    }
+    const rows = await writeShopifyTotals(db, buf.aggregate())
+    // Orders keep arriving while Shopify builds the file, so both sides of the completeness check stop at the
+    // moment the export started.
+    await setTotal(db, 'shopify', 'orders_pulled', op.createdAt ? buf.pulledBefore : buf.pulled)
+    const reported = deps.reportedCount ? await deps.reportedCount(op.createdAt) : null
+    if (reported === null) await db.query(`DELETE FROM meta_source_total WHERE source = 'shopify' AND metric = 'orders_reported'`)
+    else await setTotal(db, 'shopify', 'orders_reported', reported)
+    await mark(op, true)
+    // Without read_all_orders Shopify hands over only the last 60 days, and every older customer looks new.
+    const today = deps.today ?? at.slice(0, 10)
+    const sixtyOneDaysAgo = new Date(Date.parse(`${today}T00:00:00Z`) - 61 * 86400000).toISOString().slice(0, 10)
+    if (buf.earliest !== null && buf.earliest >= sixtyOneDaysAgo) {
+      return { status: 'warning' as const, rows, detail: `The oldest order Shopify returned is from ${buf.earliest}. Without the read_all_orders scope Shopify hands over only the last 60 days, so if the store is older, add that scope, or older customers count as new.` }
+    }
+    return { status: 'ok' as const, rows }
   })
 }
 

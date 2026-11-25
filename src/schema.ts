@@ -62,6 +62,11 @@ export const MIGRATIONS = [
   // Numbers the owner saved by hand: a metric id, a label and one SELECT. SQL text only, never results.
   `CREATE TABLE IF NOT EXISTS meta_saved_metric (
     metric TEXT PRIMARY KEY, title TEXT NOT NULL, unit TEXT NOT NULL, sql TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL)`,
+  // Shopify order exports (bulk operations) a sync started, so a later sync can read one that finished after it stopped.
+  // The operation id and its state only. The file it points to is never stored.
+  `CREATE TABLE IF NOT EXISTS meta_shopify_bulk (
+    op_id TEXT PRIMARY KEY, status TEXT NOT NULL, started_at TIMESTAMPTZ NOT NULL, checked_at TIMESTAMPTZ, consumed_at TIMESTAMPTZ,
+    objects BIGINT, error_code TEXT)`,
 ]
 
 export const PUBLIC_TABLES = [

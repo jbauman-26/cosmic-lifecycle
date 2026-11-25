@@ -2,6 +2,27 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## Unreleased
+
+Shopify sync for large stores. Measured on synthetic data shaped like a Shopify Plus brand (3 million orders over 3 years, 600,000 customers); no real store was connected.
+
+### Added
+
+- **Large stores sync Shopify through one bulk export.** At 25,000 orders or more (`shopify.bulk_min_orders`), `lifecycle sync` asks Shopify for a bulk operation instead of paging 250 orders at a time, which at 3 million orders is 12,000 requests in a row. The operation id is saved in `meta_shopify_bulk`, so a sync that stops early loses nothing: the next one polls the same export, or reads the same finished file again (Shopify keeps it a week). Totals are replaced only after the whole file is read and its line count matches Shopify's own count. While the export is still building, the sync returns `warning` with code `export_running`, the last totals stay, and that run does not count as fresh. A sync waits `shopify.export_wait_seconds` (120) for the export, or `--export-wait SECONDS`.
+- The file is read as a stream into a compact buffer: on 3 million synthetic orders, about 560 MB peak memory and 8 seconds to read, total and write, against about 1.8 GB for the paged path holding every order as an object. The daily and cohort totals were identical to the paged path's, row for row.
+- The completeness check compares the orders in the export with Shopify's count of orders created up to the moment the export started, so orders placed while Shopify builds the file do not fail it.
+- A warning when the oldest order Shopify returns is within 60 days: without the `read_all_orders` scope Shopify returns only the last 60 days, and older customers then count as new.
+
+### Fixed
+
+- A page Shopify answers with `THROTTLED` (inside a 200 reply) is retried after the wait Shopify's cost numbers imply, up to 5 times, instead of failing the sync at once.
+
+### What is proven and what is not
+
+- Typecheck and the full suite pass. The bulk path is tested against replies built from Shopify's documentation, not recorded from a live store, and end to end at 3 million synthetic orders against a stand-in endpoint.
+- Not run against a real Shopify store. The `created_at:<=` filter on `ordersCount` is unverified on a live store; if Shopify ignores it, `orders_complete` fails instead of passing silently.
+- Every sync after the first still exports the full history. A daily export of a 3 million order store is unmeasured on Shopify's side.
+
 ## 0.13.2 (2026-11-24)
 
 A privacy fix. The promise is that customer names, emails, phone numbers and street addresses never enter the warehouse. Two gaps were found on 2026-11-24 and are closed here, and a third was found while closing them.
