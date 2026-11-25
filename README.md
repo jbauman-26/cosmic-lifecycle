@@ -1,10 +1,30 @@
 # Cosmic Lifecycle
 
-Your agent should not quote a Klaviyo number it can't prove.
+Your agent should not quote a marketing number it can't prove.
 
-Cosmic Lifecycle gives Claude Code a clean view of your Shopify and Klaviyo results. It syncs totals into a database you own, checks that the numbers agree, and shows you which flows to fix first.
+Cosmic Lifecycle gives Claude Code, Cursor and Codex checked marketing numbers. It syncs totals into a database you own, checks them against your business's source of truth (Shopify orders for a store, Stripe for SaaS and other stores, HubSpot for a B2B pipeline), and puts a trust line on every number.
 
-It is for the person running lifecycle at a Shopify brand who already works in Claude Code. It is free, from [Cosmic AI](https://store.jakebauman.io/community).
+It is for the marketer who already works in an agent: at a Shopify brand, a SaaS company, a B2B team, an agency running many clients, or a creator business. It is free, from [Cosmic AI](https://store.jakebauman.io/community).
+
+## Pick your workspace type
+
+```sh
+lifecycle init --type saas      # shopify, ecommerce, saas, b2b, agency or creator
+lifecycle workspace show        # what your numbers are checked against
+lifecycle metrics list          # the metrics for your type: MRR and churn, pipeline and win rate, ...
+lifecycle demo                  # the demo for your type, on invented data
+```
+
+| Type | Source of truth | First metrics |
+|---|---|---|
+| shopify | Shopify orders | net revenue, AOV, flow revenue, MER, contribution margin |
+| ecommerce | Stripe charges | Stripe revenue, orders, AOV, cost per new customer |
+| saas | Stripe | MRR, net new MRR, churn, new paying customers, cost per new customer |
+| b2b | HubSpot | new leads, pipeline created, won revenue, win rate, cost per lead |
+| agency | set per client | spend, CPC, CTR, revenue, leads, one workspace per client |
+| creator | Stripe | revenue, members, churn, visit to paid |
+
+A workspace with no source of truth connected still works: its numbers carry a line that says plainly they were not checked. An install from before 0.14.0 is a Shopify store and nothing changes. See `lifecycle docs workspaces`.
 
 ## Install
 

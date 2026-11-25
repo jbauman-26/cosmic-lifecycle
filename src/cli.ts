@@ -2,10 +2,10 @@
 import { Command } from 'commander'
 import { emit, emitError, type Format } from './output.js'
 import { init } from './commands/init.js'
-import { connectGa4, connectKlaviyo, connectMeta, connectShopify, connectStripe } from './commands/connect.js'
+import { connectGa4, connectHubspot, connectKlaviyo, connectMeta, connectShopify, connectStripe } from './commands/connect.js'
 import { doctor } from './commands/doctor.js'
 import { openDb, migrate, type Db } from './db.js'
-import { readConfig, settingValue } from './config.js'
+import { readConfig, settingValue, writeConfig } from './config.js'
 import { getSecret, getSourceSecret } from './secrets.js'
 import { CliError } from './errors.js'
 import { fetchOrderCount, fetchOrders, shopifyToken } from './sources/shopify.js'
@@ -14,7 +14,8 @@ import { reconcile } from './reconcile.js'
 import { Klaviyo } from './sources/klaviyo.js'
 import { Stripe } from './sources/stripe.js'
 import { MetaAds } from './sources/meta.js'
-import { syncGa4, syncKlaviyo, syncMeta, syncShopify, syncShopifyBulk, syncStripe, type SourceResult } from './sync.js'
+import { HubSpot } from './sources/hubspot.js'
+import { exportProgress, syncGa4, syncHubspot, syncKlaviyo, syncMeta, syncShopify, syncShopifyBulk, syncStripe, type SourceResult } from './sync.js'
 import { shopifyGql } from './sources/shopify-bulk.js'
 import { runQuery } from './query.js'
 import { PUBLIC_TABLES } from './schema.js'
@@ -23,11 +24,11 @@ import { DOCS } from './docs.js'
 import { addKit, ensureRegistry, listKits, searchKits, showKit, validateRegistry, type Registry } from './registry.js'
 import { accountSkillFiles, assertSlug, readSkillDir, skillsStatus, syncSkills, uninstallSkills, type Target } from './skills.js'
 import { feedbackUrl, openUrl } from './feedback.js'
-import { deleteMetric, describeMetric, formatValue, listAllMetrics, runMetric, saveMetric, UNITS } from './metrics.js'
-import { CATALOG, CUSTOM_SOURCE_NOTE, kitPrompt, sourceStatus } from './sources-catalog.js'
+import { assertPack, deleteMetric, describeMetric, formatValue, listAllMetrics, runMetric, saveMetric, UNITS } from './metrics.js'
+import { ALL_NATIVE, CATALOG, CUSTOM_SOURCE_NOTE, kitPrompt, sourceStatus } from './sources-catalog.js'
 import type { Config } from './config.js'
 import { startMcp } from './mcp.js'
-import { runDemo } from './demo.js'
+import { DEMO_TYPES, demoFor, runDemo, runTypeDemo, type DemoType } from './demo.js'
 import { deploy, deployLogs, deployPlan, deployRun, deployRunById, deployStatus, followRun, warehouseSecrets, writeProject } from './deploy.js'
 import { defaultOf, getSetting, listSettings, setSetting, unsetSetting, type SettingKey } from './config.js'
 import { deleteSecret, secretStatus, setSecret, SECRET_NAMES, type SecretName } from './secrets.js'
@@ -57,11 +58,31 @@ import { randomUUID } from 'node:crypto'
 import { NATIVE, chooseSources, disconnectNative, isNative, parseOnly } from './native.js'
 import { CLOUD_TOKEN_ENV, CLOUD_URL_ENV, CloudClient, clean, cloudTokenSource, cloudUrl, isNotBuilt, loggedIn, verifyLogin } from './cloud.js'
 import { assertReadOnlySql } from './query.js'
+import { readCosts, setCost, setProductCosts, writeCosts, costsPath, COST_KEYS } from './costs.js'
+import { readFileSync } from 'node:fs'
+import { fetchCostOrders } from './sources/shopify-costs.js'
+import { rollupMetric } from './rollup.js'
+import { assertReference, assertType, readWorkspace, REFERENCE_NAME, TYPES, WORKSPACE_TYPES, noun, type WorkspaceType } from './workspace.js'
+import { pickType } from './commands/init.js'
+import { configPath, workspaceName, workspacesDir } from './paths.js'
+import { existsSync, readdirSync } from 'node:fs'
 
 const program = new Command('lifecycle')
-  .description('A clean view of Shopify and Klaviyo for Claude Code. Read-only. Nothing sends.')
+  .description('Marketing numbers your agent can trust, for a Shopify store, a SaaS product, a B2B pipeline, an agency client or a creator business. Read-only. Nothing sends.')
   .version(VERSION)
   .option('--format <format>', 'text or json', 'text')
+  .option('--workspace <name>', 'use a named workspace, such as one per agency client. Same as LIFECYCLE_WORKSPACE')
+  // Set before any command runs, so every path, setting and keychain entry is the workspace's own.
+  .hook('preAction', (cmd) => {
+    const ws = cmd.opts().workspace
+    if (ws !== undefined) process.env.LIFECYCLE_WORKSPACE = String(ws)
+    try {
+      workspaceName()
+    } catch (e) {
+      emitError(cmd.opts().format === 'json' ? 'json' : 'text', e)
+      process.exit(1)
+    }
+  })
 
 const format = () => (program.opts().format === 'json' ? 'json' : 'text') as Format
 const run = (fn: (...a: any[]) => Promise<void>) => async (...a: any[]) => {
@@ -99,11 +120,11 @@ const CLOUD_FLAG = 'ask Cosmic Cloud instead of this machine. Needs lifecycle lo
 const clock = (iso?: string | null) => (iso ? iso.slice(0, 16).replace('T', ' ') : 'never')
 
 // Cosmic Cloud: sign in with a store token, then --cloud on a read command asks Cloud.
-program.command('login').description('Sign this machine in to Cosmic Cloud with a store token. The token is read from an environment variable and is never printed')
+program.command('login').description('Sign this machine in to Cosmic Cloud with a workspace token (Cloud calls it a store token). The token is read from an environment variable and is never printed')
   .option('--url <cloud url>', `Cosmic Cloud address. Default: ${CLOUD_URL_ENV}, then the saved address, then the public one`)
-  .option('--token-env <VAR>', 'environment variable holding the store token from Cosmic Cloud, Settings, Mac app access')
+  .option('--token-env <VAR>', 'environment variable holding the token from Cosmic Cloud, Settings, Mac app access')
   .action(run(async (opts) => {
-    if (!opts.tokenEnv) throw new CliError('Which variable holds the store token?', 'export COSMIC_CLOUD_TOKEN=..., then lifecycle login --token-env COSMIC_CLOUD_TOKEN', 'missing_secret')
+    if (!opts.tokenEnv) throw new CliError('Which variable holds the Cosmic Cloud token?', 'export COSMIC_CLOUD_TOKEN=..., then lifecycle login --token-env COSMIC_CLOUD_TOKEN', 'missing_secret')
     const token = process.env[opts.tokenEnv]
     if (!token) throw new CliError(`${opts.tokenEnv} is empty.`, `export ${opts.tokenEnv}=..., then run lifecycle login again. Never paste the token into a chat.`, 'missing_secret')
     const v = await verifyLogin(opts.url ?? cloudUrl().url, token)
@@ -132,8 +153,8 @@ program.command('logout').description('Forget the Cosmic Cloud token and address
   emit(format(), { loggedOut: !envStill, tokenRemoved: removed, urlRemoved, note }, () => [envStill ? 'The saved token and address were removed.' : 'Logged out of Cosmic Cloud.', note, 'To stop the token working everywhere, revoke it in Cosmic Cloud under Settings.'].filter(Boolean).join('\n'))
 }))
 
-const cloud = program.command('cloud').description('Cosmic Cloud: the hosted copy of this store')
-cloud.command('status').description('Whether this machine is logged in to Cosmic Cloud, which store, and what is connected there').action(run(async () => {
+const cloud = program.command('cloud').description('Cosmic Cloud: the hosted copy of this workspace')
+cloud.command('status').description('Whether this machine is logged in to Cosmic Cloud, which workspace, and what is connected there').action(run(async () => {
   const { url, source: urlSource } = cloudUrl()
   const tokenSource = cloudTokenSource()
   // A token with no address the owner chose is not logged in: it would not be sent anywhere.
@@ -157,9 +178,44 @@ cloud.command('status').description('Whether this machine is logged in to Cosmic
   }
 }))
 
-program.command('init').description('Set up the database').option('--database-url-env <name>', 'use your own Postgres instead of the local database').action(write('init', async (opts) => {
-  const r = await init(opts)
-  emit(format(), r, () => `Ready. Database: ${r.database}\nNext: lifecycle connect klaviyo --key-env NAME`)
+program.command('init').description('Set up the database and say what kind of business this workspace is')
+  .option('--database-url-env <name>', 'use your own Postgres instead of the local database')
+  .option('--type <type>', `workspace type: ${WORKSPACE_TYPES.join(', ')}. Asked when not given in a terminal; shopify otherwise, and for every install made before 0.14.0`)
+  .option('--reference <source>', 'source of truth the trust gate checks against: shopify, stripe, hubspot, ga4 or none. Default: the one for the type')
+  .action(write('init', async (opts) => {
+  let type: WorkspaceType | undefined = opts.type ? assertType(opts.type) : undefined
+  // Only a brand new workspace in a terminal is asked. An existing install stays as it is.
+  if (!type && format() === 'text' && process.stdin.isTTY && process.stdout.isTTY && !existsSync(configPath())) type = await pickType()
+  const r = await init({ ...opts, type, reference: opts.reference ? assertReference(opts.reference) : undefined })
+  const t = TYPES[r.type]
+  const first = t.sources[0]!
+  emit(format(), r, () => r.type === 'shopify' && r.reference === 'shopify'
+    ? `Ready. Database: ${r.database}\nNext: lifecycle connect klaviyo --key-env NAME`
+    : [`Ready. Database: ${r.database}. Workspace: ${t.title}.`, `Source of truth: ${REFERENCE_NAME[r.reference]}. ${t.referenceWhy}`, `Sources most ${t.title.toLowerCase()} workspaces connect: ${t.sources.join(', ')}.`, `Next: ${ALL_NATIVE.find((s) => s.slug === first)?.connect ?? `lifecycle warehouse show ${first}`}`].join('\n'))
+}))
+
+const workspaceCmd = program.command('workspace').description('What kind of business this workspace is, its source of truth, and named workspaces')
+workspaceCmd.command('show').description('Type, source of truth, metric pack and the sources this type usually connects').action(run(async () => {
+  const w = readWorkspace()
+  const t = TYPES[w.type]
+  const out = { name: workspaceName() ?? 'default', type: w.type, title: t.title, reference: w.reference, referenceSet: w.referenceSet, referenceWhy: t.referenceWhy, sources: t.sources, pack: w.type }
+  emit(format(), out, () => [`Workspace: ${out.name} (${t.title})`, `Source of truth: ${REFERENCE_NAME[w.reference]}${w.referenceSet ? ' (set by hand)' : ''}. ${t.referenceWhy}`, `Usual sources: ${t.sources.join(', ')}`, `Metrics: lifecycle metrics list --pack ${w.type}`].join('\n'))
+}))
+workspaceCmd.command('list').description('Named workspaces on this machine, such as one per agency client').action(run(async () => {
+  const dir = workspacesDir()
+  const names = existsSync(dir) ? readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort() : []
+  const list = names.map((name) => {
+    const prev = process.env.LIFECYCLE_WORKSPACE
+    process.env.LIFECYCLE_WORKSPACE = name
+    try {
+      const w = readWorkspace()
+      return { name, type: w.type, reference: w.reference }
+    } finally {
+      if (prev === undefined) delete process.env.LIFECYCLE_WORKSPACE
+      else process.env.LIFECYCLE_WORKSPACE = prev
+    }
+  })
+  emit(format(), { current: workspaceName() ?? 'default', workspaces: list }, () => (list.length ? list.map((w) => `${w.name}  ${w.type}, checked against ${REFERENCE_NAME[w.reference]}`).join('\n') : 'No named workspaces. Make one with: lifecycle --workspace NAME init --type agency'))
 }))
 
 const connect = program.command('connect').description('Connect a data source')
@@ -167,8 +223,8 @@ connect.command('klaviyo').option('--key-env <name>', 'environment variable hold
   const r = await connectKlaviyo(opts)
   emit(format(), r, () => `Connected to Klaviyo: ${r.account}${keyNote(r)}`)
 }))
-connect.command('shopify').option('--store <domain>').option('--client-id <id>').option('--secret-env <name>', 'environment variable holding the client secret').action(write('connect shopify', async (opts) => {
-  const r = await connectShopify(opts)
+connect.command('shopify').option('--shop <domain>', 'the shop domain, NAME.myshopify.com').option('--store <domain>', 'same as --shop, kept so older scripts work').option('--client-id <id>').option('--secret-env <name>', 'environment variable holding the client secret').action(write('connect shopify', async (opts) => {
+  const r = await connectShopify({ ...opts, store: opts.shop ?? opts.store })
   emit(format(), r, () => `Connected to ${r.store}${keyNote(r)}`)
 }))
 
@@ -184,6 +240,11 @@ connect.command('stripe').description('Read-only: charges, refunds, subscription
 connect.command('meta').description('Read-only: daily spend and results by campaign. No audiences, people or creative.').option('--account <id>', 'ad account id from Ads Manager').option('--token-env <name>', 'environment variable holding a system user token with ads_read').action(write('connect meta', async (opts) => {
   const r = await connectMeta(opts)
   emit(format(), r, () => `Connected to Meta ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: lifecycle sync`)
+}))
+
+connect.command('hubspot').description('Read-only: daily deals, pipeline and new contacts as counts. No contact, company or deal record').option('--token-env <name>', 'environment variable holding a private app token with crm.objects.deals.read and crm.objects.contacts.read').action(write('connect hubspot', async (opts) => {
+  const r = await connectHubspot(opts)
+  emit(format(), r, () => `Connected to HubSpot${r.portal ? ` portal ${r.portal}` : ''} (deals without a currency count as ${r.currency}).${keyNote(r)}\nNext: lifecycle sync`)
 }))
 
 const collectList = (v: string, prev: string[] = []) => [...prev, v]
@@ -225,14 +286,16 @@ program.command('sync').description('Pull fresh totals from connected sources, t
   const ga4Refresh = getSecret('ga4-refresh-token')
   const stripeKey = getSecret('stripe-read-key')
   const metaToken = getSecret('meta-ads-token')
+  const hubspotToken = getSecret('hubspot-token')
   const chosen = chooseSources(only, {
     shopify: Boolean(config.shopify && shopifySecret),
     klaviyo: Boolean(key),
     ga4: Boolean(config.ga4 && ga4Secret && ga4Refresh),
     stripe: Boolean(config.stripe && stripeKey),
     meta: Boolean(config.meta && metaToken),
+    hubspot: Boolean(config.hubspot && hubspotToken),
   })
-  if (!chosen.length) throw new CliError('No sources connected.', 'lifecycle connect klaviyo --key-env NAME', 'not_connected')
+  if (!chosen.length) throw new CliError('No sources connected.', readWorkspace().type === 'shopify' ? 'lifecycle connect klaviyo --key-env NAME' : `lifecycle connect ${TYPES[readWorkspace().type].sources[0]}`, 'not_connected')
   const db = await openDb()
   try {
     await migrate(db)
@@ -253,9 +316,22 @@ program.command('sync').description('Pull fresh totals from connected sources, t
             gql: shopifyGql(store, await tok()),
             reportedCount: async (before) => fetchOrderCount(store, await tok(), before ?? undefined),
             waitMs: (opts.exportWait !== undefined ? Number(opts.exportWait) : settingValue('shopify.export_wait_seconds')) * 1000,
+            expected: total,
           }))
         } else {
           results.push(await syncShopify(db, async () => fetchOrders(store, await tok()), async () => fetchOrderCount(store, await tok())))
+        }
+        // Unit costs, once the owner has run lifecycle costs sync. Its own result line, so a cost failure never hides the orders.
+        if ((config as { costs?: { shopify?: boolean } }).costs?.shopify) {
+          const at = new Date().toISOString()
+          try {
+            const { orders, currency } = await fetchCostOrders(store, await tok())
+            const w = await writeCosts(db, orders, currency ?? 'USD')
+            results.push({ source: 'shopify_costs', status: 'ok', rows: w.days })
+          } catch (e) {
+            results.push({ source: 'shopify_costs', status: 'failed', rows: 0, detail: e instanceof Error ? e.message : String(e), code: e instanceof CliError ? e.code : 'error' })
+          }
+          await db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status, rows_written, detail, code) VALUES ($1,'shopify_costs',$2,$3,$4,$5,$6,$7)`, [randomUUID(), at, new Date().toISOString(), results.at(-1)!.status, results.at(-1)!.rows, results.at(-1)!.detail ?? null, results.at(-1)!.code ?? null])
         }
       } else if (source === 'klaviyo') {
         results.push(await syncKlaviyo(db, new Klaviyo(key!), opts))
@@ -267,6 +343,9 @@ program.command('sync').description('Pull fresh totals from connected sources, t
       } else if (source === 'stripe') {
         const stripe = new Stripe(stripeKey!)
         results.push(await syncStripe(db, { charges: () => stripe.charges(), subscriptions: () => stripe.subscriptions() }))
+      } else if (source === 'hubspot') {
+        const hs = new HubSpot(hubspotToken!)
+        results.push(await syncHubspot(db, { deals: () => hs.deals(), contacts: () => hs.contacts(), total: (o) => hs.total(o) }, { currency: config.hubspot!.currency }))
       } else {
         const meta = new MetaAds(metaToken!, config.meta!.account)
         results.push(await syncMeta(db, (since, until) => meta.insights(since, until), { currency: config.meta!.currency, account: config.meta!.account }))
@@ -377,7 +456,7 @@ program.command('query').argument('<sql>').description('Run one read-only SQL qu
 
 // Verified metrics: fixed SQL, so the same question gets the same answer every time.
 const metrics = program.command('metrics').description('Verified metrics: the same SQL every time, with a trust line. Plus numbers of your own: metrics save')
-metrics.command('list').description('List every verified metric, then the numbers the owner saved').option('--cloud', CLOUD_FLAG).action(run(async (opts) => {
+metrics.command('list').description('List the verified metrics for this workspace type, then the numbers the owner saved').option('--pack <name>', `a metric pack: ${[...WORKSPACE_TYPES, 'all'].join(', ')}. Default: this workspace's type`).option('--cloud', CLOUD_FLAG).action(run(async (opts) => {
   if (opts.cloud) {
     const m = await new CloudClient().metrics()
     emit(format(), m, () => m.map((x) => (x.saved ? `${x.name}: ${x.title ?? x.name} (saved by the owner, not reviewed)` : `${x.name}: ${x.description ?? x.title ?? ''}${x.needs?.length ? ` (needs ${x.needs.join(', ')})` : ''}`)).join('\n') || 'Cosmic Cloud lists no metrics yet.')
@@ -385,7 +464,7 @@ metrics.command('list').description('List every verified metric, then the number
   }
   const db = await openIfSetUp()
   try {
-    const m = await listAllMetrics(db)
+    const m = await listAllMetrics(db, opts.pack ? assertPack(opts.pack) : undefined)
     emit(format(), m, () => m.map((x) => (x.saved ? `${x.name}: ${x.title} (saved by the owner, not reviewed)` : `${x.name}: ${x.description} (needs ${x.needs.join(', ')})`)).join('\n'))
   } finally {
     await db?.close()
@@ -424,7 +503,29 @@ metrics.command('delete').argument('<name>').description('Delete a saved number.
     await db.close()
   }
 }))
-metrics.command('run').argument('<names...>').option('--days <n>', 'window in days (default: metrics.default_days, 90)').option('--cloud', CLOUD_FLAG).description('Run one or more metrics').action(run(async (names: string[], opts) => {
+metrics.command('run').argument('<names...>').option('--days <n>', 'window in days (default: metrics.default_days, 90)').option('--cloud', CLOUD_FLAG)
+  .option('--all-stores', 'add the metric up across every workspace on this machine, in one currency')
+  .option('--stores <names>', 'add it up across these workspaces only, a comma list (default is the unnamed one)')
+  .option('--currency <code>', 'currency for --all-stores or --stores. Default: the rollup.currency setting')
+  .option('--rate-date <date>', 'exchange rate date, YYYY-MM-DD. Default: the latest rate')
+  .option('--rate <CODE=RATE>', 'give a rate by hand: one CODE in the reporting currency (repeatable)', collectList)
+  .description('Run one or more metrics').action(run(async (names: string[], opts) => {
+  if (opts.allStores || opts.stores) {
+    const days = opts.days === undefined ? defaultDays() : Number(opts.days)
+    const stores = opts.allStores ? ('all' as const) : String(opts.stores).split(',').map((x: string) => x.trim()).filter(Boolean)
+    const results: Awaited<ReturnType<typeof rollupMetric>>[] = []
+    for (const n of names) results.push(await rollupMetric(n, { stores, currency: opts.currency, days, rateDate: opts.rateDate, rates: opts.rate }))
+    const out = names.length === 1 ? results[0]! : { rollup: true, currency: results[0]!.currency, metrics: results }
+    emit(format(), out, () => results.map((r) => [
+      r.trust.line,
+      `${r.title}, all stores, last ${r.days} days: ${r.total === null ? 'no value' : r.unit === 'usd' ? `${r.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${r.currency}` : formatValue(r.unit, r.total)}`,
+      r.line,
+      ...r.stores.map((x: any) => `  ${x.store}: ${x.status === 'ok' ? `${x.value} ${x.currency ?? ''}${x.rate && x.rate !== 1 ? ` / ${x.rate} = ${x.converted} ${r.currency}` : ''}` : x.detail ?? x.status}`),
+      ...r.notes,
+    ].join('\n')).join('\n\n'))
+    if (results.some((r) => r.stores.some((x: any) => x.status !== 'ok'))) process.exitCode = 1
+    return
+  }
   if (opts.cloud) {
     const client = new CloudClient()
     const days = opts.days === undefined ? undefined : Number(opts.days)
@@ -466,6 +567,45 @@ metrics.command('candidates').description('Custom queries run more than once: ca
   }
 }))
 
+// Costs for contribution margin: the owner's own rates, plus Shopify unit costs.
+const costs = program.command('costs').description('Cost inputs for contribution margin, in costs.json, the file the Cosmic AI app writes: cost of goods, shipping, payment fees and ad spend')
+costs.command('show').description('The cost inputs in costs.json, and how much of Shopify the cost sync has read').action(run(async () => {
+  const c = readCosts()
+  const db = await openDb()
+  try {
+    await migrateIfFree(db, 'costs show')
+    const cov = (await db.query(`SELECT count(*)::int AS days, coalesce(sum(lines), 0)::int AS lines, coalesce(sum(lines_with_cost), 0)::int AS costed, max(source_synced_at) AS at FROM fact_cogs_daily`))[0] ?? {}
+    const out = { file: costsPath(), costs: c, shopifyCosts: { days: Number(cov.days ?? 0), lines: Number(cov.lines ?? 0), linesWithCost: Number(cov.costed ?? 0), syncedAt: cov.at ? new Date(String(cov.at)).toISOString() : null } }
+    emit(format(), out, () => [c ? JSON.stringify(c, null, 2) : 'No costs set. Start with: lifecycle costs set currency USD', out.shopifyCosts.days ? `Shopify product costs: ${out.shopifyCosts.linesWithCost} of ${out.shopifyCosts.lines} line items, synced ${clock(out.shopifyCosts.syncedAt)}` : 'Shopify product costs: not synced. lifecycle costs sync'].join('\n'))
+  } finally {
+    await db.close()
+  }
+}))
+costs.command('set').argument('<key>', COST_KEYS.join(', ')).argument('<value>', 'such as USD, shopify, percent:35, per_order:6.50, none, 2.9, meta').description('Set one cost input in costs.json, the same file the Cosmic AI app writes').action(run(async (key: string, value: string) => {
+  const c = setCost(key, value)
+  emit(format(), c, () => `Saved ${key}. lifecycle costs show prints them all.`)
+}))
+costs.command('products').argument('<csv>', 'a CSV of sku,unit_cost').option('--fallback <percent>', 'cost of goods for SKUs not in the file, as a percent of their revenue').description('Use your own cost per product instead of Shopify\'s').action(run(async (file: string, opts) => {
+  const c = setProductCosts(readFileSync(file, 'utf8'), opts.fallback)
+  emit(format(), c, () => `Saved ${c.cogs.mode === 'per_product' ? c.cogs.items.length : 0} product costs. Run lifecycle costs sync so sales by SKU are read.`)
+}))
+costs.command('sync').description('Read each line item\'s unit cost from Shopify. Needs read_inventory and read_products on the app. After the first one, lifecycle sync does it too').action(write('costs sync', async () => {
+  const config = readConfig()
+  const secret = getSecret('shopify-client-secret')
+  if (!config.shopify || !secret) throw new CliError('Shopify is not connected.', 'lifecycle connect shopify', 'not_connected')
+  const db = await openDb()
+  try {
+    await migrate(db)
+    const token = await shopifyToken(config.shopify.store, config.shopify.clientId, secret)
+    const { orders, currency } = await fetchCostOrders(config.shopify.store, token)
+    const r = await writeCosts(db, orders, currency ?? 'USD')
+    writeConfig({ ...readConfig(), costs: { shopify: true } } as never)
+    emit(format(), { ...r, currency }, () => [`Read unit costs for ${r.linesWithCost} of ${r.lines} line items over ${r.days} days (${currency ?? 'currency unknown'}).`, r.truncatedOrders ? `${r.truncatedOrders} orders have more than 100 line items; lines past the first 100 are not counted.` : '', r.coveragePct !== null && r.coveragePct < 100 ? 'Lines with no unit cost use cogs_percent: lifecycle costs set cogs_percent 35' : '', 'Next: lifecycle metrics run contribution_margin'].filter(Boolean).join('\n'))
+  } finally {
+    await db.close()
+  }
+}))
+
 const sources = program.command('sources').description('What can be connected, and what is connected')
 sources
   .command('catalog')
@@ -473,9 +613,12 @@ sources
   .option('--query <text>', 'search by name, slug or category')
   .option('--category <name>', 'only one category, such as reviews or helpdesk')
   .option('--readiness <level>', 'native, tested, built or planned')
+  .option('--type <type>', `only the sources a workspace of this type usually connects: ${WORKSPACE_TYPES.join(', ')}`)
   .action(run(async (opts) => {
-    const warehouse = searchCatalog(opts).filter((s) => s.readiness !== 'native')
-    const native = opts.query || opts.category || (opts.readiness && opts.readiness !== 'native') ? [] : CATALOG
+    const typeSources = opts.type ? TYPES[assertType(opts.type)].sources : null
+    const warehouse = searchCatalog(opts).filter((s) => s.readiness !== 'native' && (!typeSources || typeSources.includes(s.slug)))
+    const nativeAll = readWorkspace().type === 'shopify' && !opts.type ? CATALOG : ALL_NATIVE
+    const native = opts.query || opts.category || (opts.readiness && opts.readiness !== 'native') ? [] : nativeAll.filter((s) => !typeSources || typeSources.includes(s.slug))
     const out = { native, warehouse: warehouse.map(({ config, ...s }) => ({ ...s, hasConnector: Boolean(config) })), legend: READINESS_LEGEND }
     emit(format(), out, () => {
       const nativeText = native.map((s) => [`${s.name} (${s.slug}), built in, about ${s.setupMinutes} minutes`, `  Syncs: ${s.syncs}`, `  Connect: ${s.connect}`, `  Tested: ${s.tested}`].join('\n'))
@@ -574,10 +717,11 @@ const registry = (opts: { registry?: string; refresh?: boolean }): Registry => {
 const withRegistry = (c: Command) => c.option('--registry <path-or-url>', 'kit registry: a local folder or a git URL').option('--refresh', 'fetch the latest kits now')
 
 const kits = program.command('kits').description('Runbooks your agent can follow, from the kit registry')
-withRegistry(kits.command('list').description('List kits in the registry')).action(run(async (opts) => {
+withRegistry(kits.command('list').description('List kits in the registry').option('--type <type>', `only kits for this workspace type: ${WORKSPACE_TYPES.join(', ')}`)).action(run(async (opts) => {
   const reg = registry(opts)
-  const k = listKits(reg)
-  emit(format(), { source: reg.source, kits: k }, () => k.map((x) => `${x.name} ${x.version}: ${x.summary}`).join('\n'))
+  const k = listKits(reg, opts.type ? assertType(opts.type) : undefined)
+  const store = readWorkspace().type === 'shopify' && !opts.type
+  emit(format(), { source: reg.source, kits: k }, () => k.map((x) => `${x.name} ${x.version}: ${x.summary}${store ? '' : ` (for ${x.types.join(', ')})`}`).join('\n') || `No kits for ${opts.type} yet. lifecycle kits list shows them all.`)
 }))
 withRegistry(kits.command('search').argument('<query>').description('Find kits by name, keyword or summary')).action(run(async (query: string, opts) => {
   const k = searchKits(registry(opts), query)
@@ -614,8 +758,8 @@ const targets = (t?: string): Target[] | undefined => {
   if (t === 'claude' || t === 'cursor') return [t]
   throw new CliError(`Unknown target ${t}.`, 'Use --target claude, cursor or all')
 }
-const skills = program.command('skills').description('Install kit skills into Claude Code and Cursor, and keep the store\'s own skills on Cosmic Cloud')
-withRegistry(skills.command('sync').description('Install or update /lifecycle and one /lifecycle:kits:<kit> skill per kit. When logged in to Cosmic Cloud, also the store\'s own skills'))
+const skills = program.command('skills').description('Install kit skills into Claude Code and Cursor, and keep the workspace\'s own skills on Cosmic Cloud')
+withRegistry(skills.command('sync').description('Install or update /lifecycle and one /lifecycle:kits:<kit> skill per kit. When logged in to Cosmic Cloud, also the workspace\'s own skills'))
   .option('--target <target>', 'claude, cursor or all. Default: claude, plus cursor when it is installed')
   .option('--dry-run', 'show what would change')
   .option('--force', 'overwrite files you edited')
@@ -638,21 +782,21 @@ withRegistry(skills.command('sync').description('Install or update /lifecycle an
     emit(format(), r, () => r.map((t) => [`${t.target}: ${t.dir}`, `  ${opts.dryRun ? 'would write' : 'wrote'} ${t.written.length}, unchanged ${t.unchanged.length}, removed ${t.removed.length}`, ...t.kept.map((k) => `  kept your edit: ${k}`)].join('\n')).join('\n') + (info.status === 'ok' ? `\nStore skills from Cosmic Cloud: ${info.skills.join(', ') || 'none'}${info.skipped.length ? `. Skipped as unsafe: ${info.skipped.join(', ')}` : ''}` : '') + (opts.dryRun ? '\nNothing was written.' : '\nRestart Claude Code to load new skills.'))
   }))
 skills.command('push').argument('<directory>', 'a folder with a SKILL.md at the top').option('--slug <name>', 'name to store it under. Default: the folder name')
-  .description('Save a skill folder to this store on Cosmic Cloud. At most 200 KB of text files. A file that looks like it holds a key is refused')
+  .description('Save a skill folder to this workspace on Cosmic Cloud. At most 200 KB of text files. A file that looks like it holds a key is refused')
   .action(run(async (dir: string, opts) => {
     const s = readSkillDir(dir, opts.slug)
     await new CloudClient().putSkill(s.slug, s.files)
     emit(format(), { slug: s.slug, pushed: true, files: s.files.map((f) => f.path), bytes: s.bytes }, () => `Pushed ${s.slug} to Cosmic Cloud: ${s.files.length} file${s.files.length === 1 ? '' : 's'}, ${Math.ceil(s.bytes / 1024)} KB.\nInstall it on a machine with: lifecycle skills sync`)
   }))
-skills.command('delete').argument('<slug>').description('Delete one of the store\'s own skills from Cosmic Cloud').action(run(async (slug: string) => {
+skills.command('delete').argument('<slug>').description('Delete one of the workspace\'s own skills from Cosmic Cloud').action(run(async (slug: string) => {
   assertSlug(slug)
   const client = new CloudClient()
   // Listing first tells "no such skill" apart from "Cloud does not have skills yet".
-  if (!(await client.skills()).some((x) => x.slug === slug)) throw new CliError(`This store has no skill named ${slug} on Cosmic Cloud.`, 'lifecycle skills status', 'unknown_skill')
+  if (!(await client.skills()).some((x) => x.slug === slug)) throw new CliError(`This workspace has no skill named ${slug} on Cosmic Cloud.`, 'lifecycle skills status', 'unknown_skill')
   await client.deleteSkill(slug)
   emit(format(), { slug, deleted: true }, () => `Deleted ${slug} from Cosmic Cloud.\nCopies installed on a machine are removed by its next lifecycle skills sync.`)
 }))
-withRegistry(skills.command('status').description('Show installed skills and kits not installed yet. When logged in to Cosmic Cloud, also the store\'s own skills there')).action(run(async (opts) => {
+withRegistry(skills.command('status').description('Show installed skills and kits not installed yet. When logged in to Cosmic Cloud, also the workspace\'s own skills there')).action(run(async (opts) => {
   // What the store keeps on Cosmic Cloud, beside what is installed here. Status never fails because Cloud did.
   let onCloud: { status: 'ok' | 'not_logged_in' | 'not_built' | 'failed'; skills: string[] } = { status: 'not_logged_in', skills: [] }
   if (loggedIn()) {
@@ -663,7 +807,7 @@ withRegistry(skills.command('status').description('Show installed skills and kit
     }
   }
   const r = skillsStatus(registry(opts)).map((t) => ({ ...t, account: onCloud }))
-  emit(format(), r, () => (onCloud.status === 'ok' ? `On Cosmic Cloud: ${onCloud.skills.join(', ') || 'no store skills'}\n` : '') + r.map((t) => `${t.target}: ${t.installed ? `installed (${t.installedVersion}), kits: ${t.kits.join(', ') || 'none'}${t.storeSkills.length ? `, store skills: ${t.storeSkills.join(', ')}` : ''}` : 'not installed'}${t.installed && t.newKits.length ? `\n  new: ${t.newKits.join(', ')}. Run lifecycle skills sync` : ''}`).join('\n'))
+  emit(format(), r, () => (onCloud.status === 'ok' ? `On Cosmic Cloud: ${onCloud.skills.join(', ') || 'no workspace skills'}\n` : '') + r.map((t) => `${t.target}: ${t.installed ? `installed (${t.installedVersion}), kits: ${t.kits.join(', ') || 'none'}${t.storeSkills.length ? `, store skills: ${t.storeSkills.join(', ')}` : ''}` : 'not installed'}${t.installed && t.newKits.length ? `\n  new: ${t.newKits.join(', ')}. Run lifecycle skills sync` : ''}`).join('\n'))
 }))
 skills.command('uninstall').description('Remove the skills this CLI installed. Files you edited are kept').option('--target <target>', 'claude, cursor or all', 'all').action(run(async (opts) => {
   const r = uninstallSkills(targets(opts.target))
@@ -697,7 +841,7 @@ program.command('deploy').description('Run the daily sync from your own GitHub a
     emit(format(), plan, () => [`This would create:`, ...plan.creates.map((c) => `  ${c}`), `Secrets to set: ${plan.secrets.join(', ')}`, `Cost: ${plan.expectedCost}`, `Nothing was created. Add --yes to go ahead.`].join('\n'))
     return
   }
-  const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token' } as const
+  const names = { LIFECYCLE_DATABASE_URL: 'database-url', LIFECYCLE_KLAVIYO_READ_KEY: 'klaviyo-read-key', LIFECYCLE_SHOPIFY_CLIENT_SECRET: 'shopify-client-secret', LIFECYCLE_GA4_CLIENT_SECRET: 'ga4-client-secret', LIFECYCLE_GA4_REFRESH_TOKEN: 'ga4-refresh-token', LIFECYCLE_STRIPE_READ_KEY: 'stripe-read-key', LIFECYCLE_META_ADS_TOKEN: 'meta-ads-token', LIFECYCLE_HUBSPOT_TOKEN: 'hubspot-token' } as const
   const secrets: Record<string, string> = {}
   const wh = new Map(warehouseSecrets(config).map((w) => [w.env, w]))
   for (const s of plan.secrets) {
@@ -932,7 +1076,7 @@ program.command('serve').description('Serve the dashboard and a read-only JSON A
 
 // Files: every report, dashboard and plan, kept by date.
 const files = program.command('files').description('Reports, dashboards and plans this CLI has written, plus the daily cloud dashboard')
-files.command('ls').argument('[path]', 'folder inside the store, such as cloud or a date', '').action(run(async (path: string) => {
+files.command('ls').argument('[path]', 'folder inside the workspace files, such as cloud or a date', '').action(run(async (path: string) => {
   const f = listFiles(path)
   emit(format(), { dir: filesDir(), files: f }, () => (f.length ? f.map((x) => `${x.modified.slice(0, 16).replace('T', ' ')}  ${String(x.bytes).padStart(8)}  ${x.path}`).join('\n') : `No files yet in ${filesDir()}`))
 }))
@@ -944,11 +1088,11 @@ files.command('get').argument('<path>').argument('[dir]', 'where to copy it', '.
   const dest = getFile(path, dir)
   emit(format(), { path, dest }, () => `Copied to ${dest}`)
 }))
-files.command('put').argument('<file>').argument('[name]').description('Keep a local file in the store, under today').action(run(async (file: string, name?: string) => {
+files.command('put').argument('<file>').argument('[name]').description('Keep a local file with the workspace files, under today').action(run(async (file: string, name?: string) => {
   const path = putFile(file, name)
   emit(format(), { path }, () => `Stored as ${path}`)
 }))
-files.command('path').description('Print where the store lives').action(run(async () => {
+files.command('path').description('Print where the workspace files live').action(run(async () => {
   emit(format(), { dir: filesDir() }, () => filesDir())
 }))
 files.command('pull').option('--repo <owner/name>').description('Download the dashboard from the latest successful daily sync').action(run(async (opts) => {
@@ -994,7 +1138,7 @@ warehouse.command('show').argument('<slug>').description('What a source needs, w
 warehouse.command('connect').argument('<slug>')
   .description('Check a key with one page of data, then save it. Keys come from environment variables, never the command line')
   .option('--secret <field=ENV_VAR>', 'credential field and the variable holding it (repeatable)', collect)
-  .option('--set <name=value>', 'a setting such as your store or subdomain (repeatable)', collect)
+  .option('--set <name=value>', 'a setting such as your shop domain or subdomain (repeatable)', collect)
   .option('--keep-personal-data', 'also load emails, names, phones and addresses. Off by default')
   .option('--skip-check', 'save without calling the API first')
   .action(write('warehouse connect', async (slug: string, opts) => {
@@ -1135,12 +1279,14 @@ program.command('status').description('One-screen summary: setup, sources, trust
     const trust = db ? await trustLine(db).catch(() => null) : null
     const update = await checkForUpdate()
     const checklist = await loadChecklist(db, config)
-    const out = { version: VERSION, setUp: Boolean(config), database: config?.database.kind ?? null, sources, trust, deployRepo: config?.deploy?.repo ?? null, update, checklist }
+    const shopifyExport = db ? await exportProgress(db) : null
+    const out = { version: VERSION, setUp: Boolean(config), database: config?.database.kind ?? null, sources, trust, deployRepo: config?.deploy?.repo ?? null, update, checklist, shopifyExport }
     emit(format(), out, () => [
       `lifecycle ${VERSION}${update.newer ? `  (update available: ${update.latest}. To get it, ${UPDATE_HINT})` : ''}`,
       config ? `Database: ${config.database.kind}` : 'Not set up. Run lifecycle init, or follow lifecycle docs quickstart',
       ...sources.map((s) => `${s.connected ? 'connected    ' : 'not connected'} ${s.name}${s.lastSync ? `, last sync ${s.lastSync.slice(0, 16).replace('T', ' ')}` : ''}`),
       trust ? `Trust: ${trust.line}` : '',
+      shopifyExport?.state === 'running' ? `Shopify order export: ${shopifyExport.ordersExported}${shopifyExport.ordersExpected ? ` of about ${shopifyExport.ordersExpected}` : ''} orders so far. The next sync picks it up.` : '',
       `Daily sync: ${config?.deploy?.repo ?? 'not deployed. lifecycle deploy --repo OWNER/NAME'}`,
       ...(checklist.done < checklist.total ? checklistLines(checklist) : []),
     ].filter(Boolean).join('\n'))
@@ -1149,10 +1295,29 @@ program.command('status').description('One-screen summary: setup, sources, trust
   }
 }))
 
-program.command('demo').description('See it work on invented sample data. No keys needed').option('--html <file>', 'also write the sample report').action(run(async (opts) => {
+program.command('demo').description('See it work on invented sample data. No keys needed').option('--html <file>', 'also write the sample report (store demo only)').option('--type <type>', `which demo: ${DEMO_TYPES.join(', ')}. Default: the one for this workspace's type`).action(run(async (opts) => {
+  const mark = { pass: 'PASS', warn: 'WARN', fail: 'FAIL', skipped: 'SKIP' }
+  const kind: DemoType = opts.type ? (DEMO_TYPES as readonly string[]).includes(opts.type) ? opts.type : demoFor(assertType(opts.type)) : demoFor(readWorkspace().type)
+  if (kind !== 'shopify') {
+    const d = await runTypeDemo(kind)
+    emit(format(), d, () => {
+      const first = d.broken.checks.find((c) => c.status === 'fail')
+      return [
+        'SAMPLE DATA. Every number below is invented.', '',
+        kind === 'saas' ? '1. A Stripe sync loses 6 charges without any error. Reconcile catches it:' : '1. A HubSpot sync misses 12 deals without any error. Reconcile catches it:',
+        `   ${first ? `${mark[first.status]} ${first.detail}` : 'No check failed.'}`, '',
+        '2. After a clean sync, the checks run against the source of truth:',
+        ...d.fixed.checks.filter((c) => c.status !== 'skipped').map((c) => `   ${mark[c.status]} ${c.name}${c.status === 'warn' ? `: ${c.detail}` : ''}`), '',
+        `3. ${kind === 'saas' ? 'SaaS' : 'B2B'} metrics, last 90 days. ${d.trust.line}`,
+        ...d.metrics.map((m) => `   ${m.title}: ${formatValue(m.unit, m.value)}`), '',
+        ...(d.bySource.length ? ['4. Pipeline created by original source:', ...d.bySource.map((r) => `   ${r.source}: ${r.deals} deals, ${formatValue('usd', r.pipeline)}`), ''] : []),
+        'Next: lifecycle docs workspaces',
+      ].join('\n')
+    })
+    return
+  }
   const d = await runDemo({ html: opts.html, write: writeHtml })
   emit(format(), d, () => {
-    const mark = { pass: 'PASS', warn: 'WARN', fail: 'FAIL', skipped: 'SKIP' }
     const lost = d.broken.checks.find((c) => c.name === 'orders_complete')
     return [
       'SAMPLE DATA. Every number below is invented.', '',

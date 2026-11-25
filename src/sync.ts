@@ -7,9 +7,23 @@ import { CompactOrders, isDone, pollExport, readExport, startOrdersExport, waitF
 import type { Ga4Day } from './sources/ga4.js'
 import { toDaily, type RawInsight } from './sources/meta.js'
 import { aggregateCharges, aggregateSubscriptions, type RawCharge, type RawSubscription } from './sources/stripe.js'
+import { aggregateContacts, aggregateDeals, uniqueCount, type RawContact, type RawDeal } from './sources/hubspot.js'
 import { Klaviyo, isNoReportData, reportsVerified, type FlowDailyRow } from './sources/klaviyo.js'
 
-export type SourceResult = { source: string; status: 'ok' | 'warning' | 'failed'; rows: number; detail?: string; code?: string }
+export type SourceResult = { source: string; status: 'ok' | 'warning' | 'failed'; rows: number; detail?: string; code?: string; progress?: ExportProgress }
+
+// How far a large store's Shopify order export has got, for an app's history loading line. Counts and times only.
+// state: running while Shopify builds the file, done once a file was read in full, failed when the last one ended badly.
+export type ExportProgress = { state: 'running' | 'done' | 'failed'; startedAt: string; checkedAt: string | null; ordersExported: number; ordersExpected: number | null; code: string | null }
+
+export async function exportProgress(db: Db): Promise<ExportProgress | null> {
+  const r = (await db.query(`SELECT status, started_at, checked_at, consumed_at, objects, expected, error_code FROM meta_shopify_bulk ORDER BY started_at DESC LIMIT 1`).catch(() => []))[0]
+  if (!r) return null
+  const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null)
+  const status = String(r.status)
+  const state = status === 'COMPLETED' && r.consumed_at && !r.error_code ? 'done' : r.consumed_at ? 'failed' : 'running'
+  return { state, startedAt: iso(r.started_at)!, checkedAt: iso(r.checked_at), ordersExported: Number(r.objects ?? 0), ordersExpected: r.expected === null || r.expected === undefined ? null : Number(r.expected), code: state === 'failed' ? (r.error_code ? String(r.error_code).toLowerCase() : status === 'MISSING' ? 'export_missing' : 'export_failed') : null }
+}
 const now = () => new Date().toISOString()
 
 async function recordRun(db: Db, source: string, fn: () => Promise<Omit<SourceResult, 'source'>>): Promise<SourceResult> {
@@ -93,6 +107,8 @@ export type BulkDeps = {
   reportedCount?: (createdBefore: string | null) => Promise<number | null>
   // How long this sync waits for Shopify to finish the export before leaving it for the next sync.
   waitMs: number
+  // Shopify's count of all orders before the export, kept so progress can say how many are left. Null when Shopify gave only a lower bound.
+  expected?: number | null
   sleep?: (ms: number) => Promise<void>
   today?: string
 }
@@ -114,11 +130,13 @@ export async function syncShopifyBulk(db: Db, deps: BulkDeps) {
     if (open && !op) await db.query(`UPDATE meta_shopify_bulk SET status = 'MISSING', consumed_at = $2 WHERE op_id = $1`, [open.op_id, at])
     if (!op) {
       op = await startOrdersExport(deps.gql)
-      await db.query(`INSERT INTO meta_shopify_bulk (op_id, status, started_at) VALUES ($1, $2, $3) ON CONFLICT (op_id) DO NOTHING`, [op.id, op.status, at])
+      await db.query(`INSERT INTO meta_shopify_bulk (op_id, status, started_at, expected) VALUES ($1, $2, $3, $4) ON CONFLICT (op_id) DO NOTHING`, [op.id, op.status, at, deps.expected ?? null])
+    } else if (deps.expected != null) {
+      await db.query(`UPDATE meta_shopify_bulk SET expected = coalesce(expected, $2) WHERE op_id = $1`, [op.id, deps.expected])
     }
     if (!isDone(op.status)) op = (await waitForExport(deps.gql, op.id, deps.waitMs, { sleep: deps.sleep })) ?? op
     await mark(op, false)
-    if (!isDone(op.status)) return { status: 'warning' as const, rows: 0, detail: RUNNING_DETAIL, code: 'export_running' }
+    if (!isDone(op.status)) return { status: 'warning' as const, rows: 0, detail: RUNNING_DETAIL, code: 'export_running', progress: (await exportProgress(db)) ?? undefined }
     if (op.status !== 'COMPLETED') {
       await mark(op, true)
       throw new CliError(`Shopify's order export ended as ${op.status.toLowerCase()}${op.errorCode ? ` (${op.errorCode})` : ''}.`, 'Run lifecycle sync again to start a new export.', 'export_failed')
@@ -130,7 +148,7 @@ export async function syncShopifyBulk(db: Db, deps: BulkDeps) {
         await readExport(op.url, buf, deps.download)
       } catch (e) {
         // An expired file cannot be read again, so the next sync starts a new export. Any other failure keeps it.
-        if (e instanceof CliError && e.code === 'export_expired') await mark(op, true)
+        if (e instanceof CliError && e.code === 'export_expired') await mark({ ...op, errorCode: 'FILE_EXPIRED' }, true)
         throw e
       }
     }
@@ -280,7 +298,11 @@ export async function syncStripe(db: Db, load: { charges: () => Promise<RawCharg
     const subs = await load.subscriptions()
     const { rows, unpriced } = await writeStripe(db, charges, subs)
     await setTotal(db, 'stripe', 'charges_pulled', charges.length)
+    // 0.14.0: what the daily rows must add up to, and how many subscriptions are open right now,
+    // so the trust gate can check Stripe's daily tables against the pull itself.
+    await setTotal(db, 'stripe', 'charges_counted', charges.filter((c) => c.status === 'succeeded' || c.status === 'failed').length)
     if (subs) await setTotal(db, 'stripe', 'subscriptions_pulled', subs.length)
+    if (subs) await setTotal(db, 'stripe', 'subscriptions_open', subs.filter((x) => x.status !== 'incomplete_expired' && !x.ended_at).length)
     const notes = [
       subs ? null : 'This key cannot read subscriptions, so MRR and churn were skipped.',
       unpriced ? `${unpriced} subscription items use tiered or metered prices and are left out of MRR.` : null,
@@ -313,5 +335,49 @@ export async function syncMeta(db: Db, load: (since: string, until: string) => P
     const { rows } = await writeMeta(db, raw, since, opts.currency ?? '', opts.account ?? '')
     await setTotal(db, 'meta', 'rows_pulled', raw.length)
     return rows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Meta returned no campaign activity from ${since} to ${until}.` }
+  })
+}
+
+// HubSpot, recomputed from the full pull in one transaction like Shopify and Stripe, so a re-run
+// never double counts. The open pipeline is a snapshot kept per day, like MRR.
+export async function writeHubspot(db: Db, deals: RawDeal[], contacts: RawContact[], currency: string, today = now().slice(0, 10)) {
+  const { daily, open } = aggregateDeals(deals, currency)
+  const people = aggregateContacts(contacts)
+  const at = now()
+  await db.transaction(async (tx: Tx) => {
+    await tx.query('DELETE FROM fact_crm_deals_daily')
+    for (const d of daily) {
+      await tx.query(`INSERT INTO fact_crm_deals_daily VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [d.date, d.currency, d.pipeline, d.source, d.created, d.amountCreated, d.won, d.lost, d.wonAmount, at])
+    }
+    await tx.query('DELETE FROM fact_crm_pipeline_open WHERE date = $1', [today])
+    for (const o of open) {
+      await tx.query(`INSERT INTO fact_crm_pipeline_open VALUES ($1,$2,$3,$4,$5,$6,$7)`, [today, o.currency, o.pipeline, o.stage, o.deals, o.amount, at])
+    }
+    await tx.query('DELETE FROM fact_crm_contacts_daily')
+    for (const c of people) {
+      await tx.query(`INSERT INTO fact_crm_contacts_daily VALUES ($1,$2,$3,$4,$5)`, [c.date, c.source, c.stage, c.contacts, at])
+    }
+  })
+  return daily.length + open.length + people.length
+}
+
+export async function syncHubspot(
+  db: Db,
+  load: { deals: () => Promise<RawDeal[]>; contacts: () => Promise<RawContact[]>; total?: (object: 'deals' | 'contacts') => Promise<number | null> },
+  opts: { currency?: string } = {},
+) {
+  return recordRun(db, 'hubspot', async () => {
+    const deals = await load.deals()
+    const contacts = await load.contacts()
+    const rows = await writeHubspot(db, deals, contacts, opts.currency ?? 'usd')
+    await setTotal(db, 'hubspot', 'deals_pulled', uniqueCount(deals))
+    await setTotal(db, 'hubspot', 'contacts_pulled', uniqueCount(contacts))
+    for (const object of ['deals', 'contacts'] as const) {
+      const reported = load.total ? await load.total(object) : null
+      if (reported === null) await db.query(`DELETE FROM meta_source_total WHERE source = 'hubspot' AND metric = $1`, [`${object}_reported`])
+      else await setTotal(db, 'hubspot', `${object}_reported`, reported)
+    }
+    if (!deals.length && !contacts.length) return { status: 'warning' as const, rows, detail: 'HubSpot returned no deals and no contacts.' }
+    return { status: 'ok' as const, rows }
   })
 }

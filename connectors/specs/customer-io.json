@@ -1,0 +1,64 @@
+{
+  "slug": "customer-io",
+  "name": "Customer.io",
+  "docs": "https://docs.customer.io/api/app/",
+  "credentials": [
+    {
+      "name": "app_api_key",
+      "label": "App API key",
+      "help": "In Customer.io open Account settings, API credentials, App API keys, and create a key. Customer.io App API keys are not scoped, so treat it as full access. This connector only sends GET requests to the campaign and newsletter lists, never to people."
+    }
+  ],
+  "params": [
+    {
+      "name": "region",
+      "label": "API host: api for US accounts, api-eu for EU accounts",
+      "example": "api"
+    }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://{param:region}.customer.io/v1/",
+      "auth": {
+        "type": "bearer",
+        "token": "{secret:app_api_key}"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "campaigns",
+        "endpoint": {
+          "path": "campaigns",
+          "data_selector": "campaigns",
+          "paginator": {
+            "type": "single_page"
+          }
+        }
+      },
+      {
+        "name": "newsletters",
+        "endpoint": {
+          "path": "newsletters",
+          "params": {
+            "limit": 100
+          },
+          "data_selector": "newsletters",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "next",
+            "cursor_param": "start"
+          }
+        }
+      }
+    ]
+  },
+  "strip_fields": [
+    "created_by",
+    "updated_by"
+  ],
+  "notes": "Campaign and newsletter settings: id, name, state, type, tags, dates. No people, segments or delivery logs are loaded. Customer.io's per-campaign metrics are a separate call per campaign and are not loaded yet. created_by and updated_by name a teammate and are removed."
+}

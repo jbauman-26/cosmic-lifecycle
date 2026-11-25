@@ -7,6 +7,8 @@ import { Klaviyo, reportsVerified } from '../sources/klaviyo.js';
 import { shopifyToken } from '../sources/shopify.js';
 import { Stripe } from '../sources/stripe.js';
 import { MetaAds } from '../sources/meta.js';
+import { HubSpot } from '../sources/hubspot.js';
+import { readWorkspace, REFERENCE_NAME } from '../workspace.js';
 export async function doctor() {
     const checks = [];
     if (!existsSync(configPath())) {
@@ -14,8 +16,22 @@ export async function doctor() {
     }
     const config = readConfig();
     checks.push({ name: 'setup', ok: true, detail: `Database: ${config.database.kind}` });
+    // A store needs Klaviyo and Shopify, as in 0.13. Any other workspace needs its source of truth,
+    // and Klaviyo and Shopify are checked only once connected.
+    const ws = readWorkspace();
+    const store = ws.type === 'shopify' && ws.reference === 'shopify';
+    if (!store) {
+        const has = ws.reference === 'none' ? false : ws.reference === 'shopify' ? Boolean(config.shopify) : Boolean(config[ws.reference]);
+        if (ws.reference === 'none')
+            checks.push({ name: 'reference', ok: true, detail: 'No source of truth set, so numbers are not checked against one.', next: 'lifecycle config set workspace.reference stripe (or hubspot, shopify, ga4)' });
+        else
+            checks.push({ name: 'reference', ok: has, detail: has ? `${REFERENCE_NAME[ws.reference]} is connected as the source of truth.` : `${REFERENCE_NAME[ws.reference]} is this workspace's source of truth and is not connected.`, ...(has ? {} : { next: `lifecycle connect ${ws.reference}` }) });
+    }
     const klaviyoKey = getSecret('klaviyo-read-key');
-    if (!klaviyoKey)
+    if (!klaviyoKey && !store) {
+        // Optional outside a store.
+    }
+    else if (!klaviyoKey)
         checks.push({ name: 'klaviyo', ok: false, detail: 'Not connected.', next: 'lifecycle connect klaviyo --key-env NAME' });
     else {
         try {
@@ -29,7 +45,10 @@ export async function doctor() {
             checks.push({ name: 'klaviyo-reports', ok: true, detail: 'Warning: flow report parsing is untested on real sends.' });
     }
     const secret = getSecret('shopify-client-secret');
-    if (!config.shopify || !secret)
+    if (!store && !config.shopify) {
+        // Optional outside a store.
+    }
+    else if (!config.shopify || !secret)
         checks.push({ name: 'shopify', ok: false, detail: 'Not connected.', next: 'lifecycle connect shopify --store NAME.myshopify.com --client-id ID --secret-env NAME' });
     else {
         try {
@@ -64,6 +83,18 @@ export async function doctor() {
         }
         catch {
             checks.push({ name: 'stripe', ok: false, detail: 'Key was refused.', next: 'Create a restricted key with Read on Charges and Subscriptions, then lifecycle connect stripe --key-env NAME' });
+        }
+    }
+    const hubspotToken = getSecret('hubspot-token');
+    if (config.hubspot && !hubspotToken)
+        checks.push({ name: 'hubspot', ok: false, detail: 'Connected, but the token is missing.', next: 'lifecycle connect hubspot --token-env NAME' });
+    else if (config.hubspot && hubspotToken) {
+        try {
+            await new HubSpot(hubspotToken).check();
+            checks.push({ name: 'hubspot', ok: true, detail: 'Token reads deals and contacts' });
+        }
+        catch (e) {
+            checks.push({ name: 'hubspot', ok: false, detail: e instanceof Error ? e.message : 'Token was refused.', next: 'lifecycle connect hubspot --token-env NAME' });
         }
     }
     let db;

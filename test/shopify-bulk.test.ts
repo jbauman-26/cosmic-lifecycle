@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { migrate, wrapPglite, type Db } from '../src/db.js'
-import { syncShopifyBulk, writeShopify } from '../src/sync.js'
+import { exportProgress, syncShopifyBulk, writeShopify } from '../src/sync.js'
 import { runChecks, tolerances } from '../src/reconcile.js'
 import { aggregateOrders, fetchOrders, throttleWait, type RawOrder } from '../src/sources/shopify.js'
 import { BULK_ORDERS_QUERY, CompactOrders, readExport, shopifyGql, type Gql } from '../src/sources/shopify-bulk.js'
@@ -135,6 +135,29 @@ describe('syncShopifyBulk', () => {
     const checks = await runChecks(db, tolerances())
     expect(checks.find((c) => c.name === 'orders_complete')?.status).toBe('pass')
     expect((await db.query('SELECT consumed_at IS NOT NULL AS done FROM meta_shopify_bulk'))[0]).toEqual({ done: true })
+  })
+
+  it('reports how far the export has got, with counts and times only', async () => {
+    expect(await exportProgress(db)).toBeNull()
+    const a = fakeGql([R.run_created, R.poll_running])
+    const first = await syncShopifyBulk(db, { gql: a.gql, waitMs: 0, sleep: noSleep, download, expected: 3_000_000 })
+    expect(first.progress).toMatchObject({ state: 'running', ordersExpected: 3_000_000, code: null })
+    expect(first.progress!.ordersExported).toBe(R.poll_running.data.bulkOperation.objectCount ? Number(R.poll_running.data.bulkOperation.objectCount) : 0)
+    expect(Object.keys(first.progress!).sort()).toEqual(['checkedAt', 'code', 'ordersExpected', 'ordersExported', 'startedAt', 'state'])
+    const b = fakeGql([R.poll_completed])
+    await syncShopifyBulk(db, { gql: b.gql, waitMs: 1000, sleep: noSleep, download, today: '2026-11-24' })
+    expect(await exportProgress(db)).toMatchObject({ state: 'done', code: null })
+  })
+
+  it('reports a failed export and an expired file as failed, not done', async () => {
+    const a = fakeGql([R.run_created, R.poll_failed])
+    await syncShopifyBulk(db, { gql: a.gql, waitMs: 1000, sleep: noSleep, download })
+    expect((await exportProgress(db))?.state).toBe('failed')
+    await db.query('DELETE FROM meta_shopify_bulk')
+    const gone = (async () => new Response('AccessDenied', { status: 403 })) as unknown as typeof fetch
+    const b = fakeGql([R.run_created, R.poll_completed])
+    await syncShopifyBulk(db, { gql: b.gql, waitMs: 1000, sleep: noSleep, download: gone })
+    expect(await exportProgress(db)).toMatchObject({ state: 'failed', code: 'file_expired' })
   })
 
   it('does not count a run that only waited as fresh', async () => {

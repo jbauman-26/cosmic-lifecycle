@@ -4,6 +4,8 @@ import { auditFlows, esc, htmlPage, revenuePerFlow } from './reports.js'
 import { trustLine } from './reconcile.js'
 import { loadChecklist } from './checklist.js'
 import { settingValue } from './config.js'
+import { readWorkspace } from './workspace.js'
+import { PACKS } from './metrics.js'
 
 // One local page with what an owner checks on a Monday: the trust line, every reconcile
 // check, the headline metrics, revenue per flow, the audit and recent syncs.
@@ -13,6 +15,9 @@ export const DASHBOARD_METRICS = [
   'flow_revenue_share', 'flow_revenue_per_recipient', 'flow_unsubscribe_rate', 'flow_spam_rate',
 ]
 
+// The first eight of a workspace's pack, or the 0.13 list for a store.
+export const dashboardMetrics = (type = readWorkspace().type) => (type === 'shopify' ? DASHBOARD_METRICS : PACKS[type].slice(0, 8))
+
 export async function buildDashboard(db: Tx, days = settingValue('metrics.default_days')) {
   const trust = await trustLine(db)
   const checklist = await loadChecklist(db)
@@ -21,7 +26,7 @@ export async function buildDashboard(db: Tx, days = settingValue('metrics.defaul
   const audit = await auditFlows(db)
   const runs = await db.query(`SELECT source, status, rows_written, started_at, detail FROM meta_sync_run ORDER BY started_at DESC LIMIT 8`)
   const metrics = []
-  for (const name of DASHBOARD_METRICS) metrics.push(await runMetric(db, name, days))
+  for (const name of dashboardMetrics()) metrics.push(await runMetric(db, name, days))
   return {
     days,
     trust,

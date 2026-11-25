@@ -1,0 +1,31 @@
+{
+  "slug": "bigcommerce",
+  "name": "BigCommerce",
+  "docs": "https://developer.bigcommerce.com/docs/rest-management/orders",
+  "credentials": [
+    { "name": "access_token", "label": "Store API account access token", "help": "In the BigCommerce control panel open Settings, Store-level API accounts, Create API account. Set Orders to read-only and every other scope to None, save, and copy the access token. The store hash is the part after /stores/ in the API path shown on the same page. This connector only sends GET requests." }
+  ],
+  "params": [
+    { "name": "store_hash", "label": "Store hash (from the API path, stores/HASH/)", "example": "abc123xyz" }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://api.bigcommerce.com/stores/{param:store_hash}/",
+      "auth": { "type": "api_key", "name": "X-Auth-Token", "api_key": "{secret:access_token}", "location": "header" },
+      "headers": { "Accept": "application/json" }
+    },
+    "resource_defaults": { "primary_key": "id", "write_disposition": "merge" },
+    "resources": [
+      {
+        "name": "orders",
+        "endpoint": {
+          "path": "v2/orders",
+          "params": { "limit": 250, "sort": "id:asc" },
+          "paginator": { "type": "page_number", "base_page": 1, "page_param": "page", "total_path": null, "stop_after_empty_page": true }
+        }
+      }
+    ]
+  },
+  "strip_fields": ["billing_address", "customer_message", "staff_notes", "ip_address", "ip_address_v6", "geoip_country", "geoip_country_iso2", "shipping_addresses", "products", "coupons", "consignments"],
+  "notes": "Orders keep id, status, currency, subtotal, tax, shipping, discount and total amounts, item counts, refunded amount, payment method, channel, dates and customer_id. Billing address, customer and staff messages and IP data are removed. The order's sub-resources (products, shipping addresses, coupons) are links on v2 and are not followed. BigCommerce v2 answers an empty page with 204 No Content; the runner treats that as the last page, which has not been seen on a real store. Full refresh merged on id."
+}

@@ -4,6 +4,9 @@ import { assertNoPersonal, assertReadOnlySql } from './query.js'
 import { trustLine } from './reconcile.js'
 import { ATTRIBUTION_NOTE } from './reports.js'
 import { settingValue } from './config.js'
+import { readWorkspace, WORKSPACE_TYPES, type WorkspaceType } from './workspace.js'
+import { costsConfigured } from './costs.js'
+import { computeMargin, MARGIN_SQL } from './margin.js'
 
 // 90 unless someone ran lifecycle config set metrics.default_days.
 export const defaultDays = () => settingValue('metrics.default_days')
@@ -14,7 +17,7 @@ export const defaultDays = () => settingValue('metrics.default_days')
 // $1 is the first day of the window, as YYYY-MM-DD.
 
 export type Unit = 'count' | 'usd' | 'percent' | 'usd_per_recipient' | 'ratio'
-export type Source = 'shopify' | 'klaviyo' | 'ga4' | 'stripe' | 'meta'
+export type Source = 'shopify' | 'klaviyo' | 'ga4' | 'stripe' | 'meta' | 'hubspot'
 
 export type Metric = {
   name: string
@@ -24,6 +27,8 @@ export type Metric = {
   needs: Source[]
   sql: string
   notes?: string[]
+  // Margin metrics are computed from costs.json; this says which part of the answer is the value.
+  margin?: 'cogs' | 'cm1' | 'cm2' | 'cm3' | 'cm3_percent' | 'coverage'
 }
 
 const ratio = (num: string, den: string, scale = 1) =>
@@ -86,17 +91,110 @@ export const METRICS: Metric[] = [
   { name: 'ga4_purchase_rate', title: 'GA4 purchase rate', description: 'GA4 purchases divided by GA4 sessions.', unit: 'percent', needs: ['ga4'], sql: ratio(PURCHASES, SESSIONS, 100) },
 ]
 
+// 0.14.0: metrics for workspaces that are not Shopify stores. Kept apart from METRICS, the
+// Shopify pack, so a store's metric list reads exactly as it did. Every one is run by
+// `metrics run` whatever the workspace type, with the same trust line.
+const STRIPE_NEW = `(SELECT coalesce(sum(new_customers), 0) FROM fact_stripe_daily WHERE date >= $1)`
+const STRIPE_ACTIVE = `(SELECT active_subscriptions FROM fact_stripe_mrr WHERE date = (SELECT max(date) FROM fact_stripe_mrr) AND $1::date IS NOT NULL ORDER BY active_subscriptions DESC, currency LIMIT 1)`
+// MRR on the last sync on or before the first day of the window, in the same currency as today's.
+const STRIPE_MRR_THEN = `(SELECT m.mrr FROM fact_stripe_mrr m WHERE m.date <= $1::date AND m.currency = (SELECT currency FROM fact_stripe_mrr WHERE date = (SELECT max(date) FROM fact_stripe_mrr) ORDER BY active_subscriptions DESC, currency LIMIT 1) ORDER BY m.date DESC LIMIT 1)`
+const META_CLICKS = `(SELECT coalesce(sum(clicks), 0) FROM fact_meta_ads_daily WHERE date >= $1)`
+const META_IMPRESSIONS = `(SELECT coalesce(sum(impressions), 0) FROM fact_meta_ads_daily WHERE date >= $1)`
+// Spend over the days Meta was synced for, against new customers on those same days.
+const META_SINCE = `GREATEST($1::date, (SELECT min(date) FROM fact_meta_ads_daily))`
+const STRIPE_NEW_SINCE_META = `(SELECT coalesce(sum(new_customers), 0) FROM fact_stripe_daily WHERE date >= ${META_SINCE})`
+const STRIPE_NET_SINCE_META = `(SELECT coalesce(sum(net), 0) FROM fact_stripe_daily WHERE date >= ${META_SINCE} AND currency = ${MAIN_CCY})`
+const CRM_MAIN_CCY = `(SELECT currency FROM fact_crm_deals_daily WHERE date >= $1 GROUP BY currency ORDER BY sum(deals_created + deals_won) DESC, currency LIMIT 1)`
+const CRM_LEADS = `(SELECT coalesce(sum(contacts), 0) FROM fact_crm_contacts_daily WHERE date >= $1)`
+const CRM_LEADS_SINCE_META = `(SELECT coalesce(sum(contacts), 0) FROM fact_crm_contacts_daily WHERE date >= ${META_SINCE})`
+const CRM_CUSTOMERS_FROM_LEADS = `(SELECT coalesce(sum(contacts), 0) FROM fact_crm_contacts_daily WHERE date >= $1 AND lower(lifecycle_stage) = 'customer')`
+const CRM_CREATED = `(SELECT coalesce(sum(deals_created), 0) FROM fact_crm_deals_daily WHERE date >= $1)`
+const CRM_CREATED_AMOUNT = `(SELECT coalesce(sum(amount_created), 0) FROM fact_crm_deals_daily WHERE date >= $1 AND currency = ${CRM_MAIN_CCY})`
+const CRM_WON = `(SELECT coalesce(sum(deals_won), 0) FROM fact_crm_deals_daily WHERE date >= $1)`
+const CRM_LOST = `(SELECT coalesce(sum(deals_lost), 0) FROM fact_crm_deals_daily WHERE date >= $1)`
+const CRM_WON_AMOUNT = `(SELECT coalesce(sum(won_amount), 0) FROM fact_crm_deals_daily WHERE date >= $1 AND currency = ${CRM_MAIN_CCY})`
+const CRM_WON_IN_CCY = `(SELECT coalesce(sum(deals_won), 0) FROM fact_crm_deals_daily WHERE date >= $1 AND currency = ${CRM_MAIN_CCY})`
+const CRM_OPEN = `(SELECT coalesce(sum(open_amount), 0) FROM fact_crm_pipeline_open WHERE date = (SELECT max(date) FROM fact_crm_pipeline_open) AND $1::date IS NOT NULL AND currency = (SELECT currency FROM fact_crm_pipeline_open WHERE date = (SELECT max(date) FROM fact_crm_pipeline_open) GROUP BY currency ORDER BY sum(open_deals) DESC, currency LIMIT 1))`
+const CRM_CCY_NOTE = 'Deal amounts are in the main deal currency for the window: the one with the most deals. Other currencies are left out, not converted.'
+const CRM_SOURCE_NOTE = "Source is HubSpot's original source for the record (hs_analytics_source). Records HubSpot could not place show as UNKNOWN or OFFLINE."
+const META_ONLY_SPEND = 'Only Meta spend is counted. Other paid channels are not in the spend yet, so the true cost is higher if you run them.'
+const CLAIM_FREE = 'Uses no ad platform claim: spend from Meta, results from the reference source.'
+
+export const PACK_METRICS: Metric[] = [
+  { name: 'stripe_new_customers', title: 'New paying customers', description: 'Stripe customers whose first successful charge fell in the window.', unit: 'count', needs: ['stripe'], sql: single(STRIPE_NEW), notes: ['A customer is new on the day of their first successful charge in the synced history. Charges with no Stripe customer are not counted.'] },
+  { name: 'stripe_charges', title: 'Successful Stripe charges', description: 'Successful Stripe charges in the window. For a store on a Stripe checkout this is the order count.', unit: 'count', needs: ['stripe'], sql: single(STRIPE_CHARGES) },
+  { name: 'stripe_average_charge', title: 'Average charge', description: 'Stripe net revenue divided by successful charges. For a store, the average order value.', unit: 'usd', needs: ['stripe'], sql: ratio(STRIPE_NET, `(SELECT coalesce(sum(charges), 0) FROM fact_stripe_daily WHERE date >= $1 AND currency = ${MAIN_CCY})`), notes: [CCY_NOTE] },
+  { name: 'stripe_arpa', title: 'Average revenue per account', description: 'Stripe MRR divided by active subscriptions at the last sync. Ignores the window.', unit: 'usd', needs: ['stripe'], sql: ratio(STRIPE_MRR, STRIPE_ACTIVE), notes: ['Counts subscriptions, not customers: a customer with two subscriptions counts twice.', CCY_NOTE] },
+  { name: 'stripe_net_new_mrr', title: 'Net new MRR', description: 'MRR at the last sync minus MRR at the last sync on or before the first day of the window.', unit: 'usd', needs: ['stripe'], sql: `SELECT (${STRIPE_MRR}) - (${STRIPE_MRR_THEN}) AS value, (${STRIPE_MRR}) AS numerator, (${STRIPE_MRR_THEN}) AS denominator`, notes: ['MRR history starts on the first sync. Until a sync exists from before the window, this has no value.', 'Numerator is MRR now, denominator MRR at the start. Neither is a ratio.'] },
+  { name: 'stripe_subscription_churn_rate', title: 'Subscription churn rate', description: 'Subscriptions that ended in the window, divided by subscriptions active at its start (active now, minus started, plus ended).', unit: 'percent', needs: ['stripe'], sql: ratio(STRIPE_ENDED, `(coalesce(${STRIPE_ACTIVE}, 0) - ${STRIPE_STARTED} + ${STRIPE_ENDED})`, 100), notes: ['Logo churn, not revenue churn. Active means active or past_due at the last sync, and the start count is worked back from it, so trials that never paid can move it slightly.'] },
+  { name: 'cost_per_new_customer', title: 'Cost per new paying customer', description: 'Meta ad spend divided by new paying customers in Stripe, over the days Meta was synced for.', unit: 'usd', needs: ['meta', 'stripe'], sql: ratio(META_SPEND, STRIPE_NEW_SINCE_META), notes: [CLAIM_FREE, META_ONLY_SPEND, 'All new customers count, paid or not, so this is a blended cost, not the cost of a customer Meta brought.', META_CCY_NOTE] },
+  { name: 'visit_to_paid_rate', title: 'Visit to paid rate', description: 'New paying customers in Stripe divided by GA4 sessions.', unit: 'percent', needs: ['ga4', 'stripe'], sql: ratio(STRIPE_NEW, SESSIONS, 100), notes: ['Two tools, two clocks: GA4 days follow the property time zone and Stripe days are UTC. Use a window of a week or more.'] },
+  { name: 'stripe_efficiency_ratio', title: 'Revenue to ad spend (Stripe)', description: 'Stripe net revenue divided by Meta ad spend, over the days Meta was synced for. All revenue over spend, with no attribution.', unit: 'ratio', needs: ['stripe', 'meta'], sql: ratio(STRIPE_NET_SINCE_META, META_SPEND), notes: [CLAIM_FREE, META_ONLY_SPEND, CCY_NOTE] },
+  { name: 'meta_cpc', title: 'Meta cost per click', description: 'Meta ad spend divided by clicks.', unit: 'usd', needs: ['meta'], sql: ratio(META_SPEND, META_CLICKS), notes: [META_CCY_NOTE] },
+  { name: 'meta_ctr', title: 'Meta click-through rate', description: 'Meta clicks divided by impressions.', unit: 'percent', needs: ['meta'], sql: ratio(META_CLICKS, META_IMPRESSIONS, 100) },
+  { name: 'meta_cpm', title: 'Meta cost per thousand impressions', description: 'Meta ad spend per 1,000 impressions.', unit: 'usd', needs: ['meta'], sql: ratio(META_SPEND, META_IMPRESSIONS, 1000), notes: [META_CCY_NOTE] },
+  { name: 'crm_new_leads', title: 'New leads', description: 'HubSpot contacts created in the window, every source and stage.', unit: 'count', needs: ['hubspot'], sql: single(CRM_LEADS), notes: [CRM_SOURCE_NOTE] },
+  { name: 'crm_lead_to_customer_rate', title: 'Lead to customer rate', description: 'Contacts created in the window whose lifecycle stage is customer today, divided by all contacts created in the window.', unit: 'percent', needs: ['hubspot'], sql: ratio(CRM_CUSTOMERS_FROM_LEADS, CRM_LEADS, 100), notes: ['Recent leads have had less time to close, so a short window reads low.'] },
+  { name: 'crm_deals_created', title: 'Deals created', description: 'HubSpot deals created in the window, every pipeline.', unit: 'count', needs: ['hubspot'], sql: single(CRM_CREATED) },
+  { name: 'crm_pipeline_created', title: 'Pipeline created', description: 'Amount on HubSpot deals created in the window.', unit: 'usd', needs: ['hubspot'], sql: single(CRM_CREATED_AMOUNT), notes: [CRM_CCY_NOTE, 'A deal with no amount counts as zero.'] },
+  { name: 'crm_open_pipeline', title: 'Open pipeline', description: 'Amount on HubSpot deals still open at the last sync. Ignores the window.', unit: 'usd', needs: ['hubspot'], sql: single(CRM_OPEN), notes: ['In the currency with the most open deals. A deal with no amount counts as zero.'] },
+  { name: 'crm_deals_won', title: 'Deals won', description: 'HubSpot deals closed won with a close date in the window.', unit: 'count', needs: ['hubspot'], sql: single(CRM_WON) },
+  { name: 'crm_won_revenue', title: 'Closed won revenue', description: 'Amount on HubSpot deals closed won in the window.', unit: 'usd', needs: ['hubspot'], sql: single(CRM_WON_AMOUNT), notes: [CRM_CCY_NOTE] },
+  { name: 'crm_win_rate', title: 'Win rate', description: 'Deals closed won divided by all deals closed, won or lost, in the window.', unit: 'percent', needs: ['hubspot'], sql: ratio(CRM_WON, `(${CRM_WON} + ${CRM_LOST})`, 100) },
+  { name: 'crm_average_deal_size', title: 'Average deal size', description: 'Closed won revenue divided by deals won in the window.', unit: 'usd', needs: ['hubspot'], sql: ratio(CRM_WON_AMOUNT, CRM_WON_IN_CCY), notes: [CRM_CCY_NOTE] },
+  { name: 'cost_per_lead', title: 'Cost per lead', description: 'Meta ad spend divided by new HubSpot contacts, over the days Meta was synced for.', unit: 'usd', needs: ['meta', 'hubspot'], sql: ratio(META_SPEND, CRM_LEADS_SINCE_META), notes: [CLAIM_FREE, META_ONLY_SPEND, 'Every new contact counts, from any source, so this is a blended cost per lead. Pair it with pipeline created: the cheapest lead is not always the cheapest customer.', META_CCY_NOTE] },
+]
+
+// 0.14.0: contribution margin for a store, from the owner's costs.json (the file the app writes) and
+// the daily facts. Computed in src/margin.ts; the SQL shown is the one fixed query it reads.
+type MarginPart = 'cogs' | 'cm1' | 'cm2' | 'cm3' | 'cm3_percent' | 'coverage'
+const marginMetric = (name: string, title: string, description: string, unit: Unit, margin: MarginPart): Metric => ({ name, title, description, unit, needs: ['shopify'], sql: MARGIN_SQL, margin })
+export const MARGIN_METRICS: Metric[] = [
+  marginMetric('cogs', 'Cost of goods', 'Cost of goods for orders in the window, from Shopify product costs, a percent, or your cost per product.', 'usd', 'cogs'),
+  marginMetric('gross_margin', 'Margin after cost of goods (CM1)', 'Revenue less what the products cost you.', 'usd', 'cm1'),
+  marginMetric('contribution_margin_before_ads', 'Margin after shipping and fees (CM2)', 'CM1 less shipping and payment fees.', 'usd', 'cm2'),
+  marginMetric('contribution_margin', 'Contribution margin (CM3)', 'CM2 less ad spend. Also returns each day, what went in and what is missing.', 'usd', 'cm3'),
+  marginMetric('contribution_margin_percent', 'Contribution margin percent', 'CM3 as a share of revenue.', 'percent', 'cm3_percent'),
+  marginMetric('cost_coverage', 'Line items with a Shopify cost', 'Share of line items in the window whose product has a cost in Shopify.', 'percent', 'coverage'),
+]
+
+// Which metrics each workspace type sees first. Shopify is exactly the 0.13 list, in order.
+export const PACKS: Record<WorkspaceType, string[]> = {
+  shopify: METRICS.map((m) => m.name),
+  ecommerce: ['stripe_net_revenue', 'stripe_charges', 'stripe_average_charge', 'stripe_new_customers', 'stripe_repeat_charge_share', 'stripe_failed_payment_rate', 'ga4_sessions', 'ga4_purchase_rate', 'meta_ad_spend', 'stripe_efficiency_ratio', 'cost_per_new_customer', 'meta_reported_roas', 'flow_attributed_revenue'],
+  saas: ['stripe_mrr', 'stripe_net_new_mrr', 'stripe_arpa', 'stripe_subscription_churn_rate', 'stripe_subscriptions_started', 'stripe_subscriptions_ended', 'stripe_new_customers', 'stripe_net_revenue', 'stripe_failed_payment_rate', 'cost_per_new_customer', 'visit_to_paid_rate', 'ga4_sessions', 'meta_ad_spend'],
+  b2b: ['crm_new_leads', 'crm_lead_to_customer_rate', 'crm_deals_created', 'crm_pipeline_created', 'crm_open_pipeline', 'crm_deals_won', 'crm_won_revenue', 'crm_win_rate', 'crm_average_deal_size', 'cost_per_lead', 'ga4_sessions', 'meta_ad_spend', 'meta_cpc'],
+  agency: ['meta_ad_spend', 'meta_cpc', 'meta_ctr', 'meta_cpm', 'meta_attributed_purchases', 'meta_reported_roas', 'ga4_sessions', 'ga4_purchase_rate', 'stripe_net_revenue', 'stripe_efficiency_ratio', 'crm_new_leads', 'cost_per_lead', 'shopify_net_revenue', 'marketing_efficiency_ratio'],
+  creator: ['stripe_net_revenue', 'stripe_new_customers', 'stripe_mrr', 'stripe_subscriptions_started', 'stripe_subscriptions_ended', 'stripe_subscription_churn_rate', 'ga4_sessions', 'visit_to_paid_rate', 'meta_ad_spend', 'cost_per_new_customer', 'flow_attributed_revenue'],
+}
+
+// Every built-in metric: the Shopify pack, then the rest. A name is unique across both.
+export const ALL_METRICS: Metric[] = [...METRICS, ...PACK_METRICS, ...MARGIN_METRICS]
+
+export type Pack = WorkspaceType | 'all'
+export function assertPack(p: string): Pack {
+  const v = p.trim().toLowerCase()
+  if (v !== 'all' && !(WORKSPACE_TYPES as readonly string[]).includes(v)) throw new CliError(`No metric pack named ${p}.`, `Packs: ${[...WORKSPACE_TYPES, 'all'].join(', ')}`, 'unknown_pack')
+  return v as Pack
+}
+
+export function packMetrics(pack: Pack): Metric[] {
+  if (pack === 'all') return ALL_METRICS
+  return PACKS[pack].map((n) => ALL_METRICS.find((m) => m.name === n)!)
+}
+
 // Which table proves each source has synced at all.
-const SOURCE_TABLE: Record<Source, string> = { shopify: 'fact_orders_daily', klaviyo: 'fact_flow_daily', ga4: 'fact_ga4_daily', stripe: 'fact_stripe_daily', meta: 'fact_meta_ads_daily' }
+const SOURCE_TABLE: Record<Source, string> = { shopify: 'fact_orders_daily', klaviyo: 'fact_flow_daily', ga4: 'fact_ga4_daily', stripe: 'fact_stripe_daily', meta: 'fact_meta_ads_daily', hubspot: 'fact_crm_deals_daily' }
 
 export function findMetric(name: string) {
-  const m = METRICS.find((x) => x.name === name)
+  const m = ALL_METRICS.find((x) => x.name === name)
   if (!m) throw new CliError(`No metric named ${name}.`, 'lifecycle metrics list', 'unknown_metric')
   return m
 }
 
-export function listMetrics() {
-  return METRICS.map(({ name, title, description, unit, needs }) => ({ name, title, description, unit, needs, saved: false as const }))
+// The workspace's pack by default, so a Shopify store lists exactly the 0.13 metrics.
+export function listMetrics(pack: Pack = readWorkspace().type) {
+  return packMetrics(pack).map(({ name, title, description, unit, needs }) => ({ name, title, description, unit, needs, saved: false as const }))
 }
 
 // Saved numbers: a SELECT the owner named, kept in the store's own database next to the data.
@@ -138,17 +236,21 @@ export async function findSavedMetric(db: Tx, name: string): Promise<SavedMetric
 }
 
 // Built-in metrics first, then the owner's saved ones, each marked.
-export async function listAllMetrics(db: Tx | null) {
+export async function listAllMetrics(db: Tx | null, pack?: Pack) {
   const saved = db ? await listSavedMetrics(db) : []
+  // A store that has entered costs also sees the margin metrics, after the 0.13 list.
+  const p = pack ?? readWorkspace().type
+  const margin = p === 'shopify' && (await costsConfigured(db)) ? MARGIN_METRICS.map(({ name, title, description, unit, needs }) => ({ name, title, description, unit, needs, saved: false as const })) : []
   return [
-    ...listMetrics(),
+    ...listMetrics(pack),
+    ...margin,
     ...saved.map((m) => ({ name: m.name, title: m.title, description: SAVED_NOTE, unit: m.unit, needs: [] as Source[], saved: true as const })),
   ]
 }
 
 // What `metrics show` prints: a built-in metric or a saved one, in one shape.
 export async function describeMetric(db: Tx | null, name: string) {
-  const builtIn = METRICS.find((x) => x.name === name)
+  const builtIn = ALL_METRICS.find((x) => x.name === name)
   if (builtIn) return { ...builtIn, saved: false as const }
   const m = db ? await findSavedMetric(db, name) : null
   if (!m) throw new CliError(`No metric named ${name}.`, 'lifecycle metrics list', 'unknown_metric')
@@ -186,7 +288,7 @@ async function runSavedSql(db: Db, sql: string, since: string) {
 
 export async function saveMetric(db: Db, name: string, opts: { sql?: string; title?: string; unit?: string }, now = Date.now()) {
   if (!SAVED_NAME.test(name)) throw new CliError('Use 3 to 48 lowercase letters, numbers and underscores, starting with a letter.', "lifecycle metrics save repeat_buyers --sql 'SELECT ...'", 'bad_name')
-  if (METRICS.some((m) => m.name === name)) throw new CliError(`${name} is a built-in metric, and a saved one cannot replace it.`, `Pick another name, such as my_${name}.`, 'reserved_name')
+  if (ALL_METRICS.some((m) => m.name === name)) throw new CliError(`${name} is a built-in metric, and a saved one cannot replace it.`, `Pick another name, such as my_${name}.`, 'reserved_name')
   if (!opts.sql?.trim()) throw new CliError('The SQL is missing.', `lifecycle metrics save ${name} --sql 'SELECT sum(orders) FROM fact_orders_daily WHERE date >= $1'`, 'bad_metric')
   const unit = (opts.unit ?? 'count') as Unit
   if (!UNITS.includes(unit)) throw new CliError(`Unknown unit ${opts.unit}.`, `Units: ${UNITS.join(', ')}`, 'bad_value')
@@ -205,7 +307,7 @@ export async function saveMetric(db: Db, name: string, opts: { sql?: string; tit
 }
 
 export async function deleteMetric(db: Tx, name: string) {
-  if (METRICS.some((m) => m.name === name)) throw new CliError(`${name} is a built-in metric and cannot be deleted.`, 'lifecycle metrics list', 'reserved_name')
+  if (ALL_METRICS.some((m) => m.name === name)) throw new CliError(`${name} is a built-in metric and cannot be deleted.`, 'lifecycle metrics list', 'reserved_name')
   const gone = await db.query(`DELETE FROM meta_saved_metric WHERE metric = $1 RETURNING metric`, [name])
   if (!gone.length) throw new CliError(`No saved metric named ${name}.`, 'lifecycle metrics list', 'unknown_metric')
   return { name, deleted: true as const }
@@ -243,7 +345,7 @@ async function runSavedMetric(db: Tx | Db, name: string, days: number, now: numb
 }
 
 export async function runMetric(db: Tx | Db, name: string, days = defaultDays(), now = Date.now()) {
-  if (!METRICS.some((x) => x.name === name)) return runSavedMetric(db, name, days, now)
+  if (!ALL_METRICS.some((x) => x.name === name)) return runSavedMetric(db, name, days, now)
   const m = findMetric(name)
   assertDays(name, days)
   const since = sinceDate(days, now)
@@ -254,6 +356,17 @@ export async function runMetric(db: Tx | Db, name: string, days = defaultDays(),
     if (!r.length) missing.push(s)
   }
   const base = { metric: m.name, title: m.title, unit: m.unit, days, since, sql: m.sql, notes: m.notes ?? [], saved: false as const }
+  if (m.margin && !missing.length) {
+    const r = await computeMargin(db, since, days)
+    if (r.status !== 'ok') return { ...base, ...r, metric: m.name, value: null, numerator: null, denominator: null, missing: [] as Source[], trust: r.trust }
+    const t = r.total
+    const value = m.margin === 'cm3_percent' ? (t.revenue > 0 ? Math.round((t.cm3 / t.revenue) * 1000000) / 10000 : null) : m.margin === 'coverage' ? r.coverage : t[m.margin]
+    const parts = m.margin === 'cm3_percent' ? { numerator: t.cm3, denominator: t.revenue } : { numerator: null, denominator: null }
+    // contribution_margin carries the whole answer the app reads; the others carry the total beside their value.
+    // For contribution_margin, `missing` is the app's list of costs counted as zero, not sources.
+    const extra = m.name === 'contribution_margin' ? { currency: r.currency, total: t, rows: r.rows, included: r.included, missing: r.missing as unknown as Source[], orders_without_cost: r.orders_without_cost } : { currency: r.currency, total: t, included: r.included, missing_costs: r.missing, missing: [] as Source[] }
+    return { ...base, notes: [...r.notes, ...r.missing.map((x) => `Counted as zero: ${x}.`)], value, ...parts, ...extra, trust: r.trust, status: value === null ? ('no_data' as const) : ('ok' as const), detail: value === null ? 'No value for this window.' : '' }
+  }
   if (missing.length) {
     return { ...base, value: null, numerator: null, denominator: null, missing, trust: await trustLine(db), status: 'no_data' as const, detail: `No ${missing.join(' or ')} data synced. Connect it, then lifecycle sync.` }
   }

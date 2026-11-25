@@ -1,7 +1,7 @@
 {
   "name": "cosmic-lifecycle",
-  "version": "0.13.2",
-  "description": "Lifecycle marketing data your agent can trust. Syncs Shopify, Klaviyo, GA4 and Stripe into your own database, proves the numbers agree, and finds what to fix.",
+  "version": "0.14.0",
+  "description": "Marketing numbers your agent can trust, for a Shopify store, a SaaS product, a B2B pipeline, an agency or a creator. Syncs Shopify, Stripe, HubSpot, Klaviyo, GA4 and Meta into your own database and checks every number against your source of truth.",
   "type": "module",
   "bin": {
     "lifecycle": "dist/cli.js",
@@ -54,7 +54,11 @@
     "marketing",
     "mcp",
     "claude-code",
-    "email-marketing"
+    "email-marketing",
+    "saas",
+    "b2b",
+    "hubspot",
+    "stripe"
   ],
   "author": "Cosmic AI"
 }

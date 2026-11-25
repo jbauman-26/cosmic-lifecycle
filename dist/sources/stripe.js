@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { fetchJson, HttpError } from '../http.js';
 import { CliError } from '../errors.js';
+import { apiBase } from './api-base.js';
 const API = 'https://api.stripe.com/v1';
 // Stripe amounts are in the smallest unit, and not every currency has cents.
 // https://docs.stripe.com/currencies#zero-decimal
@@ -22,7 +23,7 @@ export class Stripe {
     }
     async get(path, params, label) {
         const qs = new URLSearchParams(params).toString();
-        return this.fetcher(`${API}${path}?${qs}`, { headers: { authorization: `Bearer ${this.key}` } }, label);
+        return this.fetcher(`${apiBase('stripe', API)}${path}?${qs}`, { headers: { authorization: `Bearer ${this.key}` } }, label);
     }
     // Walks every page. Stripe lists newest first and pages with starting_after.
     async all(path, params, label) {

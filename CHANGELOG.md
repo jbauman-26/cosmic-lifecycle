@@ -11,6 +11,7 @@ Shopify sync for large stores. Measured on synthetic data shaped like a Shopify 
 - **Large stores sync Shopify through one bulk export.** At 25,000 orders or more (`shopify.bulk_min_orders`), `lifecycle sync` asks Shopify for a bulk operation instead of paging 250 orders at a time, which at 3 million orders is 12,000 requests in a row. The operation id is saved in `meta_shopify_bulk`, so a sync that stops early loses nothing: the next one polls the same export, or reads the same finished file again (Shopify keeps it a week). Totals are replaced only after the whole file is read and its line count matches Shopify's own count. While the export is still building, the sync returns `warning` with code `export_running`, the last totals stay, and that run does not count as fresh. A sync waits `shopify.export_wait_seconds` (120) for the export, or `--export-wait SECONDS`.
 - The file is read as a stream into a compact buffer: on 3 million synthetic orders, about 560 MB peak memory and 8 seconds to read, total and write, against about 1.8 GB for the paged path holding every order as an object. The daily and cohort totals were identical to the paged path's, row for row.
 - The completeness check compares the orders in the export with Shopify's count of orders created up to the moment the export started, so orders placed while Shopify builds the file do not fail it.
+- **Progress for an app.** A sync that leaves the export running returns `progress` (`state`, `startedAt`, `checkedAt`, `ordersExported`, `ordersExpected`, `code`), and `lifecycle status --format json` returns the same as `shopifyExport`. Counts and times only. `state` is `running`, `done` or `failed`; `code` is `export_failed`, `file_expired`, `export_missing` or Shopify's own error code in lower case.
 - A warning when the oldest order Shopify returns is within 60 days: without the `read_all_orders` scope Shopify returns only the last 60 days, and older customers then count as new.
 
 ### Fixed
@@ -22,6 +23,42 @@ Shopify sync for large stores. Measured on synthetic data shaped like a Shopify 
 - Typecheck and the full suite pass. The bulk path is tested against replies built from Shopify's documentation, not recorded from a live store, and end to end at 3 million synthetic orders against a stand-in endpoint.
 - Not run against a real Shopify store. The `created_at:<=` filter on `ordersCount` is unverified on a live store; if Shopify ignores it, `orders_complete` fails instead of passing silently.
 - Every sync after the first still exports the full history. A daily export of a 3 million order store is unmeasured on Shopify's side.
+
+## 0.14.0 (2026-11-24)
+
+The CLI for any marketer. A workspace now says what kind of business it is, and the trust gate checks its numbers against that business's own source of truth. Shopify stays a first-class path and stops being a requirement. An install from before 0.14.0 is a Shopify store and behaves exactly as it did. The spec is `docs/WORKSPACES.md`.
+
+### Added
+
+- **Workspace types.** `lifecycle init --type shopify|ecommerce|saas|b2b|agency|creator`, and a picker when a new workspace is set up in a terminal with no `--type`. Stored as `workspace.type` in `config.json`. No type means `shopify`. `lifecycle workspace show` and `lifecycle workspace list`, and an MCP tool `workspace`.
+- **A source of truth per type.** Shopify orders for a store, Stripe for ecommerce, SaaS and creator, HubSpot for B2B, set per client for an agency. Change it with `lifecycle config set workspace.reference stripe|hubspot|shopify|ga4|none` or `init --reference`. New checks: `reference`, `stripe_daily_complete`, `subscriptions_balance`, `ga4_vs_reference`, `ad_claims` (a warning above `reconcile.ad_claim_flag`, default 100%), `deals_complete`, `contacts_complete`, `deals_daily_vs_pulled`. A store runs the seven 0.13 checks and no others.
+- **Trust status `unreferenced`.** When a workspace has no source of truth, it has not synced, or the only one is GA4, every number says so in a plain sentence instead of passing or failing.
+- **Metric packs.** 22 new built-in metrics: MRR history, ARPA, churn, new paying customers, cost per new customer, visit to paid, Meta CPC, CTR and CPM, leads, lead to customer, deals, pipeline created, open pipeline, won revenue, win rate, average deal size, cost per lead. `metrics list` shows the workspace's pack; `metrics list --pack TYPE|all` shows any. MCP `list_metrics` takes `pack`. A store's list is the 0.13 list.
+- **HubSpot as a built-in source.** `lifecycle connect hubspot --token-env HUBSPOT_TOKEN` (a private app with `crm.objects.deals.read` and `crm.objects.contacts.read`). It asks HubSpot for stage, source, date and amount properties only and stores daily counts and amounts in `fact_crm_deals_daily`, `fact_crm_pipeline_open` and `fact_crm_contacts_daily`. No contact, company or deal record, and no id, is stored. Built from the CRM v3 docs and tested against a stand-in; not yet run on a real portal.
+- **Warehouse connectors**, built from vendor docs, not yet run on a real account: `hubspot-records` (ids, stages, sources, dates, amounts), `pipedrive`, `woocommerce`, `bigcommerce`, `customer-io`. Planned with reasons: `salesforce`, `linkedin-ads`, `posthog`, `mixpanel`. Each built one loads in dlt and passes the 0.13.2 personal-data rules on recorded rows. `sources catalog --type TYPE`.
+- **Contribution margin for a store,** in the shape the Cosmic AI app reads (`cosmic-ai-desktop/docs/margin-contract.md`). Costs come from `costs.json` in the workspace folder, the file the app writes; `lifecycle costs show|set|products|sync` writes the same file. Cost of goods from Shopify product costs (needs `read_inventory` and `read_products`), a percent, or a cost per product by SKU; shipping per order or as a percent; payment fees; Meta spend. `metrics run contribution_margin` returns `total`, `rows` by day, `included`, `missing`, `orders_without_cost` and the trust line, with `status: no_costs` when no costs are set. Also `cogs`, `gross_margin`, `contribution_margin_before_ads`, `contribution_margin_percent`, `cost_coverage`. A reconcile check `cost_coverage` once product costs are synced. The margin metrics join a store's list only once costs exist.
+- **One total across stores.** `metrics run NAME --all-stores|--stores A,B --currency USD [--rate-date DATE] [--rate EUR=0.91]`, and the same on the MCP `metric` tool (`stores`, `currency`, `rate_date`). The app's source and rule: European Central Bank reference rates via Frankfurter's v1 API, one rate per reporting currency and day, each store's amount divided by it, and the line "In USD at European Central Bank reference rates, via Frankfurter for Nov 20, 2026." A store with no currency or no rate is listed and left out. Settings `workspace.currency` and `rollup.currency`.
+- **Named workspaces.** `lifecycle --workspace NAME ...` or `LIFECYCLE_WORKSPACE`: an agency keeps one per client, each with its own config, database, files and keychain service.
+- **A demo per type.** `lifecycle demo --type saas|b2b`, and `demo` picks the workspace's type. Each plants a fault the trust gate catches.
+- **Kits by type.** Kit manifests take `types` and `extra_needs`. `kits list --type TYPE`.
+- `connect shopify --shop` (`--store` still works). `docs workspaces`.
+- `LIFECYCLE_STRIPE_API_URL`, `LIFECYCLE_HUBSPOT_API_URL` and `LIFECYCLE_FX_API_URL` point a source at a stand-in on this machine, for tests. Only a loopback address is accepted.
+
+### Changed
+
+- Help text, docs, the README and the `/lifecycle` skill speak to any business. Sentences that come from Cosmic Cloud, and the JSON keys, are unchanged.
+- `init --format json` also returns `type` and `reference`.
+- `reconcile` removes the stored result of a check the workspace no longer runs.
+
+### For the app and Cloud
+
+- New trust status `unreferenced`. New check names above. New tables `fact_crm_*`, `fact_cogs_daily`, `fact_cogs_sku_daily`. A new status `no_costs` on margin metrics. New secret `hubspot-token` (`LIFECYCLE_HUBSPOT_TOKEN`). New error codes: `bad_type`, `unknown_pack`, `hubspot_scope`, `not_summable`, `no_currency`, `no_rate`.
+
+### What is proven and what is not
+
+- Typecheck and the full suite pass, with every 0.13 test unchanged. A SaaS workspace runs `init --type saas`, `demo`, `connect stripe` and `sync` against a stand-in Stripe, `reconcile`, `metrics run` and the MCP server end to end with no Shopify. A B2B workspace does the same against a stand-in HubSpot.
+- Margin matches a hand calculation to the cent on a fixed store, in each cost mode. A USD and an EUR store roll up into one USD total that moves with the rate day.
+- Not run on any real HubSpot portal, Shopify cost data, WooCommerce, BigCommerce, Pipedrive or Customer.io account. The tests use a stand-in rate source. One call to the real one (`/v1/2026-11-20?base=USD&symbols=EUR`) returned the shape the code reads, and a weekend day returned the Friday's rates with Friday's date.
 
 ## 0.13.2 (2026-11-24)
 
