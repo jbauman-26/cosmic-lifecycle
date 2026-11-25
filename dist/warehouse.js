@@ -149,6 +149,9 @@ export function runRunner(job, env, opts = {}) {
                 reject(new CliError(`The connector runner stopped without a result. ${err.trim().split('\n').slice(-3).join(' ')}`.trim(), 'lifecycle warehouse sync --verbose', 'runner_failed'));
             }
         });
+        // A loader that dies before it reads the job breaks the pipe. Without a listener that error
+        // would end this whole process. The close handler above reports the crash instead.
+        child.stdin?.on('error', () => { });
         child.stdin?.end(JSON.stringify(job));
     });
 }
