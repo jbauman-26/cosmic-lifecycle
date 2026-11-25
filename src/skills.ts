@@ -147,6 +147,7 @@ const SECRET_SHAPES: [string, RegExp][] = [
   ['a Slack token', /\bxox[abprs]-[A-Za-z0-9-]{10,}/],
   ['a Google API key', /\bAIza[0-9A-Za-z_-]{30,}/],
   ['a signed token', /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/],
+  ['a bearer token', /\bBearer\s+(?!\$|<|\{|your|xxx|\.\.\.|example)[A-Za-z0-9_\-+/=.]{24,}/],
   ['a sign-in inside a web address', /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:[^\s:/@]{6,}@/i],
   ['a key or password', /(api[_-]?key|secret|token|password|passwd|authorization)["']?\s*[:=]\s*["']?(?!\$|<|\{|your|xxx|\.\.\.|example|changeme)[A-Za-z0-9_\-+/=.]{24,}/i],
 ]

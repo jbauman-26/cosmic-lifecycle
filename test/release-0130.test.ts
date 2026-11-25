@@ -458,6 +458,7 @@ describe('skills push, delete and sync with the store\'s own skills', () => {
       'an AWS access key': `AKIA${'ABCDEFGHIJKLMNOP'}`,
       'a GitHub token': `ghp_${'a'.repeat(36)}`,
       'a key or password': `api_key = "${'q7'.repeat(16)}"`,
+      'a bearer token': `curl -H "Authorization: Bearer ${'Zk4'.repeat(12)}"`,
       'a sign-in inside a web address': `postgres://app:${'hunter2hunter2'}@db.example.com/x`,
     }
     for (const [kind, text] of Object.entries(shapes)) {
@@ -465,7 +466,7 @@ describe('skills push, delete and sync with the store\'s own skills', () => {
     }
     expect(findSecrets([{ path: 'config/.env', content: 'A=1' }, { path: 'deploy.pem', content: 'x' }]).map((x) => x.path)).toEqual(['config/.env', 'deploy.pem'])
     // Ordinary writing about keys is not a key.
-    expect(findSecrets([{ path: 'SKILL.md', content: 'Set api_key=$KLAVIYO_KEY\nexport TOKEN=<your token>\nNever paste a password: use lifecycle secrets set.\ntoken: your_token_goes_here_please_replace\nmax_tokens: 4000\n' }])).toEqual([])
+    expect(findSecrets([{ path: 'SKILL.md', content: 'Set api_key=$KLAVIYO_KEY\ncurl -H "Authorization: Bearer $COSMIC_CLOUD_TOKEN"\nexport TOKEN=<your token>\nNever paste a password: use lifecycle secrets set.\ntoken: your_token_goes_here_please_replace\nmax_tokens: 4000\n' }])).toEqual([])
 
     const dir = skillDir({ 'SKILL.md': '# Skill\n', 'run.sh': `curl -H "x: 1"\nexport STRIPE=${stripe}\n` }, 'leaky')
     let e: CliError | undefined
@@ -497,7 +498,8 @@ describe('skills push, delete and sync with the store\'s own skills', () => {
     expect(sync[0].account).toEqual({ status: 'ok', skills: ['winback-brief'], skipped: [] })
     expect(sync[0].written).toEqual(expect.arrayContaining(['skills/store-winback-brief/SKILL.md', 'skills/store-winback-brief/refs/notes.md', 'skills/kit-flow-audit/SKILL.md']))
     expect(readFileSync(join(targetDir('claude'), 'skills', 'store-winback-brief', 'refs', 'notes.md'), 'utf8')).toBe('Notes\n')
-    expect((await cli(['skills', 'status'], env)).json()[0].storeSkills).toEqual(['winback-brief'])
+    expect((await cli(['skills', 'status'], env)).json()[0]).toMatchObject({ storeSkills: ['winback-brief'], account: { status: 'ok', skills: ['winback-brief'] } })
+    expect((await cli(['skills', 'status'], { LIFECYCLE_REGISTRY: env.LIFECYCLE_REGISTRY })).json()[0].account).toEqual({ status: 'not_logged_in', skills: [] })
 
     // Logged out, or Cloud down: kits still sync and the installed store skill stays.
     const offline = (await cli(['skills', 'sync', '--target', 'claude'], { LIFECYCLE_REGISTRY: env.LIFECYCLE_REGISTRY })).json()

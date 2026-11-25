@@ -626,9 +626,18 @@ skills.command('delete').argument('<slug>').description('Delete one of the store
   await client.deleteSkill(slug)
   emit(format(), { slug, deleted: true }, () => `Deleted ${slug} from Cosmic Cloud.\nCopies installed on a machine are removed by its next lifecycle skills sync.`)
 }))
-withRegistry(skills.command('status').description('Show installed skills and kits not installed yet')).action(run(async (opts) => {
-  const r = skillsStatus(registry(opts))
-  emit(format(), r, () => r.map((t) => `${t.target}: ${t.installed ? `installed (${t.installedVersion}), kits: ${t.kits.join(', ') || 'none'}${t.storeSkills.length ? `, store skills: ${t.storeSkills.join(', ')}` : ''}` : 'not installed'}${t.installed && t.newKits.length ? `\n  new: ${t.newKits.join(', ')}. Run lifecycle skills sync` : ''}`).join('\n'))
+withRegistry(skills.command('status').description('Show installed skills and kits not installed yet. When logged in to Cosmic Cloud, also the store\'s own skills there')).action(run(async (opts) => {
+  // What the store keeps on Cosmic Cloud, beside what is installed here. Status never fails because Cloud did.
+  let onCloud: { status: 'ok' | 'not_logged_in' | 'not_built' | 'failed'; skills: string[] } = { status: 'not_logged_in', skills: [] }
+  if (loggedIn()) {
+    try {
+      onCloud = { status: 'ok', skills: (await new CloudClient().skills()).map((x) => clean(String(x.slug), 63)) }
+    } catch (e) {
+      onCloud = { status: isNotBuilt(e) ? 'not_built' : 'failed', skills: [] }
+    }
+  }
+  const r = skillsStatus(registry(opts)).map((t) => ({ ...t, account: onCloud }))
+  emit(format(), r, () => (onCloud.status === 'ok' ? `On Cosmic Cloud: ${onCloud.skills.join(', ') || 'no store skills'}\n` : '') + r.map((t) => `${t.target}: ${t.installed ? `installed (${t.installedVersion}), kits: ${t.kits.join(', ') || 'none'}${t.storeSkills.length ? `, store skills: ${t.storeSkills.join(', ')}` : ''}` : 'not installed'}${t.installed && t.newKits.length ? `\n  new: ${t.newKits.join(', ')}. Run lifecycle skills sync` : ''}`).join('\n'))
 }))
 skills.command('uninstall').description('Remove the skills this CLI installed. Files you edited are kept').option('--target <target>', 'claude, cursor or all', 'all').action(run(async (opts) => {
   const r = uninstallSkills(targets(opts.target))
@@ -701,14 +710,14 @@ program.command('logs').description('Recent sync runs on this machine. --cloud s
       followed = await followRun(() => deployStatus(repo, 1).runs[0], (id) => deployRunById(repo, id), (r) => { if (text) console.error(`${new Date().toISOString().slice(11, 19)}  ${r.conclusion ?? r.status}`) })
       if (followed.conclusion !== 'success') process.exitCode = 1
     }
-    if (opts.cloud && !opts.follow && !opts.actions && loggedIn()) {
+    if (opts.cloud && !opts.follow && !opts.actions && !opts.repo && loggedIn()) {
       const limit = Number(opts.limit)
       if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new CliError('Use a limit from 1 to 200.', 'lifecycle logs --cloud --limit 20', 'bad_value')
       const runs = (await new CloudClient().runs(limit)).map((r) => ({ source: String(r.source_id ?? r.source ?? ''), status: String(r.status ?? ''), rows: Number(r.rows ?? 0), startedAt: r.started_at ?? null, finishedAt: r.finished_at ?? null, detail: null, code: r.code ?? null }))
       emit(format(), runs, () => (runs.length ? runs.map((r) => `${clock(r.startedAt)}  ${r.source.padEnd(8)} ${r.status.padEnd(8)} ${r.rows} rows${r.code ? ` (${r.code})` : ''}`).join('\n') : 'Nothing has synced on Cosmic Cloud yet. Start one: lifecycle sync --cloud'))
       return
     }
-    if (opts.cloud && !opts.actions && !opts.follow && format() === 'text') console.error('Not logged in to Cosmic Cloud, so this is the GitHub Actions log. Its own flag is now --actions.')
+    if (opts.cloud && !opts.actions && !opts.follow && !opts.repo && format() === 'text') console.error('Not logged in to Cosmic Cloud, so this is the GitHub Actions log. Its own flag is now --actions.')
     if (opts.cloud || opts.actions || opts.follow) {
       const r = deployLogs(opts.repo ?? readConfig().deploy?.repo, 60, followed)
       emit(format(), r, () => `${r.run.url}\n${r.log}`)
