@@ -134,6 +134,7 @@ Rules:
 - Purchases and purchase value in fact_meta_ads_daily are what Meta attributes to its own ads. They are a claim, not orders. Never add them to Shopify revenue or to email revenue. For a number with no attribution in it, use the marketing_efficiency_ratio metric.
 - Nothing in this tool sends a message, and nothing changes an ad account. Meta Ads is read only.
 - If a command fails with code \`busy\`, another lifecycle command is writing to the store. Wait and run it again. Do not delete files to get past it.
+- \`--cloud\` on a read command asks Cosmic Cloud instead of this machine. Use it only when the user is logged in (\`lifecycle cloud status --format json\`). Code \`not_built\` means Cloud does not have that route yet: run the command without \`--cloud\`, and do not retry. See \`lifecycle docs cloud\`.
 `,
     kits: `# Kits
 
@@ -167,7 +168,12 @@ Flow:
 Skills for Claude Code and Cursor:
   lifecycle skills sync installs /lifecycle and one /lifecycle:kits:NAME skill
   per kit. It never overwrites a file you edited. lifecycle skills uninstall
-  removes what it installed.
+  removes what it installed. When logged in to Cosmic Cloud it also installs
+  the store's own skills, pushed with lifecycle skills push DIRECTORY.
+  See lifecycle docs cloud.
+
+lifecycle kits show NAME also lists every file in the kit, so you can see what
+kits add will copy before it does.
 
 Writing a kit:
   Copy a kit folder in the registry, edit it, then run
@@ -181,15 +187,15 @@ lifecycle connect shopify --store STORE --client-id ID --secret-env NAME
 lifecycle connect ga4 --property ID --client-id ID --secret-env NAME --refresh-token-env NAME
 lifecycle connect stripe --key-env NAME
 lifecycle connect meta --account ID --token-env NAME
-lifecycle sync [--since DATE] [--only SOURCE[,SOURCE]]
+lifecycle sync [--since DATE] [--only SOURCE[,SOURCE]] [--cloud]
 lifecycle disconnect SOURCE [--delete-data]
-lifecycle schema [TABLE]
-lifecycle query "SELECT ..."
-lifecycle metrics list|show NAME|run NAME... [--days N]|candidates
+lifecycle schema [TABLE] [--cloud]
+lifecycle query "SELECT ..." [--cloud]
+lifecycle metrics list [--cloud]|show NAME|run NAME... [--days N] [--cloud]|candidates
 lifecycle metrics save NAME --sql 'SELECT ...' [--title TEXT] [--unit count|usd|percent|usd_per_recipient|ratio]
 lifecycle metrics delete NAME
-lifecycle sources list|catalog|import NAME --csv FILE [--date-column NAME]
-lifecycle tools catalog [--query TEXT]|providers|run TOOL [--input JSON] [--wait] [--timeout SECONDS] [--out FILE]|get RUN [--out FILE]|runs
+lifecycle sources list [--cloud]|catalog|import NAME --csv FILE [--date-column NAME]
+lifecycle tools catalog [--query TEXT]|providers|run TOOL [--input JSON] [--wait] [--timeout SECONDS] [--out FILE]|get RUN [--out FILE]|abort RUN|runs
 lifecycle exec -- COMMAND [ARGS]
 lifecycle serve [--port N]
 lifecycle provision neon --key-env NEON_API_KEY [--name N] [--region R] [--yes]
@@ -202,14 +208,19 @@ lifecycle segments apply PLAN_FILE --confirm
 lifecycle kits list|search QUERY|show NAME|prompt NAME|add NAME [--into DIR]
 lifecycle kits validate [DIR] [--write-index]
 lifecycle skills sync|status|uninstall [--target claude|cursor|all]
+lifecycle skills push DIRECTORY [--slug NAME]
+lifecycle skills delete SLUG
+lifecycle login [--url URL] --token-env VAR
+lifecycle logout
+lifecycle cloud status
 lifecycle feedback MESSAGE [--open]
 lifecycle deploy [--repo OWNER/NAME] [--yes] [--write DIR]
 lifecycle jobs list|run
-lifecycle logs [--cloud] [--follow]
+lifecycle logs [--cloud] [--actions] [--follow] [--limit N]
 lifecycle dashboard [--html FILE] [--days N]
 lifecycle status
 lifecycle config list|get|set|unset KEY [VALUE]
-  keys: registry.uri, deploy.repo, update.check,
+  keys: registry.uri, deploy.repo, update.check, cloud.url,
         reconcile.tolerance.klaviyo_orders (3), reconcile.tolerance.ga4_purchases (15),
         reconcile.attributed_share_flag (60), reconcile.freshness_days (2),
         query.row_cap (1000), metrics.default_days (90)
@@ -217,9 +228,76 @@ lifecycle secrets list|set NAME --from-env VAR|delete NAME
 lifecycle mcp
 lifecycle doctor
 lifecycle warehouse show|connect|sync|schema|query|list|disconnect|add-api
-lifecycle docs quickstart|setup|agents|kits|commands|warehouse|troubleshooting
+lifecycle docs quickstart|setup|agents|kits|commands|tools|cloud|warehouse|troubleshooting
 
 Add --format json to any command.`,
+    cloud: `# Cosmic Cloud
+
+Cosmic Cloud is the hosted copy of a store: its connections, its warehouse and
+its schedules. This machine keeps working without it. Logging in adds one thing:
+--cloud on a read command asks Cloud instead of the database on this machine.
+
+Log in:
+  The store owner creates a token in Cosmic Cloud under Settings, Mac app access.
+  It is shown once. Put it in an environment variable, never in a chat:
+    export COSMIC_CLOUD_TOKEN=...
+    lifecycle login --token-env COSMIC_CLOUD_TOKEN
+  login checks the token with Cloud (GET /api/v1/store), prints the store's name,
+  then saves the address in config.json (cloud.url) and the token in the keychain.
+  The token is never printed, logged or written to a file.
+  lifecycle cloud status shows the store, the address, where the token comes
+  from, and each connection on Cloud. lifecycle logout forgets the token and
+  the address on this machine. To stop a token working everywhere, revoke it in Cloud.
+
+Without a keychain, such as on Linux or in CI:
+    LIFECYCLE_CLOUD_URL     the Cloud address. It wins over the saved one.
+    LIFECYCLE_CLOUD_TOKEN   the store token. It wins over the keychain.
+  login still checks the token and saves the address, then says to keep the
+  token in LIFECYCLE_CLOUD_TOKEN.
+  The token is only ever sent over https, or to this machine for tests.
+
+Ask Cloud instead of this machine:
+  lifecycle schema --cloud                  GET /schema
+  lifecycle query "SELECT ..." --cloud      POST /query, one read-only SELECT
+  lifecycle metrics list --cloud            GET /metrics
+  lifecycle metrics run NAME --cloud        GET /metrics/NAME
+  lifecycle sources list --cloud            GET /store
+  lifecycle logs --cloud                    GET /runs
+  lifecycle sync --cloud [--only SOURCE]    POST /sync. Starts it and returns at once
+  The trust line comes with Cloud's numbers too. Read it before quoting one.
+  lifecycle exec does not add the Cloud token to the command's environment.
+
+logs --cloud changed in 0.13.0:
+  It used to show the last GitHub Actions log. That is now lifecycle logs --actions.
+  A machine that is not logged in to Cosmic Cloud still gets the Actions log from
+  --cloud, so an existing script keeps working.
+
+The store's own skills:
+  lifecycle skills push DIRECTORY saves a skill folder (a SKILL.md at the top,
+  text files only, at most 200 KB) to the store on Cloud. The folder name is
+  the skill's name, or pass --slug. Nothing is sent if a file looks like it
+  holds a key: the error names the file and line. Links are not followed.
+  lifecycle skills delete SLUG removes it from Cloud.
+  lifecycle skills sync installs the store's skills beside the kit skills, under
+  skills/store-SLUG, on every machine that is logged in. A skill deleted from
+  Cloud is removed on the next sync, unless you edited the installed copy.
+
+Tool runs:
+  When logged in, each lifecycle tools run also sends its record to Cloud:
+  the tool, the request (provider, model and input, with any email address
+  taken out), the status, the times and the cost. The output and the error
+  text stay on this machine. If Cloud cannot be reached the run still succeeds,
+  and the JSON says "cloud": { "posted": false }.
+
+"Cosmic Cloud does not have this yet" (code not_built):
+  Cloud is being built route by route. A route it does not have yet answers
+  404, and the CLI says so plainly. Run the command without --cloud to use
+  the data on this machine. Do not retry in a loop.
+
+Rules:
+- Cloud holds totals only, like the local database. No customer names, emails or addresses.
+- Never put the token in a prompt, a URL, a file or a commit.
+`,
     tools: `# Tools
 
 Two kinds of tool run from \`lifecycle tools run\`.
@@ -265,6 +343,8 @@ lifecycle tools run scrapecreators:v1/reddit/search --input '{"query":"welcome e
 - Apify output is the run's dataset, up to 1,000 items. The rest stay in the dataset on Apify.
 - Kie chat models answer directly and are not supported. Use image, video and audio models.
 - A finished run shows what it cost when the provider reports it: Kie and ScrapeCreators in credits, Apify in US dollars. fal does not report a cost.
+- Every run keeps the request it sent: provider, model and input. \`lifecycle tools get RUN\` shows it under \`request\`, so a result can be tied back to what was asked. A key is never part of it. An input field named like a key, such as \`api_key\`, is saved as \`[removed]\`.
+- \`lifecycle tools abort RUN\` asks the provider to stop a run that is still going. Apify and fal can stop one. Kie cannot (code \`cannot_abort\`), and ScrapeCreators has already answered. Work done before the stop may still be billed. A run that had already finished is saved as it ended, not as aborted.
 
 ## Rules for agents
 
@@ -361,6 +441,12 @@ No keychain, such as on Linux, in CI, or when an app passes keys per call:
   reconcile, disconnect, metrics save and the warehouse writes take a lock file,
   write.lock in the home folder. A second one waits 10 seconds
   (LIFECYCLE_LOCK_WAIT_MS), then fails with code busy. Reads are not blocked.
+  A read that would first bring an older database up to date (report, audit,
+  logs, metrics candidates, segments propose) skips that step while a writer
+  holds the store, and never writes beside it.
+  Cosmic Cloud answers busy the same way when a change to the store is running
+  there. The CLI passes on how many seconds Cloud said to wait.
+  sync --cloud takes no lock here: it does not touch this machine's database.
   A lock left by a command that crashed is cleared on the next run. A Postgres
   store does its own locking and takes no lock file.
 
@@ -401,11 +487,26 @@ Error codes (the "code" field with --format json, and in lifecycle logs):
   scope_denied     Shopify refused a field or scope. Add the scope it names to the app, then connect again.
   not_connected    sync --only or disconnect named a source that is not connected.
   unknown_source   Not one of shopify, klaviyo, ga4, stripe, meta.
-  busy             Another lifecycle command is writing to this store. Wait, then run it again.
+  busy             Another lifecycle command is writing to this store, or Cosmic Cloud is changing it. Wait, then run it again.
   missing_uv       Warehouse sources need uv. Update the app, install uv, or set LIFECYCLE_UV_PATH.
+  loader_failed    A warehouse source's loader stopped before it finished. Run lifecycle warehouse sync SLUG --verbose to see why.
   reserved_name    metrics save or delete named a built-in metric. Pick another name.
   bad_metric       A saved metric must be one SELECT that returns one row with one number.
   bad_schema       LIFECYCLE_DB_SCHEMA is not a plain schema name.
+  not_logged_in    A Cosmic Cloud command ran with no store token. lifecycle login --token-env VAR.
+  unauthorized     Cosmic Cloud refused the store token. Create a new one in Cloud, then log in again.
+  not_built        Cosmic Cloud does not have that route yet, or a source has no connector yet. Run it without --cloud.
+  cloud_unreachable  Cosmic Cloud did not answer. Check the network and lifecycle cloud status.
+  cloud_error      Cosmic Cloud answered with something this CLI does not understand. Try again in a moment.
+  bad_url          The Cloud address is not a plain https address, or it answered with a redirect.
+  bad_token        The store token has a space, a line break or another character a token never has. Copy it again.
+  unknown_table    schema --cloud named a table Cloud does not hold.
+  too_large        skills push: the folder is over 200 KB.
+  secret_found     skills push: a file looks like it holds a key. Nothing was sent.
+  bad_skill        skills push or delete: no SKILL.md, a bad name, a file that is not text, or a link.
+  unknown_skill    skills delete named a skill this store does not have on Cloud.
+  cannot_abort     tools abort: this provider cannot stop a job, or the run has no cancel link.
+  not_running      tools abort named a run that had already ended.
 
 Updates:
   The repo is private, so there is no public download link. The Cosmic AI app and

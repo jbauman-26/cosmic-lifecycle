@@ -1,0 +1,212 @@
+import { CliError } from './errors.js'
+import { getSetting } from './config.js'
+import { envName, getSecret } from './secrets.js'
+
+// Cosmic Cloud: the hosted copy of a store's warehouse. `lifecycle login` saves the Cloud
+// address in config.json and the store token in the keychain. From then on `--cloud` on a
+// read command asks Cloud instead of this machine's database.
+//
+// Three rules hold for every call here:
+// 1. The token goes in the Authorization header and nowhere else. It is never printed,
+//    logged or put in a URL, and any error text that repeats it is scrubbed.
+// 2. The token is only sent over https, or to this machine (localhost) for tests.
+// 3. A route Cloud does not have yet answers 404. That becomes code `not_built` with a
+//    plain sentence, so an agent knows to wait for Cloud rather than retry.
+
+export const DEFAULT_CLOUD_URL = 'https://cosmic-cloud.vercel.app'
+export const CLOUD_URL_ENV = 'LIFECYCLE_CLOUD_URL'
+export const CLOUD_TOKEN_ENV = envName('cloud-token')
+const TIMEOUT_MS = 30_000
+const LOGIN_NEXT = 'lifecycle login --token-env YOUR_VAR'
+
+const isLoopback = (host: string) => host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
+
+// Accepts the site address with or without /api/v1 on the end, and returns it without.
+export function normalizeCloudUrl(raw: string): string {
+  let u: URL
+  try {
+    u = new URL(raw.trim())
+  } catch {
+    throw new CliError('That is not a web address.', `lifecycle login --url ${DEFAULT_CLOUD_URL} --token-env YOUR_VAR`, 'bad_url')
+  }
+  if (u.username || u.password || u.search || u.hash) throw new CliError('The Cloud address must be a plain address, with no sign-in, query or fragment in it.', `lifecycle login --url ${DEFAULT_CLOUD_URL} --token-env YOUR_VAR`, 'bad_url')
+  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && isLoopback(u.hostname))) {
+    throw new CliError('The Cloud address must start with https, so the store token is never sent in the clear.', `lifecycle login --url ${DEFAULT_CLOUD_URL} --token-env YOUR_VAR`, 'bad_url')
+  }
+  const path = u.pathname.replace(/\/+$/, '').replace(/\/api\/v1$/, '')
+  return `${u.origin}${path}`
+}
+
+export type CloudUrlSource = 'env' | 'config' | 'default'
+
+// Priority: LIFECYCLE_CLOUD_URL, then the address login saved, then the public address.
+export function cloudUrl(): { url: string; source: CloudUrlSource } {
+  const fromEnv = process.env[CLOUD_URL_ENV]
+  if (fromEnv) return { url: normalizeCloudUrl(fromEnv), source: 'env' }
+  let saved: unknown
+  try {
+    saved = getSetting('cloud.url')
+  } catch {
+    saved = undefined
+  }
+  if (typeof saved === 'string' && saved) return { url: normalizeCloudUrl(saved), source: 'config' }
+  return { url: DEFAULT_CLOUD_URL, source: 'default' }
+}
+
+export const cloudToken = () => getSecret('cloud-token')
+export const loggedIn = () => Boolean(cloudToken())
+export const cloudTokenSource = (): 'env' | 'keychain' | 'missing' => (process.env[CLOUD_TOKEN_ENV] ? 'env' : cloudToken() ? 'keychain' : 'missing')
+
+// Text that came from the server is shown to a person or an agent: one line, no control characters, not too long.
+export const clean = (text: string, max = 300) => text.replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').trim().slice(0, max)
+
+// Shapes from the Cloud API doc. Fields Cloud may add later are kept as they come.
+export type CloudStore = { id: string; name: string; [k: string]: unknown }
+export type CloudRun = { started_at?: string; finished_at?: string | null; status?: string; rows?: number; code?: string | null; source_id?: string; source?: string; [k: string]: unknown }
+export type CloudConnection = { id: string; source_id: string; source_name?: string; status?: string; status_code?: string; last_success_at?: string | null; freshness?: string; next_sync_at?: string | null; recent_runs?: CloudRun[]; [k: string]: unknown }
+export type CloudStoreReply = { contract_version?: string; store: CloudStore; connections: CloudConnection[] }
+export type CloudColumn = { name: string; type: string }
+export type CloudTable = { name: string; columns: CloudColumn[]; rows?: number | null }
+export type CloudSchema = { schemas: { name: string; tables: CloudTable[] }[] }
+export type CloudQueryResult = { columns: string[]; rows: Record<string, unknown>[]; rowCount: number; truncated: boolean }
+export type CloudMetric = { name: string; title?: string; description?: string; unit?: string; needs?: string[]; saved?: boolean; [k: string]: unknown }
+export type CloudSyncReply = { started: string[]; already_running: string[] }
+export type SkillFile = { path: string; content: string }
+export type CloudSkill = { slug: string; files: SkillFile[]; updated_at?: string; [k: string]: unknown }
+
+export type CloudOptions = { url?: string; token?: string; fetch?: typeof fetch; timeoutMs?: number }
+
+type Call = { method: 'GET' | 'POST' | 'PUT' | 'DELETE'; path: string; body?: unknown; timeoutMs?: number }
+
+const list = <T>(body: unknown, key: string): T[] => (Array.isArray(body) ? body : Array.isArray((body as Record<string, unknown> | null)?.[key]) ? ((body as Record<string, unknown>)[key] as T[]) : [])
+
+export class CloudClient {
+  readonly url: string
+  private token: string
+  private fetchFn: typeof fetch
+  private timeoutMs: number
+
+  constructor(opts: CloudOptions = {}) {
+    this.url = opts.url ? normalizeCloudUrl(opts.url) : cloudUrl().url
+    const token = opts.token ?? cloudToken()
+    if (!token) throw new CliError('Not logged in to Cosmic Cloud.', LOGIN_NEXT, 'not_logged_in')
+    // A token is plain printable text. Anything else cannot go in a header, and is not a token.
+    if (!/^[\x21-\x7e]+$/.test(token)) throw new CliError('That token has spaces, line breaks or other characters a token never has.', 'Copy the token again from Cosmic Cloud under Settings, export it, then run lifecycle login again.', 'bad_token')
+    this.token = token
+    this.fetchFn = opts.fetch ?? fetch
+    this.timeoutMs = opts.timeoutMs ?? TIMEOUT_MS
+  }
+
+  // Never let the token out in a message, even if the server echoes it back.
+  private scrub(text: string) {
+    return clean(text.split(this.token).join('[token]'))
+  }
+
+  private async call(c: Call): Promise<any> {
+    const route = `${c.method} ${c.path.split('?')[0]}`
+    let res: Response
+    try {
+      res = await this.fetchFn(`${this.url}/api/v1${c.path}`, {
+        method: c.method,
+        headers: { authorization: `Bearer ${this.token}`, accept: 'application/json', ...(c.body === undefined ? {} : { 'content-type': 'application/json' }) },
+        ...(c.body === undefined ? {} : { body: JSON.stringify(c.body) }),
+        // A redirect could carry the request to another host. Stop instead of following it.
+        redirect: 'manual',
+        signal: AbortSignal.timeout(c.timeoutMs ?? this.timeoutMs),
+      })
+    } catch (e) {
+      const why = e instanceof Error && e.name === 'TimeoutError' ? 'it did not answer in time' : 'it could not be reached'
+      throw new CliError(`Cosmic Cloud did not answer: ${why}.`, 'Check the network and the address in lifecycle cloud status, then run this again.', 'cloud_unreachable')
+    }
+    const text = await res.text().catch(() => '')
+    let body: any = null
+    try {
+      body = text ? JSON.parse(text) : null
+    } catch {
+      body = null
+    }
+    if (res.ok) return body ?? {}
+    if (res.status >= 300 && res.status < 400) throw new CliError('Cosmic Cloud answered with a redirect, which this CLI does not follow.', 'Check the address: lifecycle cloud status', 'bad_url')
+    const err = body?.error && typeof body.error === 'object' ? body.error : {}
+    const code = typeof err.code === 'string' ? err.code : ''
+    const message = typeof err.message === 'string' ? this.scrub(err.message) : ''
+    const retry = Number(res.headers.get('retry-after') ?? err.retry_after_seconds)
+    const wait = Number.isFinite(retry) && retry > 0 ? `Wait ${Math.ceil(retry)} seconds, then run this again.` : 'Wait a minute, then run this again.'
+    if (res.status === 401) throw new CliError('Cosmic Cloud refused the store token. It may have been revoked.', `Create a new token in Cosmic Cloud under Settings, then ${LOGIN_NEXT}`, 'unauthorized')
+    // Cloud answers 404 not_found for a route it does not have. Named 404s, such as unknown_metric, pass through.
+    if (res.status === 404 && (!code || code === 'not_found')) throw new CliError(`Cosmic Cloud does not have this yet (${route}).`, 'It is being built. Until then, run the command without --cloud to use the data on this machine.', 'not_built')
+    if (res.status === 405) throw new CliError(`Cosmic Cloud does not take ${route} yet.`, 'It is being built. Until then, run the command without --cloud to use the data on this machine.', 'not_built')
+    if (res.status === 429) throw new CliError(message || 'Cosmic Cloud is getting too many calls from this store token.', wait, 'rate_limited')
+    if (res.status === 503 && (!code || code === 'busy')) throw new CliError(message || 'Another change to this store is running on Cosmic Cloud.', wait, 'busy')
+    if (code) throw new CliError(message || `Cosmic Cloud refused the request (${code}).`, res.status >= 500 ? 'Run this again in a moment.' : 'Fix the request, then run this again.', code)
+    throw new CliError(`Cosmic Cloud answered with status ${res.status}.`, 'Run this again in a moment, then lifecycle cloud status.', 'cloud_error')
+  }
+
+  store(): Promise<CloudStoreReply> {
+    return this.call({ method: 'GET', path: '/store' })
+  }
+
+  async schema(): Promise<CloudSchema> {
+    const r = await this.call({ method: 'GET', path: '/schema' })
+    return { schemas: list<CloudSchema['schemas'][number]>(r, 'schemas').map((s) => ({ name: String(s.name), tables: (s.tables ?? []).map((t) => ({ name: String(t.name), columns: (t.columns ?? []).map((c) => ({ name: String(c.name), type: String(c.type) })), rows: typeof t.rows === 'number' ? t.rows : null })) })) }
+  }
+
+  // Rows come back as objects keyed by column, whether Cloud sends objects or arrays.
+  async query(sql: string): Promise<CloudQueryResult> {
+    const r = await this.call({ method: 'POST', path: '/query', body: { sql } })
+    const raw: unknown[] = Array.isArray(r.rows) ? r.rows : []
+    const first = raw.find((x) => x !== null && x !== undefined)
+    const columns: string[] = Array.isArray(r.columns) ? r.columns.map((c: unknown) => (typeof c === 'string' ? c : String((c as { name?: unknown })?.name ?? ''))) : first && !Array.isArray(first) ? Object.keys(first as object) : []
+    const rows = raw.map((row) => (Array.isArray(row) ? Object.fromEntries(columns.map((c, i) => [c, row[i] ?? null])) : (row as Record<string, unknown>)))
+    return { columns, rows, rowCount: rows.length, truncated: Boolean(r.truncated) }
+  }
+
+  async metrics(): Promise<CloudMetric[]> {
+    return list<CloudMetric>(await this.call({ method: 'GET', path: '/metrics' }), 'metrics')
+  }
+
+  metric(name: string, days?: number): Promise<Record<string, any>> {
+    return this.call({ method: 'GET', path: `/metrics/${encodeURIComponent(name)}${days === undefined ? '' : `?days=${days}`}` })
+  }
+
+  async runs(limit = 20): Promise<CloudRun[]> {
+    return list<CloudRun>(await this.call({ method: 'GET', path: `/runs?limit=${limit}` }), 'runs')
+  }
+
+  // Starting a sync is never retried here: a retry could start it twice.
+  async sync(connectionId?: string): Promise<CloudSyncReply> {
+    const r = await this.call({ method: 'POST', path: '/sync', ...(connectionId ? { body: { connection_id: connectionId } } : {}) })
+    return { started: list<string>(r.started, ''), already_running: list<string>(r.already_running, '') }
+  }
+
+  async skills(): Promise<CloudSkill[]> {
+    return list<CloudSkill>(await this.call({ method: 'GET', path: '/skills' }), 'skills')
+  }
+
+  putSkill(slug: string, files: SkillFile[]): Promise<Record<string, unknown>> {
+    return this.call({ method: 'PUT', path: `/skills/${encodeURIComponent(slug)}`, body: { files } })
+  }
+
+  deleteSkill(slug: string): Promise<Record<string, unknown>> {
+    return this.call({ method: 'DELETE', path: `/skills/${encodeURIComponent(slug)}` })
+  }
+
+  async toolRuns(): Promise<Record<string, unknown>[]> {
+    return list<Record<string, unknown>>(await this.call({ method: 'GET', path: '/tools/runs' }), 'runs')
+  }
+
+  postToolRun(record: Record<string, unknown>, timeoutMs = 5000): Promise<Record<string, unknown>> {
+    return this.call({ method: 'POST', path: '/tools/runs', body: record, timeoutMs })
+  }
+}
+
+// One place that decides whether a failed Cloud call was "not built yet".
+export const isNotBuilt = (e: unknown) => e instanceof CliError && e.code === 'not_built'
+
+// Signs in: checks the token with GET /store before anything is saved.
+export async function verifyLogin(url: string, token: string, fetchFn?: typeof fetch) {
+  const client = new CloudClient({ url, token, fetch: fetchFn })
+  const r = await client.store()
+  if (!r?.store || typeof r.store.name !== 'string') throw new CliError('That address answered, but not like Cosmic Cloud.', 'Check the address, then run lifecycle login again.', 'bad_url')
+  return { url: client.url, store: { id: clean(String(r.store.id ?? ''), 80), name: clean(r.store.name, 120) }, connections: Array.isArray(r.connections) ? r.connections.length : 0 }
+}

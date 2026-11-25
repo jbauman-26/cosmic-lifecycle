@@ -283,7 +283,13 @@ export function connectedSources(config: Config) {
   return Object.entries(config.warehouse?.sources ?? {}).map(([slug, s]) => ({ slug, ...s }))
 }
 
-export type WarehouseSyncResult = { source: string; status: 'ok' | 'failed'; rows: number; tables?: Record<string, number>; detail?: string }
+// `code` is set when a failure has one: loader_failed when the loader process crashed, or the code of
+// the error that stopped the source, such as missing_secret or missing_uv.
+export type WarehouseSyncResult = { source: string; status: 'ok' | 'failed'; rows: number; tables?: Record<string, number>; detail?: string; code?: string }
+
+// The loader runs in its own process. When that process dies without a result, the cause is in its
+// log, which can hold anything, so the owner gets one plain sentence and the command to see the log.
+export const loaderFailed = (name: string, slug: string) => `The loader for ${name} stopped before it finished, so this sync did not complete. Data loaded by earlier syncs is still there. To see why, run lifecycle warehouse sync ${slug} --verbose.`
 
 export async function syncSources(slugs: string[] | undefined, opts: { verbose?: boolean; record?: (r: WarehouseSyncResult, startedAt: string) => Promise<void> } = {}) {
   const config = readConfig()
@@ -309,7 +315,10 @@ export async function syncSources(slugs: string[] | undefined, opts: { verbose?:
         ? { source: c.slug, status: 'ok', rows: Number(r.rows ?? 0), tables: r.tables as Record<string, number> }
         : { source: c.slug, status: 'failed', rows: 0, detail: explain(r.error) }
     } catch (e) {
-      result = { source: c.slug, status: 'failed', rows: 0, detail: e instanceof Error ? e.message : String(e) }
+      const code = e instanceof CliError && e.code !== 'error' ? e.code : undefined
+      result = code === 'runner_failed'
+        ? { source: c.slug, status: 'failed', rows: 0, detail: loaderFailed(allSources().find((s) => s.slug === c.slug)?.name ?? c.slug, c.slug), code: 'loader_failed' }
+        : { source: c.slug, status: 'failed', rows: 0, detail: e instanceof Error ? e.message : String(e), ...(code ? { code } : {}) }
     }
     results.push(result)
     await opts.record?.(result, startedAt)

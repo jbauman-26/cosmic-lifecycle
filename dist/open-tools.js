@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { CliError } from './errors.js';
 import { fetchJson, HttpError } from './http.js';
 import { envName, getSecret } from './secrets.js';
-import { saveRun } from './tools.js';
+import { redactSecrets, saveRun, toolRequest } from './tools.js';
 export const OPEN_PROVIDERS = {
     kie: { name: 'Kie', secret: 'kie-api-key', ref: 'kie:<model>', example: 'kie:gpt-image-2-text-to-image', catalog: 'https://kie.ai/market', billing: 'Kie credits on your Kie account. A finished run reports the credits it used.' },
     fal: { name: 'fal', secret: 'fal-key', ref: 'fal:<endpoint_id>', example: 'fal:fal-ai/minimax/voice-clone', catalog: 'https://fal.ai/models', billing: 'Billed by fal to your fal account. fal does not report the cost in the result.' },
@@ -68,7 +68,7 @@ async function start(provider, id, body, ctx, method) {
         for (const u of [r?.status_url, r?.response_url])
             if (typeof u !== 'string' || !u.startsWith(FAL))
                 throw new CliError('fal returned a status link outside queue.fal.run.', 'Nothing more was sent. Check the request in your fal dashboard.', 'provider_refused');
-        return { remote: { requestId: String(r.request_id ?? ''), statusUrl: r.status_url, responseUrl: r.response_url } };
+        return { remote: { requestId: String(r.request_id ?? ''), statusUrl: r.status_url, responseUrl: r.response_url, ...(typeof r.cancel_url === 'string' && r.cancel_url.startsWith(FAL) ? { cancelUrl: r.cancel_url } : {}) } };
     }
     if (provider === 'apify') {
         const r = await ctx.http(`${APIFY}/actors/${id}/runs`, { method: 'POST', headers: { ...json, authorization: `Bearer ${key}` }, body: JSON.stringify(body) }, 'Apify run actor', once);
@@ -170,7 +170,8 @@ export async function startOpenTool(ref, body, ctx, opts = {}) {
             throw new CliError(`${p.name} turned the request down with status ${e.status}: ${e.body}`, e.status === 401 || e.status === 403 ? `Check the key: lifecycle secrets set ${p.secret} --from-env YOUR_VAR` : e.status === 429 ? `${p.name} is rate limiting this key. Nothing started. Wait a minute, then run it again.` : `Nothing started. Check the id and input against ${p.catalog}`, 'provider_refused');
         throw e;
     }
-    const run = { id: randomUUID().slice(0, 8), tool: `${parsed.provider}:${parsed.id}`, input: body, status: 'running', startedAt: now().toISOString(), finishedAt: '', provider: parsed.provider, remote: started.remote };
+    const method = (opts.method ?? 'GET').toUpperCase();
+    const run = { id: randomUUID().slice(0, 8), tool: `${parsed.provider}:${parsed.id}`, input: redactSecrets(body), status: 'running', startedAt: now().toISOString(), finishedAt: '', request: toolRequest(parsed.provider, parsed.id, body, parsed.provider === 'scrapecreators' ? method : undefined), provider: parsed.provider, remote: started.remote };
     if (started.done)
         apply(run, started.done, now);
     return saveRun(run);
@@ -180,6 +181,53 @@ export async function refreshRun(run, ctx, now = () => new Date()) {
     if (run.status !== 'running' || !run.provider || !run.remote)
         return run;
     return saveRun(apply(run, await poll(run.provider, run.remote, ctx), now));
+}
+// Asks the provider to stop a run that is still going. The run is only marked aborted once the provider agrees.
+// Apify and fal can stop a job. Kie cannot, and ScrapeCreators answers at once, so there is nothing to stop.
+// A stopped job may still be billed for the work it did.
+export async function abortRun(run, ctx, now = () => new Date()) {
+    if (run.status !== 'running')
+        throw new CliError(`Run ${run.id} is not running. It ${run.status === 'aborted' ? 'was already stopped' : run.status}.`, `lifecycle tools get ${run.id}`, 'not_running');
+    const provider = run.provider;
+    if (!provider || !run.remote || !(provider in OPEN_PROVIDERS))
+        throw new CliError(`Run ${run.id} cannot be stopped from here.`, `lifecycle tools get ${run.id}`, 'cannot_abort');
+    // It may have finished since the last look. A finished run is saved as it ended, not as aborted.
+    try {
+        run = await refreshRun(run, ctx, now);
+    }
+    catch (e) {
+        if (!transient(e))
+            throw e;
+    }
+    if (run.status !== 'running')
+        return { run, aborted: false };
+    const remote = run.remote ?? {};
+    const p = OPEN_PROVIDERS[provider];
+    const key = ctx.key(provider);
+    if (provider === 'apify') {
+        await ctx.http(`${APIFY}/actor-runs/${encodeURIComponent(remote.runId ?? '')}/abort`, { method: 'POST', headers: { authorization: `Bearer ${key}` } }, 'Apify abort run', once);
+    }
+    else if (provider === 'fal') {
+        const url = remote.cancelUrl ?? remote.statusUrl?.replace(/\/status$/, '/cancel');
+        if (!url || !url.startsWith(FAL) || !url.endsWith('/cancel'))
+            throw new CliError('This fal run has no cancel link saved.', 'Stop it in your fal dashboard.', 'cannot_abort');
+        try {
+            await ctx.http(url, { method: 'PUT', headers: { authorization: `Key ${key}` } }, 'fal cancel request', once);
+        }
+        catch (e) {
+            // fal answers 400 when the job already finished. Read the result instead of calling it stopped.
+            if (e instanceof HttpError && e.status === 400)
+                return { run: await refreshRun(run, ctx, now), aborted: false };
+            throw e;
+        }
+    }
+    else {
+        throw new CliError(`${p.name} has no way to stop a job once it starts. It will finish and bill as usual.`, `Check it with: lifecycle tools get ${run.id}`, 'cannot_abort');
+    }
+    run.status = 'aborted';
+    run.error = `Stopped with lifecycle tools abort. ${p.name} may still bill for the work done before it stopped.`;
+    run.finishedAt = now().toISOString();
+    return { run: saveRun(run), aborted: true };
 }
 // Polls until the run ends or the time is up. On a timeout the run comes back still running: it was not stopped.
 // Each status request is cut off at the deadline and is not retried inside the HTTP helper, so a slow or

@@ -255,6 +255,9 @@ export function disconnectSource(slug) {
 export function connectedSources(config) {
     return Object.entries(config.warehouse?.sources ?? {}).map(([slug, s]) => ({ slug, ...s }));
 }
+// The loader runs in its own process. When that process dies without a result, the cause is in its
+// log, which can hold anything, so the owner gets one plain sentence and the command to see the log.
+export const loaderFailed = (name, slug) => `The loader for ${name} stopped before it finished, so this sync did not complete. Data loaded by earlier syncs is still there. To see why, run lifecycle warehouse sync ${slug} --verbose.`;
 export async function syncSources(slugs, opts = {}) {
     const config = readConfig();
     const connected = connectedSources(config);
@@ -279,7 +282,10 @@ export async function syncSources(slugs, opts = {}) {
                 : { source: c.slug, status: 'failed', rows: 0, detail: explain(r.error) };
         }
         catch (e) {
-            result = { source: c.slug, status: 'failed', rows: 0, detail: e instanceof Error ? e.message : String(e) };
+            const code = e instanceof CliError && e.code !== 'error' ? e.code : undefined;
+            result = code === 'runner_failed'
+                ? { source: c.slug, status: 'failed', rows: 0, detail: loaderFailed(allSources().find((s) => s.slug === c.slug)?.name ?? c.slug, c.slug), code: 'loader_failed' }
+                : { source: c.slug, status: 'failed', rows: 0, detail: e instanceof Error ? e.message : String(e), ...(code ? { code } : {}) };
         }
         results.push(result);
         await opts.record?.(result, startedAt);
