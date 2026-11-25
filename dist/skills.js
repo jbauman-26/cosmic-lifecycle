@@ -28,7 +28,7 @@ const pluginJson = () => JSON.stringify({
 }, null, 2) + '\n';
 const routerSkill = (kits) => `---
 name: ${PLUGIN}
-description: Work with Shopify and Klaviyo numbers through the Cosmic Lifecycle CLI. Use when asked about flow performance, revenue per flow, win-back segments, Klaviyo or Shopify reconciliation, or setting up a lifecycle kit.
+description: Work with checked marketing numbers through the Cosmic Lifecycle CLI, for a Shopify store, a SaaS product, a B2B pipeline, an agency client or a creator business. Use when asked about revenue, MRR, churn, pipeline, leads, cost per lead, ad spend, flow performance, reconciling one tool against another, or setting up a lifecycle kit.
 ---
 
 # Cosmic Lifecycle
@@ -40,14 +40,16 @@ lifecycle docs agents
 \`\`\`
 
 Then, as the task needs:
-- \`lifecycle docs setup\` connects Klaviyo, Shopify, GA4, Stripe and Meta Ads.
+- \`lifecycle workspace show\` says what kind of business this is and which source its numbers are checked against.
+- \`lifecycle docs workspaces\` explains the workspace types and their metric packs.
+- \`lifecycle docs setup\` connects Klaviyo, Shopify, GA4, Stripe, Meta Ads and HubSpot.
 - \`lifecycle docs kits\` explains kits.
 - \`lifecycle docs commands\` lists every command.
 
 If \`lifecycle\` is not on PATH, stop and ask the user to install it from https://github.com/jbauman-26/cosmic-lifecycle.
 
 Rules:
-- Run \`lifecycle reconcile\` before quoting any number. If a check failed, say so first.
+- Run \`lifecycle reconcile\` before quoting any number. If a check failed, say so first. If the trust line says the numbers were not checked against a source of truth, say that first instead.
 - Nothing in this tool sends a message. Never claim attributed revenue proves causation.
 - "Audit my flows", "rank my flows" or "build a win-back segment" is a kit task. Prefer the kit skill:
 ${kits.map((k) => `  - \`/${PLUGIN}:kits:${k.name}\`: ${k.summary}`).join('\n')}

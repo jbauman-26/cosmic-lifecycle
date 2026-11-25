@@ -113,6 +113,13 @@ export const PERSONAL_RULES = {
   storePrefixes: ['dim_', 'fact_', 'meta_', 'custom_'],
   // Per source, from each vendor's API reference: table, then key path (nested keys joined by __), then the decision.
   sources: {
+    // 0.14.0. HubSpot is asked for these properties only; each is a stage, a source or a date.
+    'hubspot-records': {
+      // properties is kept as a container: its other keys still go through the people-row rules.
+      contacts: { properties: 'keep', properties__createdate: 'keep', properties__lifecyclestage: 'keep', properties__hs_lead_status: 'keep', properties__hs_analytics_source: 'keep', properties__hs_analytics_source_data_1: 'keep', properties__hs_object_id: 'keep' },
+      deals: { properties: 'keep', properties__createdate: 'keep', properties__closedate: 'keep', properties__amount: 'keep', properties__deal_currency_code: 'keep', properties__dealstage: 'keep', properties__pipeline: 'keep', properties__hs_is_closed: 'keep', properties__hs_is_closed_won: 'keep', properties__hs_analytics_source: 'keep', properties__hs_analytics_source_data_1: 'keep', properties__hs_object_id: 'keep' },
+    },
+    pipedrive: { leads: { source_name: 'keep' } },
     zendesk: {
       users: { user_fields: 'personal', notes: 'free_text', details: 'free_text' },
       tickets: { via__source: 'personal', custom_fields: 'free_text', fields: 'free_text' },

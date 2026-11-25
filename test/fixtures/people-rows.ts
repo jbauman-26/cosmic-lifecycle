@@ -233,6 +233,27 @@ export const PEOPLE_FIXTURES: Record<string, Record<string, PeopleFixture>> = {
       kept: ['ord-1', 'paid', 'Fixture Soap', 'USD'],
     },
   },
+  // 0.14.0
+  'hubspot-records': {
+    contacts: {
+      row: {
+        id: '51', properties: { createdate: '2026-11-01T09:00:00Z', lifecyclestage: 'lead', hs_analytics_source: 'ORGANIC_SEARCH', hs_object_id: '51', email: P.email, firstname: P.first, lastname: P.last, phone: P.phone, company: 'McFixture Holdings', jobtitle: 'Head of Fixtures' },
+        createdAt: '2026-11-01T09:00:00Z', updatedAt: '2026-11-02T09:00:00Z', archived: false,
+      },
+      gone: [P.email, P.first, P.last, P.phone, 'McFixture Holdings', 'Head of Fixtures'],
+      kept: ['ORGANIC_SEARCH', 'lead', '2026-11-01T09:00:00Z'],
+    },
+  },
+  pipedrive: {
+    leads: {
+      row: {
+        id: 'adf21080-0e10-11eb-879b-05d71fb426ec', title: `${P.full} inbound demo`, owner_id: 9, person_id: 78, organization_id: 13, source_name: 'Web forms', origin: 'WebForms', channel: 2,
+        is_archived: false, value: { amount: 3000, currency: 'USD' }, add_time: '2026-11-03T10:00:00.000Z', cc_email: P.email,
+      },
+      gone: [P.full, P.email],
+      kept: ['Web forms', 'WebForms', '3000', '2026-11-03T10:00:00.000Z'],
+    },
+  },
   shipbob: {
     orders: {
       row: { id: 801, order_number: 'FX-801', status: 'Fulfilled', gift_message: `Happy day from ${P.first}, ${P.phone2}`, recipient: { name: P.full, email: P.email, phone_number: P.phone, address: { address1: P.street, city: 'Fixtureville', state: 'CA', zip_code: P.zip, country: 'US' } }, products: [{ id: 1, sku: 'FX-SKU', quantity: 1 }], created_date: '2026-10-11T00:00:00Z' },
