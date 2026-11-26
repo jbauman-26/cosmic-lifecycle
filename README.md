@@ -88,7 +88,7 @@ cosmic schema hubspot
 cosmic query "SELECT property_dealstage, count(*) FROM hubspot.deal GROUP BY 1"
 ```
 
-Nothing is copied. `cosmic schema`, `cosmic query` and the MCP server read the tables where they are, read-only. Columns that look personal (emails, names, phone numbers, addresses) are left out of the schema and refused in queries, and email addresses or phone numbers in returned text are replaced. The only check is freshness: when the loader last wrote each table (`_fivetran_synced`, or Airbyte's `_airbyte_extracted_at`). Every answer says so: "Freshness only... They are not reconciled against any other source." It never says passed. `cosmic disconnect pipeline:hubspot` forgets the schema.
+Nothing is copied. `cosmic schema`, `cosmic query` and the MCP server read the tables where they are, read-only. Columns that look personal (emails, names, phone numbers, addresses) are left out of the schema and refused in queries, and email addresses or phone numbers in returned text are replaced. Queries use the loader tables and built-in functions and types only: views, functions or casts defined in the database are refused, and columns of an extension or custom type (citext, an enum) are left out. The only check is freshness: when the loader last wrote each table (`_fivetran_synced`, or Airbyte's `_airbyte_extracted_at`). Every answer says so: "Freshness only... They are not reconciled against any other source." It never says passed. `cosmic disconnect pipeline:hubspot` forgets the schema.
 
 Postgres only. BigQuery and Snowflake are on the roadmap. The URL stays in your environment variable; set it wherever `cosmic sync` runs, including the GitHub Actions secrets for `cosmic deploy`.
 

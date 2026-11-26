@@ -234,6 +234,17 @@ export async function assertPlainQuery(conn, body) {
     const own = [...new Set(calls.filter((c) => c.schema && c.schema !== 'pg_catalog').map((c) => `${c.schema}.${c.name}`))];
     if (own.length)
         refuse(`the query calls ${own.join(', ')}, a function defined in this database. Only built-in functions can be used on pipeline tables.`);
+    // A type from a schema other than pg_catalog, after :: or AS: a cast or a domain check can run a function that reads
+    // other tables, and neither the text nor the plan shows it.
+    for (let i = 2; i < tokens.length; i++) {
+        const t = tokens[i];
+        if (t.kind !== 'ident' || tokens[i - 1]?.kind !== 'op' || tokens[i - 1].value !== '.' || tokens[i - 2]?.kind !== 'ident')
+            continue;
+        const before = tokens[i - 3];
+        const cast = (before?.kind === 'op' && before.value === ':' && tokens[i - 4]?.kind === 'op' && tokens[i - 4].value === ':') || (before?.kind === 'ident' && !before.quoted && before.value === 'as');
+        if (cast && tokens[i - 2].value !== 'pg_catalog')
+            refuse(`the query casts to ${tokens[i - 2].value}.${t.value}, a type defined in this database. A cast or a domain can run a function, so only built-in types can be used.`);
+    }
     // Views and materialized views: their columns can be renamed past the column rules, so they are never read. Any
     // view outside pg_catalog can only be reached as schema.name (see the search path above), in any position.
     const refs = [];
