@@ -3641,5 +3641,27 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "credentials": [],
     "params": [],
     "notes": "Planned. Mixpanel's raw export streams one event per line, not a JSON list, and carries person properties. Its segmentation query fits better and needs a runner change. CSV import of daily signups meanwhile."
+  },
+  {
+    "slug": "google-business-profile",
+    "name": "Google Business Profile",
+    "category": "reviews",
+    "readiness": "planned",
+    "why": "Not in the 100-tool research. Featured from 2026-11-25 at the owner's request: it is how buyers find stores and showrooms on Google Search and Maps. Google grants API access by application only, to a profile verified and active for 60+ days (https://developers.google.com/my-business/content/prereqs). No usage data behind it.",
+    "docs": "https://developers.google.com/my-business",
+    "credentials": [],
+    "params": [],
+    "notes": "Planned as a built-in source, not a warehouse connector. Needs Google sign-in and Google's approval of API access: coming once Google approves access. It will read Searches and Maps views of your business profile by day; website clicks, calls and direction requests from the profile; review count and average star rating, and new reviews without reviewer names. The CLI has no connector code for it yet. CSV import meanwhile."
+  },
+  {
+    "slug": "vercel",
+    "name": "Vercel",
+    "category": "analytics",
+    "readiness": "planned",
+    "why": "Not in the 100-tool research. Added 2026-11-25 at the owner's request for brands whose storefront or landing pages run on Vercel (headless Shopify and custom sites). No usage data behind it.",
+    "docs": "https://vercel.com/docs/rest-api",
+    "credentials": [],
+    "params": [],
+    "notes": "Planned. Connects with a Vercel access token. It will read page views and visitors by day, with top pages and referrers; Core Web Vitals for your site by page; deployments and when each went live. The CLI has no connector code for it yet. CSV import meanwhile."
   }
 ]
