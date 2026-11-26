@@ -27,7 +27,7 @@ function fakeDb(tables: Record<string, Table>, schema = 'hubspot') {
       const t = tables[String(params[1])]
       return t?.columns.some(([c]) => c === params[2]) ? [{ '?column?': 1 }] : []
     }
-    if (sql.includes('pg_proc')) return []
+    if (sql.includes('pg_catalog.pg_')) return []
     const max = /SELECT max\("(\w+)"\) AS at FROM "(\w+)"\."(\w+)"/.exec(sql)
     if (max) {
       const rows = tables[max[3]!]!.rows
@@ -217,12 +217,12 @@ describe('review blockers: protection never depends on the SQL text', () => {
     conn.readOnly = async (sql, params) => sql.startsWith('EXPLAIN')
       ? [{ 'QUERY PLAN': [{ Plan: { 'Node Type': 'Limit', Output: ["query_to_xml('select 1'::text, true, false, ''::text)"], Plans: [{ 'Node Type': 'Seq Scan', Schema: 'hubspot', 'Relation Name': 'deal', Output: ['deal.deal_id'] }] } }] }]
       : (sql.includes('information_schema') || sql.includes('max(')) ? query(sql, params) : [{ n: 1 }]
-    await expect(pipelineQueryRun(conn, [{ schema: 'hubspot', tool: 'fivetran' }], 'SELECT U&"query\\005fto\\005fxml"(\'x\', true, false, \'\') FROM hubspot.deal', 100, 2)).rejects.toThrow(/query_to_xml is blocked/)
+    await expect(pipelineQueryRun(conn, [{ schema: 'hubspot', tool: 'fivetran' }], 'SELECT U&"query\\005fto\\005fxml"(\'x\', true, false, \'\') FROM hubspot.deal', 100, 2)).rejects.toThrow(/prefixed string or name|query_to_xml is blocked/)
   })
 
   it('refuses a function defined in the database, which could read any table (review finding)', async () => {
     const { query, conn } = hubspot()
-    const q2: typeof query = async (sql, params) => (sql.includes('pg_proc') ? [{ name: 'all_contacts' }] : query(sql, params))
+    const q2: typeof query = async (sql, params) => (sql.includes('pg_proc') ? [{ name: 'all_contacts' }] : sql.includes('pg_catalog.pg_') ? [] : query(sql, params))
     conn.query = q2
     conn.readOnly = async (sql, params) => sql.startsWith('EXPLAIN')
       ? [{ 'QUERY PLAN': [{ Plan: { 'Node Type': 'Function Scan', 'Function Name': 'all_contacts', Schema: 'public', Output: ['hubspot.property_firstname'] } }] }]

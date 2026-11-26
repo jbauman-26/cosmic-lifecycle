@@ -1,7 +1,7 @@
 import pg from 'pg';
 import { CliError } from './errors.js';
 import { assertReadOnlySql } from './query.js';
-import { assertNoBlockedFunctions, assertNoPersonalColumns, markCatalog } from './sql-guard.js';
+import { assertNoBlockedFunctions, assertNoPersonalColumns, markCatalog, tokenize } from './sql-guard.js';
 import { scrubRows } from './personal.js';
 import { PIPELINE_TOOLS } from './pipeline.js';
 export const LOADED_AT = { fivetran: '_fivetran_synced', airbyte: '_airbyte_extracted_at' };
@@ -202,6 +202,70 @@ export function callsIn(text) {
     return out;
 }
 /**
+ * Rules on the SQL itself, before Postgres plans it, for what a plan can hide: a call folded at plan time or sitting
+ * in LIMIT, a view whose columns were renamed on the way up, an operator someone defined. Strict on purpose: a
+ * pipeline query reads loader tables with built-in functions, and nothing else.
+ */
+export async function assertPlainQuery(conn, body) {
+    // The tokenizer refuses prefixed strings and names (E'..', U&".."), control characters and other escapes, for
+    // every pipeline query, whatever the catalog holds.
+    const tokens = tokenize(body);
+    const refuse = (why, next = 'Use the loader tables cosmic schema lists, with built-in functions such as count, sum, date_trunc and coalesce.') => {
+        throw new CliError(`Refused: ${why}`, next, 'blocked_object');
+    };
+    if (tokens.some((t) => t.kind === 'ident' && !t.quoted && t.value === 'operator'))
+        refuse('the query uses OPERATOR(...), which can call a function defined in this database.');
+    // Every call in the text, strings excluded: name( or schema.name(.
+    const calls = [];
+    for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i];
+        const next = tokens[i + 1];
+        if (t.kind !== 'ident' || !next || next.kind !== 'op' || next.value !== '(')
+            continue;
+        const qualified = tokens[i - 1]?.kind === 'op' && tokens[i - 1].value === '.' && tokens[i - 2]?.kind === 'ident';
+        calls.push({ schema: qualified ? tokens[i - 2].value : null, name: t.value });
+    }
+    assertNoBlockedFunctions(calls.map((c) => `${c.name}(`).join(' '));
+    const qualifiedOutside = calls.filter((c) => c.schema && !['pg_catalog'].includes(c.schema));
+    const names = [...new Set(calls.map((c) => c.name))];
+    const defined = names.length
+        ? (await conn.query(`SELECT DISTINCT lower(p.proname) AS name FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND lower(p.proname) = ANY($1)`, [names])).map((r) => String(r.name))
+        : [];
+    const own = [...new Set([...qualifiedOutside.map((c) => c.name), ...defined])];
+    if (own.length)
+        refuse(`the query calls ${own.join(', ')}, a function defined in this database. Only built-in functions can be used on pipeline tables.`);
+    // Views and materialized views: their columns can be renamed past the column rules, so they are never read.
+    // A relation reference is schema.name, or a bare name right after FROM, JOIN or a comma (which only reaches
+    // the search path, so public). A column or alias that happens to share a view's name is not one.
+    const refs = [];
+    for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i];
+        if (t.kind !== 'ident')
+            continue;
+        const prev = tokens[i - 1];
+        if (prev?.kind === 'op' && prev.value === '.' && tokens[i - 2]?.kind === 'ident')
+            refs.push({ schema: tokens[i - 2].value, name: t.value });
+        else if (tokens[i + 1]?.kind === 'op' && tokens[i + 1].value === '.')
+            continue;
+        else if ((prev?.kind === 'ident' && !prev.quoted && (prev.value === 'from' || prev.value === 'join')) || (prev?.kind === 'op' && prev.value === ','))
+            refs.push({ schema: null, name: t.value });
+    }
+    const candidates = await conn.query(`SELECT lower(c.relname) AS name, lower(n.nspname) AS schema FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+      WHERE c.relkind IN ('v', 'm') AND n.nspname NOT IN ('pg_catalog', 'information_schema') AND lower(c.relname) = ANY($1)`, [[...new Set(refs.map((r) => r.name))]]);
+    const views = candidates.filter((v) => refs.some((r) => r.name === v.name && (r.schema ? r.schema === v.schema : v.schema === 'public'))).map((r) => `${r.schema}.${r.name}`);
+    if (views.length)
+        refuse(`the query names ${views.join(', ')}, a view. Views can rename personal columns, so pipeline queries read loader tables only.`, 'Query the loader table the view is built on, naming the columns you need.');
+    // Operators someone defined: any of their symbols in the query is refused.
+    const ops = (await conn.query(`SELECT DISTINCT o.oprname AS op FROM pg_catalog.pg_operator o JOIN pg_catalog.pg_namespace n ON n.oid = o.oprnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')`)).map((r) => String(r.op));
+    if (ops.length) {
+        const symbols = body.replace(/'(?:[^']|'')*'/g, "''").replace(/"(?:[^"]|"")*"/g, '""').match(/[+\-*/<>=~!@#%^&|`?]+/g) ?? [];
+        const hit = ops.filter((op) => symbols.some((sym) => sym.includes(op)));
+        if (hit.length)
+            refuse(`the query uses ${hit.join(', ')}, an operator defined in this database.`);
+    }
+}
+/**
  * One read-only query against registered pipeline schemas in the same database (a query may join hubspot and
  * salesforce tables one loader wrote). Two checks run before it: every table Postgres would read must be a
  * registered loader table, and no column it names may be personal. Protection never depends on spotting a schema
@@ -212,6 +276,7 @@ export async function pipelineQueryRun(conn, schemas, sql, cap, maxDays) {
     const found = await Promise.all(schemas.map(async (s) => ({ ...s, tables: await discoverTables(conn.query, s.tool, s.schema) })));
     const allowed = new Set(found.flatMap((f) => f.tables.map((t) => `${f.schema}\0${t.table}`)));
     assertNoPersonalColumns(body, found.flatMap((f) => catalogFor(f.schema, f.tables)));
+    await assertPlainQuery(conn, body);
     const plan = await tablesRead(conn, body);
     // Blocked functions, checked on Postgres's own spelling of the plan, so an escaped name (U&"...") is seen as itself.
     assertNoBlockedFunctions(callsIn(plan.text).map((c) => `${c.name}(`).join(' '));
