@@ -1,7 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import { openDb, migrate, type Db } from './db.js'
+import { openDb, migrate, wrapPglite, type Db } from './db.js'
+import { CliError } from './errors.js'
 import { recordCustomQuery, runQuery } from './query.js'
 import { reconcile } from './reconcile.js'
 import { auditFlows, revenuePerFlow } from './reports.js'
@@ -18,6 +19,7 @@ import { readWorkspace, REFERENCE_NAME, TYPES, WORKSPACE_TYPES } from './workspa
 import { assertPack, defaultDays } from './metrics.js'
 import { rollupMetric } from './rollup.js'
 import { workspaceName } from './paths.js'
+import { NOTES_RULE, readNotes, withNotes } from './notes.js'
 
 const text = (data: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] })
 
@@ -31,8 +33,22 @@ export async function schemaInfo(db: Db) {
 }
 
 // Read-only by construction: there is no sync, connect or segment tool here.
+export const NOT_SET_UP = 'This workspace is not set up yet, so there are no numbers. Tell the user to run lifecycle init, or follow lifecycle docs quickstart. Until then every tool that needs the workspace answers with "Not set up yet".'
+
 export async function startMcp() {
-  const db = await openDb()
+  // 0.17.0: a fresh install starts the server too, so `claude mcp add` works before setup.
+  // It runs on an empty in-memory database and says plainly that nothing is set up.
+  let db: Db
+  try {
+    db = await openDb()
+  } catch (e) {
+    if (!(e instanceof CliError) || e.code !== 'not_initialized') throw e
+    const { PGlite } = await import('@electric-sql/pglite')
+    db = wrapPglite(await PGlite.create())
+    await migrate(db)
+    await buildMcpServer(db, NOT_SET_UP).connect(new StdioServerTransport())
+    return
+  }
   // Bring an older store up to date, unless a sync is writing right now: then it is already current.
   const startLock = tryWriteLock('mcp start')
   if (startLock) {
@@ -45,8 +61,8 @@ export async function startMcp() {
   await buildMcpServer(db).connect(new StdioServerTransport())
 }
 
-export function buildMcpServer(db: Db) {
-  const server = new McpServer({ name: 'cosmic-lifecycle', version: VERSION }, { instructions: DOCS.agents })
+export function buildMcpServer(db: Db, notice?: string) {
+  const server = new McpServer({ name: 'cosmic-lifecycle', version: VERSION }, { instructions: notice ? `${notice}\n\n${DOCS.agents}` : DOCS.agents })
   const readOnly = { readOnlyHint: true, openWorldHint: false }
   server.registerTool('list_metrics', {
     description: 'List the verified metrics for this workspace type, plus any numbers the owner saved (saved: true). Prefer these to writing SQL: the same metric always runs the same SQL.',
@@ -67,9 +83,10 @@ export function buildMcpServer(db: Db) {
       rate_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('exchange rate date; defaults to the latest'),
     },
     annotations: readOnly,
-  }, async ({ name, days, stores, currency, rate_date }) => text(stores
+  }, async ({ name, days, stores, currency, rate_date }) => text(withNotes(stores
     ? await rollupMetric(name, { stores, currency, days: days ?? defaultDays(), rateDate: rate_date, open: { store: workspaceName() ?? 'default', db } })
-    : await runMetric(db, name, days)))
+    : await runMetric(db, name, days), name)))
+  server.registerTool('owner_notes', { description: 'The owner\'s business context and past corrections, such as "exclude wholesale orders". Read them before explaining any number. metric and query results carry the matching ones as owner_notes.', annotations: readOnly }, async () => text({ rule: NOTES_RULE, notes: readNotes() }))
   server.registerTool('list_source_catalog', { description: 'Sources this CLI can connect, what each syncs, and the command to connect it.', annotations: readOnly }, async () => text(readWorkspace().type === 'shopify' ? CATALOG : ALL_NATIVE))
   server.registerTool('list_tool_catalog', { description: 'Read-only Klaviyo and Shopify API tools that run on the user\'s own keys.', annotations: readOnly }, async () => text(toolCatalog()))
   server.registerTool('run_tool', {
@@ -91,7 +108,7 @@ export function buildMcpServer(db: Db) {
         lock()
       }
     }
-    return text(r)
+    return text(withNotes(r))
   })
   server.registerTool('metric_candidates', { description: 'Custom queries run more than once. Each is a candidate to become a verified metric.', annotations: readOnly }, async () => text(await metricCandidates(db)))
   server.registerTool('reconcile', { description: 'Prove the numbers agree across sources. Run this before quoting a number.', annotations: { openWorldHint: false } }, async () => text(await withWriteLock('mcp reconcile', () => reconcile(db))))

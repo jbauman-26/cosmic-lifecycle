@@ -1,0 +1,8 @@
+# Reviewed 2026-11-25 before the repo went public. All three are test fixtures, not credentials:
+# a LinkedIn paging cursor (nextPageToken), an import line matched on a symbol name, and a made-up Snapchat token ('0.MGQCxyz123').
+5d58be0abb52b6edcf3c9161a83b9390ca7e9c68:test/fixtures/linkedin-ads/campaigns-page1.json:generic-api-key:5
+5d58be0abb52b6edcf3c9161a83b9390ca7e9c68:test/linkedin-ads.test.ts:linkedin-client-secret:8
+ae3d57259d94cced75aaff601803b9f195813903:test/snapchat-ads.test.ts:generic-api-key:148
+test/fixtures/linkedin-ads/campaigns-page1.json:generic-api-key:5
+test/snapchat-ads.test.ts:generic-api-key:148
+test/linkedin-ads.test.ts:linkedin-client-secret:8

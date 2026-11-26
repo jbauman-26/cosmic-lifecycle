@@ -7,7 +7,7 @@ import { VERSION } from './version.js';
 const RELEASES = 'https://api.github.com/repos/jbauman-26/cosmic-lifecycle/releases/latest';
 const DAY = 24 * 60 * 60 * 1000;
 // Asks GitHub for the latest release at most once a day. Sends nothing about you or your store.
-// The repo is private, so for most installs the answer is "not found". That is expected:
+// When GitHub cannot be reached or answers "not found", that is expected:
 // the check stays quiet, remembers the miss for a day, and the CLI is updated with the
 // Cosmic AI app or Cosmic Cloud that carries it.
 export const UNREACHABLE = 'The release list is private or offline. Nothing to do: the Cosmic AI app and Cosmic Cloud update the CLI they carry.';

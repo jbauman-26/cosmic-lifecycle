@@ -1,17 +1,79 @@
-# Cosmic Lifecycle
+# Cosmic CLI
 
 Your agent should not quote a marketing number it can't prove.
 
-Cosmic Lifecycle gives Claude Code, Cursor and Codex checked marketing numbers. It syncs totals into a database you own, checks them against your business's source of truth (Shopify orders for a store, Stripe for SaaS and other stores, HubSpot for a B2B pipeline), and puts a trust line on every number.
+Cosmic CLI gives Claude Code, Cursor and Codex checked marketing numbers. It syncs your sources into a database you own (local, or your own Postgres), checks them against the business's source of truth, and puts a trust line on every number. When the sources disagree, the number says so before your agent repeats it to a client.
 
-It is for the marketer who already works in an agent: at a Shopify brand, a SaaS company, a B2B team, an agency running many clients, or a creator business. It is free, from [Cosmic AI](https://store.jakebauman.io/community).
+Built for marketing engineers, agency developers running many client stores, and anyone who asks an agent for revenue, flow or ad numbers. Free and MIT licensed. The npm package is `cosmic-lifecycle`; the command is `lifecycle`.
+
+## Install
+
+Node 20 or newer.
+
+```sh
+npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
+```
+
+## See it in 60 seconds
+
+No keys and no accounts. This runs on invented sample data.
+
+```sh
+lifecycle demo
+```
+
+The demo loses 14 orders on purpose, then shows the check catching it:
+
+```
+FAIL Orders pulled against Shopify's own count: 787 against 801, off by 1.75%.
+     Do not trust reports built on this until it is fixed.
+```
+
+## Give it to your agent
+
+Add the read-only MCP server to Claude Code:
+
+```sh
+claude mcp add lifecycle -- lifecycle mcp
+```
+
+Or paste this into Claude Code, Cursor or Codex and let the agent do the setup:
+
+```
+Set up Cosmic CLI by following the output of lifecycle docs quickstart
+```
+
+`lifecycle docs quickstart` (the same text as [llms.txt](llms.txt)) is a setup playbook written for agents. It connects one source, checks the numbers, and gives you one verified figure before it offers anything else.
+
+## Same answer every time
+
+Every built-in metric runs one fixed SQL query, written down in [docs/METRICS.md](docs/METRICS.md) and shown by `lifecycle metrics show <name>`. Ask for `contribution_margin` or `marketing_efficiency_ratio` twice and you get the same SQL twice, with the trust line and the stated assumptions attached.
+
+Write down what the numbers can't know, once:
+
+```sh
+lifecycle notes add "Exclude wholesale orders from revenue"
+lifecycle notes add --metric shopify_net_revenue "Black Friday 2025 was a one-off spike"
+```
+
+The MCP server hands the matching notes to the agent with every metric and query result, so a correction made once is applied every time. Notes live in the workspace folder. They never change the SQL and never touch a source.
+
+## One workspace per client
+
+```sh
+lifecycle --workspace acme-co init --type shopify
+lifecycle --workspace acme-co metrics run shopify_net_revenue
+lifecycle metrics run meta_ad_spend --all-stores --currency USD
+```
+
+Each workspace has its own config, database, keys and notes. `--all-stores` adds a metric up across every workspace on the machine, in one currency.
 
 ## Pick your workspace type
 
 ```sh
 lifecycle init --type saas      # shopify, ecommerce, saas, b2b, agency or creator
 lifecycle workspace show        # what your numbers are checked against
-lifecycle metrics list          # the metrics for your type: MRR and churn, pipeline and win rate, ...
+lifecycle metrics list          # the metrics for your type
 lifecycle demo                  # the demo for your type, on invented data
 ```
 
@@ -24,41 +86,7 @@ lifecycle demo                  # the demo for your type, on invented data
 | agency | set per client | spend, CPC, CTR, revenue, leads, one workspace per client |
 | creator | Stripe | revenue, members, churn, visit to paid |
 
-A workspace with no source of truth connected still works: its numbers carry a line that says plainly they were not checked. An install from before 0.14.0 is a Shopify store and nothing changes. See `lifecycle docs workspaces`.
-
-## Install
-
-The CLI ships inside the Cosmic AI Mac app and Cosmic Cloud, so if you use either, you already have it. The repo is private. If you have access to it, install a release directly:
-
-```sh
-gh release download --repo jbauman-26/cosmic-lifecycle --pattern cosmic-lifecycle.tgz
-npm install -g ./cosmic-lifecycle.tgz
-```
-
-## See it in 60 seconds
-
-No keys and no accounts. This runs on invented sample data.
-
-```sh
-lifecycle demo
-```
-
-The demo loses 14 orders on purpose, then shows the tool catching it:
-
-```
-FAIL Orders pulled against Shopify's own count: 787 against 801, off by 1.75%.
-     Do not trust reports built on this until it is fixed.
-```
-
-## Or let your agent set it up
-
-With the CLI installed, paste this into Claude Code, Cursor or Codex:
-
-```
-Set up Cosmic Lifecycle by following the output of lifecycle docs quickstart
-```
-
-`lifecycle docs quickstart` (the same text as [llms.txt](llms.txt)) is a setup playbook written for agents. It connects one source, checks the numbers, and gives you one verified figure before it offers anything else.
+A workspace with no source of truth connected still works: its numbers carry a line that says plainly they were not checked. See `lifecycle docs workspaces`.
 
 ## What it does
 
@@ -253,7 +281,7 @@ More: `lifecycle docs cloud`. Every change: [CHANGELOG.md](CHANGELOG.md).
 
 ## Where this is today
 
-This is an early release. Here is what has and has not been tested.
+Here is what has and has not been tested. Three sources have synced against real accounts (a Shopify development store, a Klaviyo test account, Stripe in test mode). Every other connector is covered by unit tests against recorded answers only, and is listed below as untested.
 
 **Tested**
 - Sync, reconcile, reports and read-only SQL on a Shopify dev store with 150 labeled sample orders.
@@ -298,12 +326,8 @@ If something breaks, `lifecycle doctor` says what is wrong and what to run next.
 
 Node 20 or newer. macOS keeps keys in the keychain. On other systems, set the `LIFECYCLE_*` environment variables listed in `lifecycle docs troubleshooting`.
 
-## Have it set up for you
+## Help
 
-Rather not wire up Shopify and Klaviyo yourself? [Jake at NorthSignal](https://northsignal.studio/lifecycle#setup) sets it up with you, starting with a free call.
-
-## Help and community
-
-Questions and setups get shared in [Cosmic AI](https://store.jakebauman.io/community), the free community this comes from.
+Bugs and missing features: `lifecycle feedback "what happened" --open`, or open an issue on this repo.
 
 MIT license.

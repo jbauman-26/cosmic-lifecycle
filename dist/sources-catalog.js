@@ -166,8 +166,7 @@ export async function sourceStatus(config, hasKey, db) {
 }
 // Any tool not in the catalog can still be brought in as daily totals.
 export const CUSTOM_SOURCE_NOTE = 'Any other source: export daily totals to CSV, then lifecycle sources import NAME --csv FILE. Columns that look like personal data are refused.';
-// The repo is private, so there is no public install or llms.txt link to hand out.
-// The setup playbook ships inside the CLI.
+// The setup playbook ships inside the CLI, so it always matches the installed version.
 export const QUICKSTART_COMMAND = 'lifecycle docs quickstart';
 // The text a person pastes into Claude Code, Cursor or Codex to have their agent run a kit.
 export function kitPrompt(kit) {

@@ -2,6 +2,51 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.17.0 (2026-11-25)
+
+The first public release. The repo is public, and the install is one command from the GitHub release. The public name is Cosmic CLI; the npm package stays `cosmic-lifecycle` and the command stays `lifecycle`.
+
+### Added
+
+- **Owner notes.** `lifecycle notes add "Exclude wholesale orders from revenue"`, `notes add --metric NAME`, `notes list`, `notes remove ID`. Notes live in `notes.json` in the workspace folder, never in the database and never in a source. `lifecycle metrics run` prints the matching notes, and the MCP `metric` and `query` results carry them as `owner_notes`, with a rule telling the agent to apply them and say which one it applied. New MCP tool `owner_notes`. Each workspace keeps its own. At most 200 notes of 500 characters.
+- **Metric definitions file.** `docs/METRICS.md` is written from the code at build time: every built-in metric, what it measures, its unit, the sources it needs, its packs and its stated assumptions.
+- **`lifecycle mcp` starts on a fresh install**, before `lifecycle init`, so `claude mcp add lifecycle -- lifecycle mcp` works right after installing. It runs on an empty in-memory database, creates no files, and its instructions say the workspace is not set up yet.
+- The agent guide says to read the owner's notes first, and to label any before-and-after comparison "before and after, not a holdout".
+
+### From 0.16.0, now on main
+
+- Google Merchant Center and six more ad platforms as read-only sources: Microsoft Advertising, LinkedIn, Reddit, Snapchat, TikTok and Pinterest, next to Meta and Google Ads. All are covered by unit tests against recorded answers only.
+
+### Fixed (from 0.15.1 and the orders fix)
+
+- `lifecycle reconcile` runs a two-source check only when both sources are connected and have synced, so an unconnected source no longer shows as a failed or passed check.
+- `orders_complete` counts the daily rows, not only two stored totals.
+
+### Changed
+
+- README, `llms.txt` and `--help` are written for marketing engineers, agency developers and Claude Code builders. The install line is `npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz`.
+
+### What is proven and what is not
+
+- Typecheck and the full suite pass, including `test/release-0170.test.ts` for notes through the MCP server. A clean install from the public release on a fresh HOME with no keys ran `lifecycle demo`, `lifecycle sources` and `lifecycle mcp`. Notes were not run against a live store.
+
+## 0.15.1 (2026-11-25)
+
+Reconcile checks only what it can honestly check. Found on a test store whose warehouse began as a copy of another store: GA4 failed with GA4 not connected (465,913 copied purchases against 546 real Shopify orders), and Klaviyo failed against 493,470 copied Placed Order events.
+
+### Fixed
+
+- **A two-source check runs only when both sources are connected now** (read from config.json), have finished a sync since they were connected, and are not syncing right now. Otherwise the check is skipped with a detail that starts `Not checked yet:` and names the reason, so a reader can tell it apart from a failure.
+- **Rows from before a disconnect never count.** Klaviyo, GA4 and flow rows synced before the source's latest disconnect belong to an account that is gone.
+- **A Klaviyo sync replaces the stored Placed Order days it pulls**, and clears them when the account has no Placed Order metric, so rows from another account cannot mix with this one's.
+- **Complete days only.** Order counts compare the window up to yesterday, so today's partial day and late events never fail a check. Shopify and Klaviyo both count by UTC day; GA4 counts by its property's day, which the tolerance covers over complete days.
+
+### Added
+
+- Setting `reconcile.min_difference` (3): two order counts that differ by this many orders or fewer pass whatever the percent, so a small store does not fail on one late order. A Klaviyo account with no orders against a store with this many orders or fewer is not checked yet.
+- A `connected` list in config.json (for example `["shopify", "klaviyo"]`) names the connected sources outright, for a host such as Cosmic Cloud that passes each source's settings only to the command that needs them.
+- `compareCounts` and `connectedNow` in `reconcile.ts`. `tolerances()` carries `minDifference` and `connected`.
+
 ## 0.15.0 (2026-11-25)
 
 Incremental Shopify sync. After the first full pull, a daily sync asks Shopify only for orders changed since the last one and rebuilds only the days and cohorts they touch. To do that and still count new versus returning customers right, the database now keeps one scrambled id per Shopify customer, made with a key that belongs to that store and is held outside the database. Built from Shopify's documentation and tested against hand-made and synthetic orders; no real store was connected.

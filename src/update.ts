@@ -11,7 +11,7 @@ const DAY = 24 * 60 * 60 * 1000
 export type UpdateInfo = { current: string; latest: string | null; newer: boolean; checkedAt: string | null; skipped?: string }
 
 // Asks GitHub for the latest release at most once a day. Sends nothing about you or your store.
-// The repo is private, so for most installs the answer is "not found". That is expected:
+// When GitHub cannot be reached or answers "not found", that is expected:
 // the check stays quiet, remembers the miss for a day, and the CLI is updated with the
 // Cosmic AI app or Cosmic Cloud that carries it.
 export const UNREACHABLE = 'The release list is private or offline. Nothing to do: the Cosmic AI app and Cosmic Cloud update the CLI they carry.'

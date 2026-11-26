@@ -335,7 +335,9 @@ describe('no stale public links', () => {
     const prompt = kitPrompt({ name: 'flow-audit', title: 'Flow audit', needs: ['klaviyo'] })
     expect(prompt).toMatch(/lifecycle docs quickstart/)
     const all = [UPDATE_HINT, prompt, ...Object.values(DOCS)].join('\n')
-    expect(all).not.toMatch(/releases\/latest\/download|raw\.githubusercontent\.com\/jbauman-26\/cosmic-lifecycle/)
+    // 0.17.0: the repo is public, so the one install link is the public release asset. Nothing else.
+    expect(all).toContain('https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz')
+    expect(all).not.toMatch(/raw\.githubusercontent\.com\/jbauman-26\/cosmic-lifecycle|gh release download/)
     expect(all).not.toContain(String.fromCharCode(8212))
   })
 

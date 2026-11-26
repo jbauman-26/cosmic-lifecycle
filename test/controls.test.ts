@@ -45,7 +45,7 @@ describe('owner settings', () => {
     expect(settingValue('reconcile.freshness_days')).toBe(2)
     expect(settingValue('query.row_cap')).toBe(1000)
     expect(settingValue('metrics.default_days')).toBe(90)
-    expect(tolerances()).toEqual({ klaviyoOrders: 3, ga4Purchases: 15, attributedShareFlag: 60, freshnessDays: 2, days: 90 })
+    expect(tolerances()).toEqual({ klaviyoOrders: 3, ga4Purchases: 15, attributedShareFlag: 60, freshnessDays: 2, minDifference: 3, days: 90 })
     expect(listSettings().find((s) => s.key === 'query.row_cap')).toMatchObject({ value: null, default: 1000 })
   })
 
@@ -83,12 +83,25 @@ describe('owner settings', () => {
 })
 
 describe('settings wired into the numbers', () => {
+  // 0.15.1: a two-source check runs only when both are connected and have synced, so connect them here.
+  beforeEach(async () => {
+    writeConfig({ database: { kind: 'local' }, shopify: { store: 'test.myshopify.com', clientId: 'c' }, klaviyo: { connected: true }, ga4: { property: '1', clientId: 'c' } } as any)
+    for (const s of ['shopify', 'klaviyo', 'ga4']) await db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status) VALUES ($1, $2, now() - interval '1 minute', now() - interval '1 minute', 'ok')`, [`seed-${s}`, s])
+    await db.query(`INSERT INTO meta_source_window VALUES ('klaviyo', 'placed_orders', $1, $2, now())`, [day(30), day(0)])
+  })
   async function seedKlaviyoGap() {
     // Shopify 100 orders, Klaviyo 95: a 5% gap.
     await db.query(`INSERT INTO fact_orders_daily VALUES ($1, 100, 1000, 1000, 0, 100, 0, now(), 0)`, [day(1)])
     await db.query(`INSERT INTO fact_klaviyo_orders_daily VALUES ($1, 95, 950, now())`, [day(1)])
-    await db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status) VALUES ('k', 'klaviyo', now(), now(), 'ok')`)
   }
+
+  it('reads the connected sources from an explicit list when a host passes one (Cosmic Cloud)', async () => {
+    writeConfig({ database: { kind: 'postgres' }, connected: ['shopify', 'klaviyo'] } as any)
+    expect(tolerances().connected).toEqual(['shopify', 'klaviyo'])
+    writeConfig({ database: { kind: 'postgres' }, connected: ['shopify'] } as any)
+    await seedKlaviyoGap()
+    expect((await runChecks(db)).find((c) => c.name === 'klaviyo_orders')).toMatchObject({ status: 'skipped', detail: 'Not checked yet: Klaviyo is not connected.' })
+  })
 
   it('uses the Klaviyo tolerance from config', async () => {
     await seedKlaviyoGap()

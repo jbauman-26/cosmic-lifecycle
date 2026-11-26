@@ -1,8 +1,8 @@
-import { settingValue } from './config.js';
+import { readRawConfig, settingValue } from './config.js';
 import { readWorkspace, REFERENCE_NAME } from './workspace.js';
 import { readCosts } from './costs.js';
 // The defaults. Each one can be changed with lifecycle config set, see tolerances().
-export const TOLERANCE = { klaviyoOrders: 3, ga4Purchases: 15, attributedShareFlag: 60, freshnessDays: 2 };
+export const TOLERANCE = { klaviyoOrders: 3, ga4Purchases: 15, attributedShareFlag: 60, freshnessDays: 2, minDifference: 3 };
 // Read on its own, not in tolerances(), so a store's tolerances read exactly as in 0.13.
 const adClaimFlag = (t) => t.adClaimFlag ?? settingValue('reconcile.ad_claim_flag');
 export function tolerances() {
@@ -11,8 +11,62 @@ export function tolerances() {
         ga4Purchases: settingValue('reconcile.tolerance.ga4_purchases'),
         attributedShareFlag: settingValue('reconcile.attributed_share_flag'),
         freshnessDays: settingValue('reconcile.freshness_days'),
+        minDifference: settingValue('reconcile.min_difference'),
         days: settingValue('metrics.default_days'),
+        connected: connectedNow(),
     };
+}
+// The native sources config.json says are connected now. Unreadable config: unknown, so no gating.
+export function connectedNow() {
+    try {
+        const raw = readRawConfig();
+        if (!raw || typeof raw !== 'object' || !('database' in raw))
+            return undefined;
+        // A host that hands keys per command (Cosmic Cloud) names the store's connected sources here, so a
+        // read that carries no source blocks still checks against what is connected.
+        if (Array.isArray(raw.connected))
+            return raw.connected.filter((s) => typeof s === 'string');
+        return ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'google-ads', 'hubspot'].filter((s) => raw[s] !== undefined && raw[s] !== null);
+    }
+    catch {
+        return undefined;
+    }
+}
+const SOURCE_NAME = { shopify: 'Shopify', klaviyo: 'Klaviyo', ga4: 'GA4', stripe: 'Stripe', meta: 'Meta', 'google-ads': 'Google Ads', hubspot: 'HubSpot' };
+/**
+ * Whether a two-source check may run now. It may not when a source is not connected, has never
+ * finished a sync since it was last connected, or is syncing right now. The reason is the skip detail,
+ * worded so the app can tell "not checked yet" from "failed".
+ */
+async function ready(db, t, sources) {
+    for (const s of sources) {
+        if (t.connected && !t.connected.includes(s))
+            return { ok: false, why: `${SOURCE_NAME[s] ?? s} is not connected.` };
+        const last = await one(db, `SELECT status FROM meta_sync_run WHERE source = $1 ORDER BY started_at DESC LIMIT 1`, [s]);
+        if (last.status === 'running')
+            return { ok: false, why: `${SOURCE_NAME[s] ?? s} is still syncing.` };
+        const done = await one(db, `SELECT 1 AS y FROM meta_sync_run r WHERE source = $1 AND status NOT IN ('failed', 'disconnected', 'running')
+      AND started_at > coalesce((SELECT max(started_at) FROM meta_sync_run d WHERE d.source = $1 AND d.status = 'disconnected'), '-infinity'::timestamptz) LIMIT 1`, [s]);
+        if (!done.y)
+            return { ok: false, why: `${SOURCE_NAME[s] ?? s} has not finished a sync since it was connected.` };
+    }
+    return { ok: true };
+}
+/** Rows a source wrote before its last disconnect belong to an account that is gone, so they never count. */
+async function rowsSince(db, source) {
+    const d = await one(db, `SELECT max(started_at) AS at FROM meta_sync_run WHERE source = $1 AND status = 'disconnected'`, [source]);
+    return d.at ? new Date(d.at).toISOString() : '1970-01-01T00:00:00.000Z';
+}
+/**
+ * Like compare, for two order counts. A gap of minDifference orders or fewer passes whatever the
+ * percent, so a store with a handful of orders does not fail on one late event.
+ */
+export function compareCounts(name, expected, actual, tolerancePct, minDifference, label) {
+    const c = compare(name, expected, actual, tolerancePct, label);
+    if (c.status === 'fail' && Math.abs(expected - actual) <= minDifference) {
+        return { ...c, status: 'pass', detail: `${label}: ${actual} against ${expected}, within ${minDifference} order${minDifference === 1 ? '' : 's'}.` };
+    }
+    return c;
 }
 const pct = (expected, actual) => (expected === 0 ? (actual === 0 ? 0 : 100) : (Math.abs(expected - actual) / expected) * 100);
 const round = (n) => Math.round(n * 100) / 100;
@@ -48,13 +102,34 @@ async function freshness(db, t) {
 export async function runChecks(db, t = tolerances()) {
     const checks = [];
     const days = t.days;
-    const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    const today = t.today ?? new Date().toISOString().slice(0, 10);
+    const dayOf = (offset) => new Date(Date.parse(today + 'T00:00:00Z') + offset * 86400000).toISOString().slice(0, 10);
+    const sinceDay = dayOf(-days);
+    const lastDay = dayOf(-1);
     // 1. Did the pull get everything Shopify says exists? This is the check that
     // would have caught a silent gap in a page table like the one we once measured.
     const totals = await db.query(`SELECT metric, value FROM meta_source_total WHERE source = 'shopify'`);
     const total = totals.find((t) => t.metric === 'orders_reported');
     const pulled = totals.find((t) => t.metric === 'orders_pulled');
-    checks.push(total && pulled ? compare('orders_complete', num(total.value), num(pulled.value), 0, 'Orders pulled against Shopify’s own count') : skip('orders_complete', 'Shopify has not been synced, or gave no exact count.'));
+    // Two stored totals can agree while the daily table is missing days, so the check also counts the rows the
+    // reports read: every pulled order that was not cancelled must sit in a day. orders_kept is written by each sync
+    // path; a store synced before it existed compares against everything pulled and says how to make it exact.
+    const kept = totals.find((t) => t.metric === 'orders_kept');
+    const daily = await one(db, `SELECT sum(orders) AS orders FROM fact_orders_daily`);
+    let complete;
+    if (!total || !pulled)
+        complete = skip('orders_complete', 'Shopify has not been synced, or gave no exact count.');
+    else {
+        complete = compare('orders_complete', num(total.value), num(pulled.value), 0, 'Orders pulled against Shopify’s own count');
+        if (complete.status === 'pass') {
+            const inDays = num(daily.orders);
+            const expected = kept ? num(kept.value) : num(pulled.value);
+            const days = compare('orders_complete', expected, inDays, 0, kept ? 'Orders in the daily totals against orders pulled and not cancelled' : 'Orders in the daily totals against orders pulled');
+            if (days.status === 'fail')
+                complete = kept ? days : { ...days, detail: `${days.detail} Cancelled orders are left out of the daily totals; sync Shopify again so the check can count them exactly.` };
+        }
+    }
+    checks.push(complete);
     // 2. Do the two tables built from those orders agree with each other?
     const d = await one(db, `SELECT sum(new_orders + returning_orders) AS orders, sum(net_revenue) AS net, sum(guest_orders) AS guest FROM fact_orders_daily`);
     const c = await one(db, `SELECT sum(orders) AS orders FROM fact_cohort_monthly`);
@@ -62,33 +137,52 @@ export async function runChecks(db, t = tolerances()) {
         ? skip('orders_vs_cohorts', 'No Shopify orders stored.')
         : compare('orders_vs_cohorts', num(d.orders), num(c.orders), 0, 'Customer orders in daily totals against cohorts'));
     // 3. Is Klaviyo seeing the same orders as Shopify?
-    const so = await one(db, `SELECT sum(orders) AS orders, sum(net_revenue) AS net FROM fact_orders_daily WHERE date >= $1`, [since]);
-    // Compare only the days Klaviyo was actually pulled for. Otherwise a partial
-    // sync reads as missing orders, and the check cries wolf.
-    const kw = await one(db, `SELECT window_start::text AS s, window_end::text AS e FROM meta_source_window WHERE source = 'klaviyo' AND metric = 'placed_orders'`);
-    const kFrom = kw.s && String(kw.s) > since ? String(kw.s) : since;
-    const kTo = kw.e ? String(kw.e) : new Date().toISOString().slice(0, 10);
-    const period = kFrom === since ? `last ${days} days` : `${kFrom} to ${kTo}, the days Klaviyo was synced for`;
-    const sk = await one(db, `SELECT sum(orders) AS orders FROM fact_orders_daily WHERE date >= $1 AND date <= $2`, [kFrom, kTo]);
-    const ko = await one(db, `SELECT sum(placed_orders) AS orders FROM fact_klaviyo_orders_daily WHERE date >= $1 AND date <= $2`, [kFrom, kTo]);
-    const klaviyoSynced = (await db.query(`SELECT 1 FROM meta_sync_run WHERE source = 'klaviyo' AND status NOT IN ('failed', 'disconnected', 'running') LIMIT 1`)).length > 0;
-    if (so.orders === null || so.orders === undefined || !klaviyoSynced)
-        checks.push(skip('klaviyo_orders', 'Needs both Shopify and Klaviyo synced.'));
-    else if (!num(sk.orders) && !num(ko.orders))
-        checks.push(skip('klaviyo_orders', `Neither source has orders in ${period}.`));
-    else if (num(ko.orders) === 0) {
-        checks.push({ name: 'klaviyo_orders', status: 'fail', expected: num(sk.orders), actual: 0, diffPct: 100, detail: `Shopify has ${num(sk.orders)} orders in ${period}, and Klaviyo has none. The store may not be connected to this Klaviyo account.` });
+    // Both count by UTC day (Shopify's processedAt, Klaviyo's report timezone), so the days line up.
+    // Only complete days count: today is still filling in, and Klaviyo events arrive minutes late.
+    const so = await one(db, `SELECT sum(orders) AS orders, sum(net_revenue) AS net FROM fact_orders_daily WHERE date >= $1 AND date <= $2`, [sinceDay, lastDay]);
+    const kReady = await ready(db, t, ['shopify', 'klaviyo']);
+    if (!kReady.ok)
+        checks.push(skip('klaviyo_orders', `Not checked yet: ${kReady.why}`));
+    else {
+        // Compare only the days Klaviyo was actually pulled for. Otherwise a partial
+        // sync reads as missing orders, and the check cries wolf.
+        const kw = await one(db, `SELECT window_start::text AS s, window_end::text AS e FROM meta_source_window WHERE source = 'klaviyo' AND metric = 'placed_orders'`);
+        const kFrom = kw.s && String(kw.s).slice(0, 10) > sinceDay ? String(kw.s).slice(0, 10) : sinceDay;
+        const kTo = kw.e && String(kw.e).slice(0, 10) < lastDay ? String(kw.e).slice(0, 10) : lastDay;
+        const period = kFrom === sinceDay && kTo === lastDay ? `the last ${days} complete days` : `${kFrom} to ${kTo}, the complete days Klaviyo was synced for`;
+        const kSince = await rowsSince(db, 'klaviyo');
+        const sk = await one(db, `SELECT sum(orders) AS orders FROM fact_orders_daily WHERE date >= $1 AND date <= $2`, [kFrom, kTo]);
+        const ko = await one(db, `SELECT sum(placed_orders) AS orders FROM fact_klaviyo_orders_daily WHERE date >= $1 AND date <= $2 AND source_synced_at >= $3`, [kFrom, kTo, kSince]);
+        if (!kw.e)
+            checks.push(skip('klaviyo_orders', 'Not checked yet: Klaviyo has no Placed Order data. Its Shopify integration may be off.'));
+        else if (kFrom > kTo)
+            checks.push(skip('klaviyo_orders', 'Not checked yet: Klaviyo has no complete day synced.'));
+        else if (!num(sk.orders) && !num(ko.orders))
+            checks.push(skip('klaviyo_orders', `Neither source has orders in ${period}.`));
+        else if (num(ko.orders) === 0 && num(sk.orders) <= t.minDifference)
+            checks.push(skip('klaviyo_orders', `Too few orders to compare yet: Shopify has ${num(sk.orders)} in ${period}.`));
+        else if (num(ko.orders) === 0) {
+            checks.push({ name: 'klaviyo_orders', status: 'fail', expected: num(sk.orders), actual: 0, diffPct: 100, detail: `Shopify has ${num(sk.orders)} orders in ${period}, and Klaviyo has none. The store may not be connected to this Klaviyo account.` });
+        }
+        else
+            checks.push(compareCounts('klaviyo_orders', num(sk.orders), num(ko.orders), t.klaviyoOrders, t.minDifference, `Klaviyo Placed Order against Shopify orders, ${period}`));
     }
-    else
-        checks.push(compare('klaviyo_orders', num(sk.orders), num(ko.orders), t.klaviyoOrders, `Klaviyo Placed Order against Shopify orders, ${period}`));
-    // 4. Is GA4 seeing the same purchases?
-    const ga = await one(db, `SELECT sum(purchases) AS purchases FROM fact_ga4_daily WHERE date >= $1`, [since]);
-    checks.push(ga.purchases === null || ga.purchases === undefined || so.orders === null || so.orders === undefined
-        ? skip('ga4_purchases', 'Needs both GA4 and Shopify synced.')
-        : compare('ga4_purchases', num(so.orders), num(ga.purchases), t.ga4Purchases, `GA4 purchases against Shopify orders, last ${days} days`));
+    // 4. Is GA4 seeing the same purchases? GA4 counts by its property's day, Shopify by UTC day.
+    // Over complete days the edges move a few hours of orders at most, which the tolerance covers.
+    const gReady = await ready(db, t, ['shopify', 'ga4']);
+    if (!gReady.ok)
+        checks.push(skip('ga4_purchases', `Not checked yet: ${gReady.why}`));
+    else {
+        const ga = await one(db, `SELECT sum(purchases) AS purchases FROM fact_ga4_daily WHERE date >= $1 AND date <= $2 AND source_synced_at >= $3`, [sinceDay, lastDay, await rowsSince(db, 'ga4')]);
+        checks.push(ga.purchases === null || ga.purchases === undefined || so.orders === null || so.orders === undefined
+            ? skip('ga4_purchases', 'Not checked yet: GA4 or Shopify has no complete day synced.')
+            : compareCounts('ga4_purchases', num(so.orders), num(ga.purchases), t.ga4Purchases, t.minDifference, `GA4 purchases against Shopify orders, the last ${days} complete days`));
+    }
     // 5. Does the attributed revenue look believable?
-    const fl = await one(db, `SELECT sum(revenue) AS revenue FROM fact_flow_daily WHERE date >= $1`, [since]);
-    if (fl.revenue === null || fl.revenue === undefined || !num(so.net))
+    const fl = kReady.ok ? await one(db, `SELECT sum(revenue) AS revenue FROM fact_flow_daily WHERE date >= $1 AND date <= $2 AND source_synced_at >= $3`, [sinceDay, lastDay, await rowsSince(db, 'klaviyo')]) : {};
+    if (!kReady.ok)
+        checks.push(skip('attributed_share', `Not checked yet: ${kReady.why}`));
+    else if (fl.revenue === null || fl.revenue === undefined || !num(so.net))
         checks.push(skip('attributed_share', 'Needs Klaviyo flow revenue and Shopify revenue.'));
     else {
         const share = round((num(fl.revenue) / num(so.net)) * 100);
@@ -98,8 +192,10 @@ export async function runChecks(db, t = tolerances()) {
         });
     }
     // 6. Do the daily flow rows add up to Klaviyo's own totals?
-    const w = await one(db, `SELECT min(window_start) AS s, max(window_end) AS e, sum(recipients) AS recipients FROM fact_flow_window`);
-    if (w.recipients === null || w.recipients === undefined)
+    const w = kReady.ok ? await one(db, `SELECT min(window_start) AS s, max(window_end) AS e, sum(recipients) AS recipients FROM fact_flow_window WHERE source_synced_at >= $1`, [await rowsSince(db, 'klaviyo')]) : {};
+    if (!kReady.ok)
+        checks.push(skip('flow_totals', `Not checked yet: ${kReady.why}`));
+    else if (w.recipients === null || w.recipients === undefined)
         checks.push(skip('flow_totals', 'No flow totals from Klaviyo yet.'));
     else {
         const f = await one(db, `SELECT sum(recipients) AS recipients FROM fact_flow_daily WHERE date >= $1 AND date <= $2`, [w.s, w.e]);
@@ -158,7 +254,11 @@ const total = async (db, source, metric) => {
 export async function runReferenceChecks(db, t, ws) {
     const checks = [];
     const days = t.days;
-    const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+    const today = t.today ?? new Date().toISOString().slice(0, 10);
+    const dayOf = (offset) => new Date(Date.parse(today + 'T00:00:00Z') + offset * 86400000).toISOString().slice(0, 10);
+    const sinceDay = dayOf(-days);
+    const lastDay = dayOf(-1);
+    const since = sinceDay;
     const name = REFERENCE_NAME[ws.reference];
     const has = ws.reference === 'none' ? false : await synced(db, ws.reference);
     // The reference itself: is there one, and has it synced?
