@@ -148,12 +148,12 @@ Run it every day from your own GitHub:
 4. lifecycle deploy --repo YOU/lifecycle-sync
 5. Read the plan, then add --yes.
 `,
-    quickstart: `# Cosmic Lifecycle: agent setup playbook
+    quickstart: `# Cosmic CLI: agent setup playbook
 
-This is the setup guide for any coding or chat agent installing Cosmic Lifecycle.
+This is the setup guide for any coding or chat agent installing Cosmic CLI (npm package cosmic-lifecycle, command lifecycle).
 A person with the CLI installed starts it by pasting one line into their agent:
 
-  Set up Cosmic Lifecycle by following the output of lifecycle docs quickstart
+  Set up Cosmic CLI by following the output of lifecycle docs quickstart
 
 Follow this playbook in order, then stop and report what is live. Do not invent another setup flow.
 
@@ -175,10 +175,8 @@ customer records, and has no account or server of ours in the path.
 
 ## Fastest path to a trusted number
 
-1. Install. The CLI ships inside the Cosmic AI app and Cosmic Cloud, so most
-   people already have it. With access to the private repo, install it directly:
-     gh release download --repo jbauman-26/cosmic-lifecycle --pattern cosmic-lifecycle.tgz
-     npm install -g ./cosmic-lifecycle.tgz
+1. Install, if lifecycle --version does not answer (Node 20 or newer):
+     npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
 2. Show it working with no keys, on labeled sample data:
      lifecycle demo
 3. Set up the local database, saying what kind of business this is:
@@ -232,7 +230,9 @@ If the tool is not set up yet, follow \`lifecycle docs quickstart\` instead.
 5. Report the sync warnings. Do not hide them from the user.
 6. For a fact only the live API has, such as the current flow list or Shopify's own order count, use a tool: \`lifecycle tools catalog\`, then \`lifecycle tools run TOOL --format json\`. These built-in tools are read-only and return no personal data. For images, video, voice or scraping, any Kie, fal, Apify or ScrapeCreators id also runs on the user's own account with that provider. Read \`lifecycle docs tools\` first: those jobs cost money and must never be started twice.
 7. Saved reports, dashboards and plans are in \`lifecycle files ls\`. Read one with \`lifecycle files cat PATH\`.
-8. For a named job, such as a flow audit, use a kit: \`lifecycle kits search "flow audit"\`, then \`lifecycle kits add NAME\`, then follow its AGENT.md through the Verify checklist.
+8. Read the owner's notes before explaining a number: \`lifecycle notes list --format json\`, or the MCP \`owner_notes\` tool. Metric and query results carry the matching ones as \`owner_notes\`. Apply them in your explanation and say which note you applied. They never change the SQL. When the owner corrects you, offer to save the correction: \`lifecycle notes add "..."\`.
+9. Any before-and-after comparison you report is "before and after, not a holdout". Never call it causal lift.
+10. For a named job, such as a flow audit, use a kit: \`lifecycle kits search "flow audit"\`, then \`lifecycle kits add NAME\`, then follow its AGENT.md through the Verify checklist.
 
 Rules:
 - The database holds totals only. It has no customer names, emails, phones or addresses. shopify_order_state and shopify_customer_first hold a scrambled id per Shopify customer and order (a keyed hash, the key kept outside the database) so a sync can fetch only changed orders. They are sync machinery: queries that would return those ids are refused, and you never need them for a number.
@@ -853,8 +853,9 @@ Error codes (the "code" field with --format json, and in lifecycle logs):
   not_running      tools abort named a run that had already ended.
 
 Updates:
-  The repo is private, so there is no public download link. The Cosmic AI app and
-  Cosmic Cloud update the CLI they carry. lifecycle status checks for a newer
+  Update by running the install line again:
+    npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
+  The Cosmic AI app and Cosmic Cloud update the CLI they carry. lifecycle status checks for a newer
   release at most once a day and says nothing when it cannot see the release list.
   Turn the check off with lifecycle config set update.check false.
 

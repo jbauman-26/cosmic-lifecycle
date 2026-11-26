@@ -49,6 +49,7 @@ import { trustLine } from './reconcile.js'
 import { defaultDays, metricCandidates } from './metrics.js'
 import { recordCustomQuery } from './query.js'
 import { basename } from 'node:path'
+import { addNote, notesFor, NOTES_RULE, readNotes, removeNote } from './notes.js'
 import { spawnSync } from 'node:child_process'
 import { saveArtifact, filesDir, listFiles, readFile, getFile, putFile, pullCloud } from './files.js'
 import { customTables, importCsv } from './custom-sources.js'
@@ -77,7 +78,7 @@ import { configPath, workspaceName, workspacesDir } from './paths.js'
 import { existsSync, readdirSync } from 'node:fs'
 
 const program = new Command('lifecycle')
-  .description('Marketing numbers your agent can trust, for a Shopify store, a SaaS product, a B2B pipeline, an agency client or a creator business. Read-only. Nothing sends.')
+  .description('Cosmic CLI: checked marketing numbers your agent can quote. Syncs your sources into a database you own, checks them against the source of truth, and puts a trust line on every number. For a store, a SaaS product, a B2B pipeline, an agency client or a creator business. Read-only. Nothing sends.')
   .version(VERSION)
   .option('--format <format>', 'text or json', 'text')
   .option('--workspace <name>', 'use a named workspace, such as one per agency client. Same as LIFECYCLE_WORKSPACE')
@@ -724,11 +725,14 @@ metrics.command('run').argument('<names...>').option('--days <n>', 'window in da
     const days = opts.days === undefined ? defaultDays() : Number(opts.days)
     const results: Awaited<ReturnType<typeof runMetric>>[] = []
     for (const n of names) results.push(await runMetric(db, n, days))
-    const out = names.length === 1 ? results[0]! : { metrics: results, trust: results[0]!.trust }
+    const owner = [...new Map(names.flatMap((n) => notesFor(n)).map((x) => [x.id, x])).values()]
+    const base = names.length === 1 ? results[0]! : { metrics: results, trust: results[0]!.trust }
+    const out = owner.length ? { ...base, owner_notes: { rule: NOTES_RULE, notes: owner } } : base
     emit(format(), out, () => [
       results[0]!.trust.line,
       ...results.map((r) => `${r.title}${r.saved ? ' (saved by the owner)' : ''}, last ${r.days} days: ${formatValue(r.unit, r.value)}${r.detail ? `. ${r.detail}` : ''}`),
       ...[...new Set(results.flatMap((r) => r.notes))],
+      ...(owner.length ? ['Owner notes:', ...owner.map((x) => `  [${x.id}] ${x.text}`)] : []),
     ].join('\n'))
   } finally {
     await db.close()
@@ -997,6 +1001,21 @@ program.command('feedback').argument('<message...>').description('Report a bug o
   const url = feedbackUrl(words.join(' '))
   const opened = opts.open ? openUrl(url) : false
   emit(format(), { url, opened }, () => `${opened ? 'Opened' : 'Open this to send it'}: ${url}\nIt includes your lifecycle, Node and OS versions. Nothing else.`)
+}))
+
+// 0.17.0: the owner's notes and past corrections, handed to the agent with every metric.
+const notes = program.command('notes').description('Business context and past corrections, such as "exclude wholesale orders". The MCP server hands them to the agent with every metric. Stored in this workspace only; sources are never written')
+notes.command('add').argument('<text...>').option('--metric <name>', 'tie the note to one metric; without it the note goes with every metric').description('Add a note').action(run(async (words: string[], opts) => {
+  const n = addNote(words.join(' '), opts.metric)
+  emit(format(), n, () => `Added note ${n.id}${n.metric ? ` for ${n.metric}` : ' for every metric'}: ${n.text}`)
+}))
+notes.command('list').description('List the notes').action(run(async () => {
+  const all = readNotes()
+  emit(format(), { rule: NOTES_RULE, notes: all }, () => (all.length ? all.map((n) => `[${n.id}] ${n.metric ?? 'all metrics'}: ${n.text}`).join('\n') : 'No notes yet. Add one: lifecycle notes add "Exclude wholesale orders from revenue"'))
+}))
+notes.command('remove').argument('<id>').description('Remove a note by its id').action(run(async (id: string) => {
+  const n = removeNote(id)
+  emit(format(), n, () => `Removed note ${n.id}: ${n.text}`)
 }))
 
 program.command('mcp').description('Start the read-only MCP server').action(run(startMcp))

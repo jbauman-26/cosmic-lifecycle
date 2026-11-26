@@ -2,6 +2,33 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.17.0 (2026-11-25)
+
+The first public release. The repo is public, and the install is one command from the GitHub release. The public name is Cosmic CLI; the npm package stays `cosmic-lifecycle` and the command stays `lifecycle`.
+
+### Added
+
+- **Owner notes.** `lifecycle notes add "Exclude wholesale orders from revenue"`, `notes add --metric NAME`, `notes list`, `notes remove ID`. Notes live in `notes.json` in the workspace folder, never in the database and never in a source. `lifecycle metrics run` prints the matching notes, and the MCP `metric` and `query` results carry them as `owner_notes`, with a rule telling the agent to apply them and say which one it applied. New MCP tool `owner_notes`. Each workspace keeps its own. At most 200 notes of 500 characters.
+- **Metric definitions file.** `docs/METRICS.md` is written from the code at build time: every built-in metric, what it measures, its unit, the sources it needs, its packs and its stated assumptions.
+- The agent guide says to read the owner's notes first, and to label any before-and-after comparison "before and after, not a holdout".
+
+### From 0.16.0, now on main
+
+- Google Merchant Center and six more ad platforms as read-only sources: Microsoft Advertising, LinkedIn, Reddit, Snapchat, TikTok and Pinterest, next to Meta and Google Ads. All are covered by unit tests against recorded answers only.
+
+### Fixed (from 0.15.1 and the orders fix)
+
+- `lifecycle reconcile` runs a two-source check only when both sources are connected and have synced, so an unconnected source no longer shows as a failed or passed check.
+- `orders_complete` counts the daily rows, not only two stored totals.
+
+### Changed
+
+- README, `llms.txt` and `--help` are written for marketing engineers, agency developers and Claude Code builders. The install line is `npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz`.
+
+### What is proven and what is not
+
+- Typecheck and the full suite pass, including `test/release-0170.test.ts` for notes through the MCP server. A clean install from the public release on a fresh HOME with no keys ran `lifecycle demo`, `lifecycle sources` and `lifecycle mcp`. Notes were not run against a live store.
+
 ## 0.15.1 (2026-11-25)
 
 Reconcile checks only what it can honestly check. Found on a test store whose warehouse began as a copy of another store: GA4 failed with GA4 not connected (465,913 copied purchases against 546 real Shopify orders), and Klaviyo failed against 493,470 copied Placed Order events.

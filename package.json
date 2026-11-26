@@ -1,6 +1,6 @@
 {
   "name": "cosmic-lifecycle",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Marketing numbers your agent can trust, for a Shopify store, a SaaS product, a B2B pipeline, an agency or a creator. Syncs Shopify, Stripe, HubSpot, Klaviyo, GA4, Meta and Google Ads into your own database and checks every number against your source of truth.",
   "type": "module",
   "bin": {
@@ -11,7 +11,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/write-llms.mjs && node scripts/write-personal-rules.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/write-llms.mjs && node scripts/write-metrics-doc.mjs && node scripts/write-personal-rules.mjs",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",

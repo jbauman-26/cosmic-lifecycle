@@ -18,6 +18,7 @@ import { readWorkspace, REFERENCE_NAME, TYPES, WORKSPACE_TYPES } from './workspa
 import { assertPack, defaultDays } from './metrics.js';
 import { rollupMetric } from './rollup.js';
 import { workspaceName } from './paths.js';
+import { NOTES_RULE, readNotes, withNotes } from './notes.js';
 const text = (data) => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
 export async function schemaInfo(db) {
     const out = {};
@@ -64,9 +65,10 @@ export function buildMcpServer(db) {
             rate_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('exchange rate date; defaults to the latest'),
         },
         annotations: readOnly,
-    }, async ({ name, days, stores, currency, rate_date }) => text(stores
+    }, async ({ name, days, stores, currency, rate_date }) => text(withNotes(stores
         ? await rollupMetric(name, { stores, currency, days: days ?? defaultDays(), rateDate: rate_date, open: { store: workspaceName() ?? 'default', db } })
-        : await runMetric(db, name, days)));
+        : await runMetric(db, name, days), name)));
+    server.registerTool('owner_notes', { description: 'The owner\'s business context and past corrections, such as "exclude wholesale orders". Read them before explaining any number. metric and query results carry the matching ones as owner_notes.', annotations: readOnly }, async () => text({ rule: NOTES_RULE, notes: readNotes() }));
     server.registerTool('list_source_catalog', { description: 'Sources this CLI can connect, what each syncs, and the command to connect it.', annotations: readOnly }, async () => text(readWorkspace().type === 'shopify' ? CATALOG : ALL_NATIVE));
     server.registerTool('list_tool_catalog', { description: 'Read-only Klaviyo and Shopify API tools that run on the user\'s own keys.', annotations: readOnly }, async () => text(toolCatalog()));
     server.registerTool('run_tool', {
@@ -89,7 +91,7 @@ export function buildMcpServer(db) {
                 lock();
             }
         }
-        return text(r);
+        return text(withNotes(r));
     });
     server.registerTool('metric_candidates', { description: 'Custom queries run more than once. Each is a candidate to become a verified metric.', annotations: readOnly }, async () => text(await metricCandidates(db)));
     server.registerTool('reconcile', { description: 'Prove the numbers agree across sources. Run this before quoting a number.', annotations: { openWorldHint: false } }, async () => text(await withWriteLock('mcp reconcile', () => reconcile(db))));

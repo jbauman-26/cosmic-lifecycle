@@ -111,7 +111,25 @@ export async function runChecks(db, t = tolerances()) {
     const totals = await db.query(`SELECT metric, value FROM meta_source_total WHERE source = 'shopify'`);
     const total = totals.find((t) => t.metric === 'orders_reported');
     const pulled = totals.find((t) => t.metric === 'orders_pulled');
-    checks.push(total && pulled ? compare('orders_complete', num(total.value), num(pulled.value), 0, 'Orders pulled against Shopify’s own count') : skip('orders_complete', 'Shopify has not been synced, or gave no exact count.'));
+    // Two stored totals can agree while the daily table is missing days, so the check also counts the rows the
+    // reports read: every pulled order that was not cancelled must sit in a day. orders_kept is written by each sync
+    // path; a store synced before it existed compares against everything pulled and says how to make it exact.
+    const kept = totals.find((t) => t.metric === 'orders_kept');
+    const daily = await one(db, `SELECT sum(orders) AS orders FROM fact_orders_daily`);
+    let complete;
+    if (!total || !pulled)
+        complete = skip('orders_complete', 'Shopify has not been synced, or gave no exact count.');
+    else {
+        complete = compare('orders_complete', num(total.value), num(pulled.value), 0, 'Orders pulled against Shopify’s own count');
+        if (complete.status === 'pass') {
+            const inDays = num(daily.orders);
+            const expected = kept ? num(kept.value) : num(pulled.value);
+            const days = compare('orders_complete', expected, inDays, 0, kept ? 'Orders in the daily totals against orders pulled and not cancelled' : 'Orders in the daily totals against orders pulled');
+            if (days.status === 'fail')
+                complete = kept ? days : { ...days, detail: `${days.detail} Cancelled orders are left out of the daily totals; sync Shopify again so the check can count them exactly.` };
+        }
+    }
+    checks.push(complete);
     // 2. Do the two tables built from those orders agree with each other?
     const d = await one(db, `SELECT sum(new_orders + returning_orders) AS orders, sum(net_revenue) AS net, sum(guest_orders) AS guest FROM fact_orders_daily`);
     const c = await one(db, `SELECT sum(orders) AS orders FROM fact_cohort_monthly`);

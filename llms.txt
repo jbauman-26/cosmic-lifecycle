@@ -1,9 +1,9 @@
-# Cosmic Lifecycle: agent setup playbook
+# Cosmic CLI: agent setup playbook
 
-This is the setup guide for any coding or chat agent installing Cosmic Lifecycle.
+This is the setup guide for any coding or chat agent installing Cosmic CLI (npm package cosmic-lifecycle, command lifecycle).
 A person with the CLI installed starts it by pasting one line into their agent:
 
-  Set up Cosmic Lifecycle by following the output of lifecycle docs quickstart
+  Set up Cosmic CLI by following the output of lifecycle docs quickstart
 
 Follow this playbook in order, then stop and report what is live. Do not invent another setup flow.
 
@@ -25,10 +25,8 @@ customer records, and has no account or server of ours in the path.
 
 ## Fastest path to a trusted number
 
-1. Install. The CLI ships inside the Cosmic AI app and Cosmic Cloud, so most
-   people already have it. With access to the private repo, install it directly:
-     gh release download --repo jbauman-26/cosmic-lifecycle --pattern cosmic-lifecycle.tgz
-     npm install -g ./cosmic-lifecycle.tgz
+1. Install, if lifecycle --version does not answer (Node 20 or newer):
+     npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
 2. Show it working with no keys, on labeled sample data:
      lifecycle demo
 3. Set up the local database, saying what kind of business this is:
