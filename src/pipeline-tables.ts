@@ -246,14 +246,27 @@ export async function assertPlainQuery(conn: PipelineConn, body: string) {
   // is a function defined in this database (or an extension's) and is refused.
   const own = [...new Set(calls.filter((c) => c.schema && c.schema !== 'pg_catalog').map((c) => `${c.schema}.${c.name}`))]
   if (own.length) refuse(`the query calls ${own.join(', ')}, a function defined in this database. Only built-in functions can be used on pipeline tables.`)
-  // A type from a schema other than pg_catalog, after :: or AS: a cast or a domain check can run a function that reads
-  // other tables, and neither the text nor the plan shows it.
+  // A type from a schema other than pg_catalog, after :: or AS, or written as schema.type 'literal': a cast or a
+  // domain check can run a function that reads other tables. EXPLAIN does not name that function.
+  const refuseCast = (schema: string, typeName: string) => {
+    if (schema !== 'pg_catalog') refuse(`the query casts to ${schema}.${typeName}, a type defined in this database. A cast or a domain can run a function, so only built-in types can be used.`)
+  }
   for (let i = 2; i < tokens.length; i++) {
     const t = tokens[i]!
     if (t.kind !== 'ident' || tokens[i - 1]?.kind !== 'op' || tokens[i - 1]!.value !== '.' || tokens[i - 2]?.kind !== 'ident') continue
     const before = tokens[i - 3]
     const cast = (before?.kind === 'op' && before.value === ':' && tokens[i - 4]?.kind === 'op' && tokens[i - 4]!.value === ':') || (before?.kind === 'ident' && !before.quoted && before.value === 'as')
-    if (cast && tokens[i - 2]!.value !== 'pg_catalog') refuse(`the query casts to ${tokens[i - 2]!.value}.${t.value}, a type defined in this database. A cast or a domain can run a function, so only built-in types can be used.`)
+    if (cast) refuseCast(tokens[i - 2]!.value, t.value)
+  }
+  // schema.type 'text' has no :: and no AS. A string after a qualified name is a typed literal, not an alias.
+  for (let i = 3; i < tokens.length; i++) {
+    const lit = tokens[i]!
+    if (lit.kind !== 'string') continue
+    const typeName = tokens[i - 1]
+    const dot = tokens[i - 2]
+    const schema = tokens[i - 3]
+    if (typeName?.kind !== 'ident' || dot?.kind !== 'op' || dot.value !== '.' || schema?.kind !== 'ident') continue
+    refuseCast(schema.value, typeName.value)
   }
   // Views and materialized views: their columns can be renamed past the column rules, so they are never read. Any
   // view outside pg_catalog can only be reached as schema.name (see the search path above), in any position.

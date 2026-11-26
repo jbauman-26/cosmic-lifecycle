@@ -229,6 +229,15 @@ describe('review blockers: protection never depends on the SQL text', () => {
       : (sql.includes('information_schema') || sql.includes('max(')) ? query(sql, params) : [{ n: 1 }]
     await expect(pipelineQueryRun(conn, [{ schema: 'hubspot', tool: 'fivetran' }], 'SELECT hubspot.property_firstname FROM public.all_contacts() hubspot', 100, 2)).rejects.toThrow(/all_contacts, a function defined in this database/)
   })
+
+  it('refuses a typed literal of a database type, which runs a domain check the plan never shows', async () => {
+    const { conn } = hubspot()
+    for (const sql of [`SELECT public.evil 'x' FROM hubspot.deal`, `SELECT "public"."evil" 'x' FROM hubspot.deal`]) {
+      await expect(pipelineQueryRun(conn, [{ schema: 'hubspot', tool: 'fivetran' }], sql, 100, 2)).rejects.toMatchObject({ code: 'blocked_object', message: expect.stringContaining('casts to public.evil') })
+    }
+    const ok = await pipelineQueryRun(conn, [{ schema: 'hubspot', tool: 'fivetran' }], `SELECT date '2020-01-01' FROM hubspot.deal`, 100, 2)
+    expect(ok.rowCount).toBe(1)
+  })
   it('says when deleted source rows are still in the table', async () => {
     const { query, conn } = fakeDb({ deal: { columns: [['deal_id', 'bigint'], ['_fivetran_deleted', 'boolean'], ['_fivetran_synced', 'timestamptz']], rows: [{ _fivetran_synced: at(1) }] } })
     conn.readOnly = async (sql, params) => sql.startsWith('EXPLAIN') ? [{ 'QUERY PLAN': [{ Plan: { Schema: 'hubspot', 'Relation Name': 'deal' } }] }] : (sql.includes('information_schema') || sql.includes('max(')) ? query(sql, params) : [{ n: 1 }]
