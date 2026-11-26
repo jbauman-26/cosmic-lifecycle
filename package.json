@@ -1,9 +1,10 @@
 {
   "name": "cosmic-lifecycle",
-  "version": "0.17.1",
-  "description": "Marketing numbers your agent can trust, for a Shopify store, a SaaS product, a B2B pipeline, an agency or a creator. Syncs Shopify, Stripe, HubSpot, Klaviyo, GA4, Meta and Google Ads into your own database and checks every number against your source of truth.",
+  "version": "0.18.0",
+  "description": "Your marketing data, ready for your AI agent. Connect ads, analytics, payments, email and CRM tools into a database you own, with a check on every number. Works with Claude Code, Cursor and Codex over MCP. Free, no account. Command: cosmic (or lifecycle).",
   "type": "module",
   "bin": {
+    "cosmic": "dist/cli.js",
     "lifecycle": "dist/cli.js",
     "cosmic-lifecycle": "dist/cli.js"
   },
@@ -58,7 +59,14 @@
     "saas",
     "b2b",
     "hubspot",
-    "stripe"
+    "stripe",
+    "marketing-data",
+    "mcp-server",
+    "ai-agent",
+    "analytics",
+    "google-ads",
+    "meta-ads",
+    "ga4"
   ],
   "author": "Cosmic AI"
 }

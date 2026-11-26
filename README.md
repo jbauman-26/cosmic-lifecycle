@@ -1,10 +1,18 @@
 # Cosmic CLI
 
-Your agent should not quote a marketing number it can't prove.
+Your marketing data, ready for your AI agent.
 
-Cosmic CLI gives Claude Code, Cursor and Codex checked marketing numbers. It syncs your sources into a database you own (local, or your own Postgres), checks them against the business's source of truth, and puts a trust line on every number. When the sources disagree, the number says so before your agent repeats it to you or your client.
+Connect your marketing tools to Claude Code, Cursor or Codex and get numbers you can trust. Cosmic CLI pulls your ads, analytics, payments, email and CRM data into a database you own (on your computer, or your own Postgres), checks the numbers against your source of truth, and puts a trust line on every answer. When two tools disagree, your agent hears it before you repeat the number to anyone.
 
-For anyone who asks an AI about their store's numbers: a Shopify owner, a freelancer, an agency running many clients, or a marketing engineer. Free and MIT licensed. The npm package is `cosmic-lifecycle`; the command is `lifecycle`.
+For anyone who markets something: founders and SaaS teams, marketers and freelancers, creators, agencies running many clients, and online stores. Free and MIT licensed, no account. The command is `cosmic`; `lifecycle` is the same command and keeps working. The npm package is `cosmic-lifecycle`.
+
+## What it connects
+
+- **14 native sources:** Stripe, Google Analytics 4, HubSpot, Meta Ads, Google Ads, Microsoft Advertising, LinkedIn Ads, TikTok Ads, Pinterest Ads, Reddit Ads, Snapchat Ads, Google Merchant Center, Shopify and Klaviyo. Every connected source gets a freshness check, and the ones that overlap are checked against your source of truth (Stripe, Shopify or HubSpot).
+- **100 more in the warehouse catalog, with readiness shown for each:** 30 have connector code (such as Mailchimp, Brevo, Customer.io, Pipedrive, WooCommerce, BigCommerce, Zendesk, Freshdesk) and 70 are planned. `cosmic sources catalog` lists every one with its status.
+- **Anything else:** `cosmic sources import NAME --csv FILE` brings in daily totals from any tool.
+
+Only Shopify, Klaviyo and Stripe have synced against real accounts so far. Every other connector is tested against recorded answers. The full test record is under "Where this is today" below.
 
 ## Start here: paste one message into Claude Code
 
@@ -13,7 +21,7 @@ You don't need to know how to code. Open Claude Code (or Cursor, or Codex) and p
 ```
 Install Cosmic CLI with: npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
 If Node 20 or newer is missing, help me install it first.
-Then run lifecycle demo, and set it up for my store by following the output of lifecycle docs quickstart.
+Then run cosmic demo, and set it up for my business by following the output of cosmic docs quickstart.
 ```
 
 Your agent installs it, shows you the demo, then connects one source and gives you one checked number. It asks you for keys as environment variables and never asks you to paste a key into the chat.
@@ -31,10 +39,10 @@ npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/do
 No keys and no accounts. This runs on invented sample data.
 
 ```sh
-lifecycle demo
+cosmic demo
 ```
 
-The demo loses 14 orders on purpose, then shows the check catching it:
+The store demo loses 14 orders on purpose, then shows the check catching it. `cosmic demo --type saas` plants a lost Stripe charge instead, and `--type b2b` a HubSpot gap.
 
 ```
 FAIL Orders pulled against Shopify's own count: 787 against 801, off by 1.75%.
@@ -46,20 +54,20 @@ FAIL Orders pulled against Shopify's own count: 787 against 801, off by 1.75%.
 Add the read-only MCP server to Claude Code:
 
 ```sh
-claude mcp add lifecycle -- lifecycle mcp
+claude mcp add cosmic -- cosmic mcp
 ```
 
-Any other MCP client takes the same command: `lifecycle mcp`. It starts before setup, so you can add it right after installing. `lifecycle docs quickstart` (the same text as [llms.txt](llms.txt)) is the setup playbook your agent follows.
+Any other MCP client takes the same command: `cosmic mcp`. It starts before setup, so you can add it right after installing. `cosmic docs quickstart` (the same text as [llms.txt](llms.txt)) is the setup playbook your agent follows.
 
 ## Same answer every time
 
-Every built-in metric runs one fixed SQL query, written down in [docs/METRICS.md](docs/METRICS.md) and shown by `lifecycle metrics show <name>`. Ask for `contribution_margin` or `marketing_efficiency_ratio` twice and you get the same SQL twice, with the trust line and the stated assumptions attached.
+Every built-in metric runs one fixed SQL query, written down in [docs/METRICS.md](docs/METRICS.md) and shown by `cosmic metrics show <name>`. Ask for `contribution_margin` or `marketing_efficiency_ratio` twice and you get the same SQL twice, with the trust line and the stated assumptions attached.
 
 Write down what the numbers can't know, once:
 
 ```sh
-lifecycle notes add "Exclude wholesale orders from revenue"
-lifecycle notes add --metric shopify_net_revenue "Black Friday 2025 was a one-off spike"
+cosmic notes add "Exclude wholesale orders from revenue"
+cosmic notes add --metric shopify_net_revenue "Black Friday 2025 was a one-off spike"
 ```
 
 The MCP server hands the matching notes to the agent with every metric and query result, so a correction made once is applied every time. Notes live in the workspace folder. They never change the SQL and never touch a source.
@@ -67,9 +75,9 @@ The MCP server hands the matching notes to the agent with every metric and query
 ## One workspace per client
 
 ```sh
-lifecycle --workspace acme-co init --type shopify
-lifecycle --workspace acme-co metrics run shopify_net_revenue
-lifecycle metrics run meta_ad_spend --all-stores --currency USD
+cosmic --workspace acme-co init --type shopify
+cosmic --workspace acme-co metrics run shopify_net_revenue
+cosmic metrics run meta_ad_spend --all-stores --currency USD
 ```
 
 Each workspace has its own config, database, keys and notes. `--all-stores` adds a metric up across every workspace on the machine, in one currency.
@@ -77,26 +85,26 @@ Each workspace has its own config, database, keys and notes. `--all-stores` adds
 ## Pick your workspace type
 
 ```sh
-lifecycle init --type saas      # shopify, ecommerce, saas, b2b, agency or creator
-lifecycle workspace show        # what your numbers are checked against
-lifecycle metrics list          # the metrics for your type
-lifecycle demo                  # the demo for your type, on invented data
+cosmic init --type saas      # shopify, ecommerce, saas, b2b, agency or creator
+cosmic workspace show        # what your numbers are checked against
+cosmic metrics list          # the metrics for your type
+cosmic demo                  # the demo for your type, on invented data
 ```
 
 | Type | Source of truth | First metrics |
 |---|---|---|
-| shopify | Shopify orders | net revenue, AOV, flow revenue, MER; contribution margin once you set costs (`lifecycle costs set`) |
+| shopify | Shopify orders | net revenue, AOV, flow revenue, MER; contribution margin once you set costs (`cosmic costs set`) |
 | ecommerce | Stripe charges | Stripe revenue, orders, AOV, cost per new customer |
 | saas | Stripe | MRR, net new MRR, churn, new paying customers, cost per new customer |
 | b2b | HubSpot | new leads, pipeline created, won revenue, win rate, cost per lead |
 | agency | set per client | spend, CPC, CTR, revenue, leads, one workspace per client |
 | creator | Stripe | revenue, members, churn, visit to paid |
 
-A workspace with no source of truth connected still works: its numbers carry a line that says plainly they were not checked. See `lifecycle docs workspaces`.
+A workspace with no source of truth connected still works: its numbers carry a line that says plainly they were not checked. See `cosmic docs workspaces`.
 
 ## What it does
 
-**Checks the numbers before anyone quotes them.** `lifecycle reconcile` compares each source against the others. Every report opens with the result, so a failed check is the first thing you and your agent see.
+**Checks the numbers before anyone quotes them.** `cosmic reconcile` compares each source against the others. Every report opens with the result, so a failed check is the first thing you and your agent see.
 
 | Check | What it compares |
 |---|---|
@@ -108,15 +116,15 @@ A workspace with no source of truth connected still works: its numbers carry a l
 | `flow_totals` | Daily flow rows against Klaviyo's own totals |
 | `freshness` | How long ago each source synced |
 
-**Finds what to fix.** `lifecycle audit flows` looks for missing core flows, flows that stopped sending, falling revenue per recipient, and high spam rates. Each finding comes with its evidence.
+**Finds what to fix.** `cosmic audit flows` looks for missing core flows, flows that stopped sending, falling revenue per recipient, and high spam rates. Each finding comes with its evidence.
 
-**Ranks your flows.** `lifecycle report revenue-per-flow` ranks flows by attributed revenue per recipient, next to your Shopify revenue.
+**Ranks your flows.** `cosmic report revenue-per-flow` ranks flows by attributed revenue per recipient, next to your Shopify revenue.
 
-**Answers the same question the same way every time.** `lifecycle metrics run average_order_value` runs fixed, reviewed SQL, so Monday's number matches Friday's. Each result carries its inputs, its exact SQL and the reconcile status. `lifecycle metrics list` shows them all. Agents use these before writing their own SQL.
+**Answers the same question the same way every time.** `cosmic metrics run average_order_value` runs fixed, reviewed SQL, so Monday's number matches Friday's. Each result carries its inputs, its exact SQL and the reconcile status. `cosmic metrics list` shows them all. Agents use these before writing their own SQL.
 
-**Keeps the numbers you ask for most.** `lifecycle metrics save repeat_orders --sql 'SELECT ...'` saves one SELECT of your own as a named number. It shows in `metrics list` marked as saved by the owner, runs read-only with the same trust line, and can never take the name of a built-in metric. `lifecycle metrics delete NAME` removes it.
+**Keeps the numbers you ask for most.** `cosmic metrics save repeat_orders --sql 'SELECT ...'` saves one SELECT of your own as a named number. It shows in `metrics list` marked as saved by the owner, runs read-only with the same trust line, and can never take the name of a built-in metric. `cosmic metrics delete NAME` removes it.
 
-**Builds a win-back segment from your own timing.** `lifecycle segments propose winback` reads how long your customers actually take to reorder, then writes a plan. Nothing happens until you review it and run `apply --confirm`.
+**Builds a win-back segment from your own timing.** `cosmic segments propose winback` reads how long your customers actually take to reorder, then writes a plan. Nothing happens until you review it and run `apply --confirm`.
 
 ## What it will not do
 
@@ -127,22 +135,22 @@ A workspace with no source of truth connected still works: its numbers carry a l
 
 ## Set it up
 
-Klaviyo takes about 2 minutes. Shopify takes about 15, because Shopify requires steps in two dashboards. `lifecycle sources catalog` lists what each source syncs and how to connect it, and `lifecycle sources list` shows what is connected.
+Klaviyo takes about 2 minutes. Shopify takes about 15, because Shopify requires steps in two dashboards. `cosmic sources catalog` lists what each source syncs and how to connect it, and `cosmic sources list` shows what is connected.
 
 ```sh
-lifecycle docs setup
+cosmic docs setup
 ```
 
 Then:
 
 ```sh
-lifecycle init
-lifecycle connect klaviyo --key-env KLAVIYO_READ_KEY
-lifecycle connect shopify --store NAME.myshopify.com --client-id ID --secret-env SHOPIFY_SECRET
-lifecycle connect stripe --key-env STRIPE_READ_KEY   # optional: subscriptions, MRR, repeat payments
-lifecycle sync
-lifecycle reconcile
-lifecycle audit flows --html audit.html
+cosmic init
+cosmic connect klaviyo --key-env KLAVIYO_READ_KEY
+cosmic connect shopify --store NAME.myshopify.com --client-id ID --secret-env SHOPIFY_SECRET
+cosmic connect stripe --key-env STRIPE_READ_KEY   # optional: subscriptions, MRR, repeat payments
+cosmic sync
+cosmic reconcile
+cosmic audit flows --html audit.html
 ```
 
 ## Use it from Claude Code
@@ -150,59 +158,59 @@ lifecycle audit flows --html audit.html
 Add the read-only MCP server:
 
 ```sh
-claude mcp add lifecycle -- lifecycle mcp
+claude mcp add cosmic -- cosmic mcp
 ```
 
 Install the skills once, then ask for a job by name:
 
 ```sh
-lifecycle skills sync
+cosmic skills sync
 ```
 
-That adds `/lifecycle` and one skill per kit, such as `/lifecycle:kits:flow-audit`. It never overwrites a skill file you edited, and `lifecycle skills uninstall` removes what it added.
+That adds `/lifecycle` and one skill per kit, such as `/lifecycle:kits:flow-audit`. It never overwrites a skill file you edited, and `cosmic skills uninstall` removes what it added.
 
 ## Kits
 
 A kit is a runbook your agent follows, with a Verify checklist at the end. Kits live in their own repo, [cosmic-registry](https://github.com/jbauman-26/cosmic-registry), so a kit fix reaches you without a new CLI release. The CLI downloads it on first use, refreshes it every 10 minutes, and keeps working offline from the last copy.
 
 ```sh
-lifecycle kits list
-lifecycle kits search "win back"
-lifecycle kits show winback-segment
-lifecycle kits add winback-segment
+cosmic kits list
+cosmic kits search "win back"
+cosmic kits show winback-segment
+cosmic kits add winback-segment
 ```
 
-Kits today: `flow-audit`, `revenue-per-flow`, `winback-segment`. `lifecycle kits prompt NAME` prints a setup prompt to paste into your agent. Any kit that writes copy includes an editing standard and a required review step. To use a fork or a local folder, pass `--registry`, or see `lifecycle docs kits`.
+Kits today: `flow-audit`, `revenue-per-flow`, `winback-segment`. `cosmic kits prompt NAME` prints a setup prompt to paste into your agent. Any kit that writes copy includes an editing standard and a required review step. To use a fork or a local folder, pass `--registry`, or see `cosmic docs kits`.
 
 ## Run it every day
 
-`lifecycle deploy` puts a daily sync in a private repo on your own GitHub account, against your own Postgres. It prints the plan first, and creates nothing without `--yes`.
+`cosmic deploy` puts a daily sync in a private repo on your own GitHub account, against your own Postgres. It prints the plan first, and creates nothing without `--yes`.
 
 ```sh
-lifecycle provision neon --key-env NEON_API_KEY --yes   # a managed Postgres in your own Neon account
-lifecycle deploy --repo YOU/lifecycle-sync
-lifecycle jobs list        # recent runs and the success streak
-lifecycle logs --actions   # the last run's log
-lifecycle logs --follow    # wait for a running sync to finish, then show its log
+cosmic provision neon --key-env NEON_API_KEY --yes   # a managed Postgres in your own Neon account
+cosmic deploy --repo YOU/lifecycle-sync
+cosmic jobs list        # recent runs and the success streak
+cosmic logs --actions   # the last run's log
+cosmic logs --follow    # wait for a running sync to finish, then show its log
 ```
 
 ## Check on it
 
 ```sh
-lifecycle status       # setup, sources, trust line, daily sync, updates
-lifecycle dashboard    # one local HTML page with every check, metric and fix
-lifecycle logs         # recent syncs on this machine, with an error code on any that failed
-lifecycle secrets list # where each key comes from, never its value
-lifecycle config list  # every setting, with its default
+cosmic status       # setup, sources, trust line, daily sync, updates
+cosmic dashboard    # one local HTML page with every check, metric and fix
+cosmic logs         # recent syncs on this machine, with an error code on any that failed
+cosmic secrets list # where each key comes from, never its value
+cosmic config list  # every setting, with its default
 ```
 
 Sync one source on its own schedule, or remove one:
 
 ```sh
-lifecycle sync --only meta              # also --only shopify,klaviyo or a repeated --only
-lifecycle sync --only shopify --full    # read the whole order history now, not only what changed
-lifecycle disconnect stripe             # forget its settings and saved keys, keep its data
-lifecycle disconnect stripe --delete-data
+cosmic sync --only meta              # also --only shopify,klaviyo or a repeated --only
+cosmic sync --only shopify --full    # read the whole order history now, not only what changed
+cosmic disconnect stripe             # forget its settings and saved keys, keep its data
+cosmic disconnect stripe --delete-data
 ```
 
 Settings you can change. Each one starts at the value the CLI has always used, so nothing changes until you set it:
@@ -213,14 +221,14 @@ Settings you can change. Each one starts at the value the CLI has always used, s
 | `reconcile.tolerance.ga4_purchases` | 15 | Percent GA4 purchases may differ from Shopify before the check fails |
 | `reconcile.attributed_share_flag` | 60 | Warn when Klaviyo credits flows with more than this percent of revenue |
 | `reconcile.freshness_days` | 2 | Days without a sync before the freshness check fails |
-| `query.row_cap` | 1000 | Most rows `lifecycle query` returns |
+| `query.row_cap` | 1000 | Most rows `cosmic query` returns |
 | `metrics.default_days` | 90 | Window for metrics, reports and sync pulls when none is given |
 | `shopify.full_check_days` | 7 | Days between full Shopify pulls once daily syncs fetch only changed orders |
 | `shopify.overlap_days` | 3 | Days before the last sync an incremental Shopify sync looks again, for late edits and refunds |
 
 ```sh
-lifecycle config set reconcile.tolerance.ga4_purchases 20
-lifecycle config get query.row_cap
+cosmic config set reconcile.tolerance.ga4_purchases 20
+cosmic config get query.row_cap
 ```
 
 With `--format json`, a failure carries a `code` the app and scripts can act on: `key_rejected` (the source refused the key), `rate_limited` (it asked to slow down), `scope_denied` (Shopify refused a field or scope), `not_connected`, `unknown_source`, `busy` (another command is writing to this store), `missing_uv` (warehouse sources have no uv to run on) and `reserved_name` (a saved number tried to take a built-in metric's name).
@@ -237,23 +245,23 @@ Environment variables for an app or a server that runs the CLI:
 | `LIFECYCLE_LOCK_WAIT_MS` | How long a write command waits for the lock. Default 10000. |
 | `LIFECYCLE_ROTATED_FILE` | Without a keychain, a path where the CLI hands back sign-ins a source replaced during a run (Pinterest on every refresh, Microsoft Advertising sometimes). The file is JSON, `{ "<secret-name>": "<new value>" }`, keyed by the secret's name such as `pinterest-ads-refresh-token`, merged with what is already there, written with mode 0600 through a temporary file and a rename. Store each value where the next run reads its `LIFECYCLE_*` variable. Values are never printed. With a keychain, the new value goes to the keychain instead and the file is not used. |
 
-Where there is no keychain, `lifecycle connect SOURCE --key-env NAME` still passes once the key checks out. It saves the source's settings, not the key, and says which `LIFECYCLE_*` variable to set when you sync.
+Where there is no keychain, `cosmic connect SOURCE --key-env NAME` still passes once the key checks out. It saves the source's settings, not the key, and says which `LIFECYCLE_*` variable to set when you sync.
 
 ## More from the command line
 
 ```sh
-lifecycle serve                                  # dashboard and a read-only JSON API on 127.0.0.1
-lifecycle tools catalog                          # read-only Klaviyo and Shopify API tools, on your own keys
-lifecycle tools run shopify.order_count
-lifecycle tools providers                        # Kie, fal, Apify and ScrapeCreators: any id runs, on your own account
-lifecycle tools run kie:gpt-image-2-text-to-image --input '{"prompt":"A red running shoe"}' --wait
-lifecycle exec -- node my-report.js              # run a script with your keys in its environment
-lifecycle sources import meta_ads --csv ads.csv  # any other tool's daily totals
-lifecycle sources catalog --category reviews      # 100 tools Shopify stores use, 30 with connectors
-lifecycle warehouse connect gorgias --secret api_key=GORGIAS_KEY --set subdomain=you --set username=you@store.com
-lifecycle warehouse sync && lifecycle warehouse query "select status, count(*) from src_gorgias.tickets group by 1"
-lifecycle files ls                               # every saved report, dashboard and plan
-lifecycle files pull                             # the dashboard from the last daily sync
+cosmic serve                                  # dashboard and a read-only JSON API on 127.0.0.1
+cosmic tools catalog                          # read-only Klaviyo and Shopify API tools, on your own keys
+cosmic tools run shopify.order_count
+cosmic tools providers                        # Kie, fal, Apify and ScrapeCreators: any id runs, on your own account
+cosmic tools run kie:gpt-image-2-text-to-image --input '{"prompt":"A red running shoe"}' --wait
+cosmic exec -- node my-report.js              # run a script with your keys in its environment
+cosmic sources import meta_ads --csv ads.csv  # any other tool's daily totals
+cosmic sources catalog --category reviews      # 100 tools Shopify stores use, 30 with connectors
+cosmic warehouse connect gorgias --secret api_key=GORGIAS_KEY --set subdomain=you --set username=you@store.com
+cosmic warehouse sync && cosmic warehouse query "select status, count(*) from src_gorgias.tickets group by 1"
+cosmic files ls                               # every saved report, dashboard and plan
+cosmic files pull                             # the dashboard from the last daily sync
 ```
 
 Every command by the job it does: [docs/COMMANDS.md](docs/COMMANDS.md).
@@ -264,26 +272,26 @@ Cosmic Cloud is the hosted copy of a store. Logging in is optional. With it, `--
 
 ```sh
 export COSMIC_CLOUD_TOKEN=...                     # from Cosmic Cloud, Settings, Mac app access. Never paste it into a chat
-lifecycle login --token-env COSMIC_CLOUD_TOKEN    # checks the token, prints the store name, saves the token to the keychain
-lifecycle cloud status                            # the store, and each connection on Cloud
-lifecycle query "select * from fact_orders_daily limit 5" --cloud
-lifecycle schema --cloud
-lifecycle metrics list --cloud && lifecycle metrics run shopify_orders --cloud
-lifecycle sources list --cloud
-lifecycle sync --cloud                            # starts it on Cloud and returns at once
-lifecycle logs --cloud                            # recent runs on Cloud
-lifecycle skills push ./my-skill                  # a folder with a SKILL.md, text only, 200 KB at most
-lifecycle skills delete my-skill
-lifecycle logout
+cosmic login --token-env COSMIC_CLOUD_TOKEN    # checks the token, prints the store name, saves the token to the keychain
+cosmic cloud status                            # the store, and each connection on Cloud
+cosmic query "select * from fact_orders_daily limit 5" --cloud
+cosmic schema --cloud
+cosmic metrics list --cloud && cosmic metrics run shopify_orders --cloud
+cosmic sources list --cloud
+cosmic sync --cloud                            # starts it on Cloud and returns at once
+cosmic logs --cloud                            # recent runs on Cloud
+cosmic skills push ./my-skill                  # a folder with a SKILL.md, text only, 200 KB at most
+cosmic skills delete my-skill
+cosmic logout
 ```
 
 - The token is never printed, logged or written to a file. Without a keychain, set `LIFECYCLE_CLOUD_TOKEN`. `LIFECYCLE_CLOUD_URL` sets the address. With no saved address and no `LIFECYCLE_CLOUD_URL` (after `logout`), `--cloud` stops with `not_logged_in` and sends nothing.
 - Cloud is being built route by route. A route it does not have yet fails with code `not_built` and a plain sentence. Run the command without `--cloud` meanwhile.
 - `skills push` sends nothing if a file looks like it holds a key. `skills sync` installs the store's own skills beside the kit skills.
-- `lifecycle tools abort RUN` stops an Apify or fal job that is still going. Every tool run keeps the request it sent, and `lifecycle tools get RUN` shows it.
+- `cosmic tools abort RUN` stops an Apify or fal job that is still going. Every tool run keeps the request it sent, and `cosmic tools get RUN` shows it.
 - `logs --cloud` used to mean the GitHub Actions log. That is now `logs --actions`. A machine that is not logged in still gets the Actions log from `--cloud`.
 
-More: `lifecycle docs cloud`. Every change: [CHANGELOG.md](CHANGELOG.md).
+More: `cosmic docs cloud`. Every change: [CHANGELOG.md](CHANGELOG.md).
 
 ## Where this is today
 
@@ -326,14 +334,14 @@ Here is what has and has not been tested. Three sources have synced against real
 - Anything against the real Cosmic Cloud. `login`, `cloud status`, every `--cloud` command, `skills push` and `delete`, and the tool run records were run against a local stand-in for the Cloud API only. Cloud does not have `/schema`, `/query`, `GET /metrics`, `/runs`, `/skills` or `/tools/runs` yet, so the shapes come from the plan, not from a live answer.
 - `tools abort` on a real Apify or fal job. It was written from their API docs and tested against recorded answers.
 
-If something breaks, `lifecycle doctor` says what is wrong and what to run next. To report a bug, run `lifecycle feedback "what happened" --open`.
+If something breaks, `cosmic doctor` says what is wrong and what to run next. To report a bug, run `cosmic feedback "what happened" --open`.
 
 ## Requirements
 
-Node 20 or newer. macOS keeps keys in the keychain. On other systems, set the `LIFECYCLE_*` environment variables listed in `lifecycle docs troubleshooting`.
+Node 20 or newer. macOS keeps keys in the keychain. On other systems, set the `LIFECYCLE_*` environment variables listed in `cosmic docs troubleshooting`.
 
 ## Help
 
-Bugs and missing features: `lifecycle feedback "what happened" --open`, or open an issue on this repo.
+Bugs and missing features: `cosmic feedback "what happened" --open`, or open an issue on this repo.
 
 MIT license.
