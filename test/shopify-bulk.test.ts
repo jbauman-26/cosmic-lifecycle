@@ -131,7 +131,7 @@ describe('syncShopifyBulk', () => {
 
     // Both sides of the completeness check stop when the export started: 5 orders, not the 6th made during it.
     const totals = await db.query(`SELECT metric, value::int AS v FROM meta_source_total WHERE source = 'shopify' ORDER BY metric`)
-    expect(totals).toEqual([{ metric: 'orders_pulled', v: 5 }, { metric: 'orders_reported', v: 5 }])
+    expect(totals).toEqual([{ metric: 'orders_kept', v: 5 }, { metric: 'orders_pulled', v: 5 }, { metric: 'orders_reported', v: 5 }])
     const checks = await runChecks(db, tolerances())
     expect(checks.find((c) => c.name === 'orders_complete')?.status).toBe('pass')
     expect((await db.query('SELECT consumed_at IS NOT NULL AS done FROM meta_shopify_bulk'))[0]).toEqual({ done: true })

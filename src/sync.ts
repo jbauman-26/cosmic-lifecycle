@@ -157,6 +157,7 @@ export async function syncShopify(db: Db, loadOrders: () => Promise<RawOrder[]>,
     }
     const { rows, drift } = await writeFull(db, totals, state)
     await setTotal(db, 'shopify', 'orders_pulled', orders.length)
+    await setTotal(db, 'shopify', 'orders_kept', orders.filter((o) => !o.cancelledAt).length)
     const reported = reportedCount ? await reportedCount() : null
     if (reported === null) await db.query(`DELETE FROM meta_source_total WHERE source = 'shopify' AND metric = 'orders_reported'`)
     else await setTotal(db, 'shopify', 'orders_reported', reported)
@@ -188,6 +189,8 @@ async function incremental(db: Db, deps: IncrementalDeps) {
     if (maxSeen) await writeSyncState(tx, { cursor: maxSeen, keyCheck: deps.keyer.check })
     const pulled = await tx.query(`SELECT count(*)::int AS n FROM shopify_order_state`)
     await setTotal(tx, 'shopify', 'orders_pulled', Number(pulled[0]!.n))
+    const kept = await tx.query(`SELECT count(*)::int AS n FROM shopify_order_state WHERE NOT cancelled`)
+    await setTotal(tx, 'shopify', 'orders_kept', Number(kept[0]!.n))
     return t
   })
   const reported = deps.reportedCount ? await deps.reportedCount() : null
@@ -273,6 +276,8 @@ export async function syncShopifyBulk(db: Db, deps: BulkDeps) {
     // Orders keep arriving while Shopify builds the file, so both sides of the completeness check stop at the
     // moment the export started.
     await setTotal(db, 'shopify', 'orders_pulled', op.createdAt ? buf.pulledBefore : buf.pulled)
+    // Every order in the file that was not cancelled lands in a day, whatever the cutoff.
+    await setTotal(db, 'shopify', 'orders_kept', buf.pulled - buf.cancelled)
     const reported = deps.reportedCount ? await deps.reportedCount(op.createdAt) : null
     if (reported === null) await db.query(`DELETE FROM meta_source_total WHERE source = 'shopify' AND metric = 'orders_reported'`)
     else await setTotal(db, 'shopify', 'orders_reported', reported)
