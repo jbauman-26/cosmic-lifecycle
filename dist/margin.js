@@ -78,6 +78,14 @@ export async function computeMargin(db, since, days) {
         missing.push(`Meta Ads spend: the ad account is in ${metaOther.join(', ')}, not ${costs.currency}, and is not converted yet`);
     else
         included.push('Meta Ads spend');
+    // 0.17.1: only Meta spend is subtracted so far. Name every other ad platform with spend in the
+    // window, so a margin is never shown as complete while it leaves their spend out.
+    const OTHER_ADS = [['Google Ads', 'fact_google_ads_campaign_daily'], ['Microsoft Advertising', 'fact_microsoft_ads_daily'], ['LinkedIn Ads', 'fact_linkedin_ads_daily'], ['Reddit Ads', 'fact_reddit_ads_daily'], ['Snapchat Ads', 'fact_snapchat_ads_daily'], ['TikTok Ads', 'fact_tiktok_ads_daily'], ['Pinterest Ads', 'fact_pinterest_ads_daily']];
+    for (const [label, table] of OTHER_ADS) {
+        const hit = await db.query(`SELECT 1 FROM ${table} WHERE date >= $1 LIMIT 1`, [since]).catch(() => []);
+        if (hit.length)
+            missing.push(`${label} spend: synced but not subtracted yet, so this margin is too high by that spend`);
+    }
     let withoutCost = 0;
     let tax = 0;
     const out = rows.map((r) => {

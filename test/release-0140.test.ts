@@ -120,7 +120,8 @@ describe('the trust gate for each workspace type', () => {
       const b = await reconcile(db, tolerances(), ws('shopify'))
       expect(b.checks.map((c) => c.name)).toEqual(a.map((c) => c.name))
       expect(b.checks.map((c) => c.name)).not.toContain('reference')
-      expect((await trustLine(db)).line).toBe('Numbers passed reconciliation, with 7 checks skipped.')
+    // 0.17.1: every check skipped is unchecked, never passed.
+      expect((await trustLine(db)).line).toBe('Nothing checked yet: all 7 checks were skipped because their sources have not synced. Treat these numbers as unchecked.')
     } finally {
       await db.close()
     }
@@ -391,7 +392,7 @@ describe('the demo for each type', () => {
     expect(b2b.broken.checks.find((c) => c.name === 'deals_complete')?.status).toBe('fail')
     expect(b2b.fixed.passed).toBe(true)
     expect(b2b.bySource.length).toBe(5)
-  })
+  }, 20_000) // 0.17.1: two full demos on PGlite; about 1 s locally, over 5 s on a loaded CI runner
 })
 
 // The whole CLI, in its own process, for a SaaS workspace with no Shopify anywhere: init, demo,

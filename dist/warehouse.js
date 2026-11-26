@@ -121,7 +121,7 @@ function destination(config) {
     if (config.database.kind === 'postgres') {
         const url = getSecret('database-url');
         if (!url)
-            throw new CliError('No database URL saved.', 'Set LIFECYCLE_DATABASE_URL, or run lifecycle init --local.', 'no_database');
+            throw new CliError('No database URL saved.', 'Set LIFECYCLE_DATABASE_URL, or run lifecycle init for the local database.', 'no_database');
         return { dest: { kind: 'postgres', url_env: 'LIFECYCLE_WAREHOUSE_URL' }, env: { LIFECYCLE_WAREHOUSE_URL: url } };
     }
     mkdirSync(appHome(), { recursive: true, mode: 0o700 });

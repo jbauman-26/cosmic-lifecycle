@@ -2,13 +2,25 @@
 
 Your agent should not quote a marketing number it can't prove.
 
-Cosmic CLI gives Claude Code, Cursor and Codex checked marketing numbers. It syncs your sources into a database you own (local, or your own Postgres), checks them against the business's source of truth, and puts a trust line on every number. When the sources disagree, the number says so before your agent repeats it to a client.
+Cosmic CLI gives Claude Code, Cursor and Codex checked marketing numbers. It syncs your sources into a database you own (local, or your own Postgres), checks them against the business's source of truth, and puts a trust line on every number. When the sources disagree, the number says so before your agent repeats it to you or your client.
 
-Built for marketing engineers, agency developers running many client stores, and anyone who asks an agent for revenue, flow or ad numbers. Free and MIT licensed. The npm package is `cosmic-lifecycle`; the command is `lifecycle`.
+For anyone who asks an AI about their store's numbers: a Shopify owner, a freelancer, an agency running many clients, or a marketing engineer. Free and MIT licensed. The npm package is `cosmic-lifecycle`; the command is `lifecycle`.
 
-## Install
+## Start here: paste one message into Claude Code
 
-Node 20 or newer.
+You don't need to know how to code. Open Claude Code (or Cursor, or Codex) and paste this:
+
+```
+Install Cosmic CLI with: npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
+If Node 20 or newer is missing, help me install it first.
+Then run lifecycle demo, and set it up for my store by following the output of lifecycle docs quickstart.
+```
+
+Your agent installs it, shows you the demo, then connects one source and gives you one checked number. It asks you for keys as environment variables and never asks you to paste a key into the chat.
+
+## Or install it yourself
+
+Node 20 or newer:
 
 ```sh
 npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
@@ -29,7 +41,7 @@ FAIL Orders pulled against Shopify's own count: 787 against 801, off by 1.75%.
      Do not trust reports built on this until it is fixed.
 ```
 
-## Give it to your agent
+## Connect it to your agent
 
 Add the read-only MCP server to Claude Code:
 
@@ -37,13 +49,7 @@ Add the read-only MCP server to Claude Code:
 claude mcp add lifecycle -- lifecycle mcp
 ```
 
-Or paste this into Claude Code, Cursor or Codex and let the agent do the setup:
-
-```
-Set up Cosmic CLI by following the output of lifecycle docs quickstart
-```
-
-`lifecycle docs quickstart` (the same text as [llms.txt](llms.txt)) is a setup playbook written for agents. It connects one source, checks the numbers, and gives you one verified figure before it offers anything else.
+Any other MCP client takes the same command: `lifecycle mcp`. It starts before setup, so you can add it right after installing. `lifecycle docs quickstart` (the same text as [llms.txt](llms.txt)) is the setup playbook your agent follows.
 
 ## Same answer every time
 
@@ -79,7 +85,7 @@ lifecycle demo                  # the demo for your type, on invented data
 
 | Type | Source of truth | First metrics |
 |---|---|---|
-| shopify | Shopify orders | net revenue, AOV, flow revenue, MER, contribution margin |
+| shopify | Shopify orders | net revenue, AOV, flow revenue, MER; contribution margin once you set costs (`lifecycle costs set`) |
 | ecommerce | Stripe charges | Stripe revenue, orders, AOV, cost per new customer |
 | saas | Stripe | MRR, net new MRR, churn, new paying customers, cost per new customer |
 | b2b | HubSpot | new leads, pipeline created, won revenue, win rate, cost per lead |

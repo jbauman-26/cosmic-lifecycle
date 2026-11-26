@@ -2,6 +2,21 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.17.1 (2026-11-25)
+
+Fixes found while filming the launch video, and a README a non-developer can follow.
+
+### Fixed
+
+- **The trust line no longer says "passed" when nothing was checked.** On a fresh install, reconcile skips every check because no source has synced. The line used to read "Numbers passed reconciliation, with 7 checks skipped." It now reads "Nothing checked yet: all 7 checks were skipped because their sources have not synced. Treat these numbers as unchecked.", with status `unchecked`. When at least one check ran, the line reads as before.
+- **Contribution margin names the ad spend it leaves out.** Only Meta spend is subtracted so far. When Google Ads, Microsoft Advertising, LinkedIn, Reddit, Snapchat, TikTok or Pinterest spend synced in the window, the result's `missing` list now says "synced but not subtracted yet, so this margin is too high by that spend".
+- `lifecycle notes add` refuses a note that is already saved for the same metric (case does not matter), with code `duplicate`.
+- Two error hints named `lifecycle init --local`, a flag that does not exist. They now say `lifecycle init`.
+
+### Changed
+
+- README: the main path is one message pasted into Claude Code, Cursor or Codex, which installs the CLI, runs the demo and starts setup. The workspace table says contribution margin appears once costs are set, which is how `metrics list` has always behaved.
+
 ## 0.17.0 (2026-11-25)
 
 The first public release. The repo is public, and the install is one command from the GitHub release. The public name is Cosmic CLI; the npm package stays `cosmic-lifecycle` and the command stays `lifecycle`.

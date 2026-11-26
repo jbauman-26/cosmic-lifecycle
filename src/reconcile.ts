@@ -247,6 +247,9 @@ export async function trustLine(db: Tx) {
   const ref = rows.find((r) => r.check_name === REFERENCE_CHECK)
   const others = rows.filter((r) => r.check_name !== REFERENCE_CHECK)
   const skipped = others.filter((r) => r.status === 'skipped').length
+  // 0.17.1: every check skipped means nothing was checked. Never call that passed.
+  const ran = others.filter((r) => r.status === 'pass' || r.status === 'warn').length
+  if (!ref && !ran) return { status: 'unchecked' as const, line: `Nothing checked yet: all ${skipped} checks were skipped because their sources have not synced. Treat these numbers as unchecked.` }
   if (!ref) return { status: 'passed' as const, line: `Numbers passed reconciliation${skipped ? `, with ${skipped} checks skipped` : ''}.` }
   if (ref.status !== 'pass') return { status: 'unreferenced' as const, line: String(ref.detail) }
   return { status: 'passed' as const, line: `${String(ref.detail)}${skipped ? ` ${skipped} check${skipped === 1 ? ' was' : 's were'} skipped.` : ''}` }
