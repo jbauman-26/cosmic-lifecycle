@@ -35,7 +35,17 @@ function fakeDb(tables: Record<string, Table>, schema = 'hubspot') {
     }
     throw new Error(`fake db: unexpected SQL ${sql}`)
   }
-  const conn: PipelineConn = { query, readOnly: async () => [{ n: 40, note: 'call me at person1@example.com' }], close: async () => undefined }
+  // EXPLAIN: the relations the SQL names, the way Postgres would report them (test only: a simple match).
+  const readOnly: PipelineConn['readOnly'] = async (sql, params) => {
+    if (sql.startsWith('EXPLAIN')) {
+      const rels = [...sql.matchAll(/(?:FROM|JOIN)\s+"?(\w+)"?\s*\.\s*"?(\w+)"?/gi)].map((m) => ({ 'Node Type': 'Seq Scan', 'Relation Name': m[2], Schema: m[1] }))
+      return [{ 'QUERY PLAN': [{ Plan: { 'Node Type': 'Aggregate', Plans: rels } }] }]
+    }
+    if (sql.includes('information_schema') || sql.includes('max(')) return query(sql, params)
+    seen.push(sql)
+    return [{ n: 40, note: 'call me at person1@example.com' }]
+  }
+  const conn: PipelineConn = { query, readOnly, close: async () => undefined }
   return { query, conn, seen }
 }
 
@@ -146,6 +156,60 @@ describe('freshness, and the trust line that never says passed', () => {
       expect(t.line.toLowerCase()).not.toMatch(/passed|reconciled against (stripe|shopify|hubspot)/)
       expect(t.line).toContain(FRESHNESS_ONLY)
     }
+  })
+})
+
+describe('review blockers: protection never depends on the SQL text', () => {
+  const planned = (rels: [string, string][]) => {
+    const { query, conn } = hubspot()
+    conn.readOnly = async (sql, params) => {
+      if (sql.startsWith('EXPLAIN')) return [{ 'QUERY PLAN': [{ Plan: { 'Node Type': 'Nested Loop', Plans: rels.map(([Schema, r]) => ({ 'Node Type': 'Seq Scan', Schema, 'Relation Name': r })) } }] }]
+      if (sql.includes('information_schema') || sql.includes('max(')) return query(sql, params)
+      return [{ n: 1 }]
+    }
+    return conn
+  }
+  const run = (conn: PipelineConn, sql: string) => pipelineQueryRun(conn, [{ schema: 'hubspot', tool: 'fivetran' }], sql, 100, 2)
+
+  it('refuses a table in an unregistered schema, even when the SQL text names a registered one', async () => {
+    const conn = planned([['public', 'customers']])
+    await expect(run(conn, "SELECT full_name, id FROM public.customers WHERE 'hubspot.' <> ''")).rejects.toMatchObject({ code: 'not_connected', message: expect.stringContaining('public.customers') })
+  })
+
+  it('refuses a table hidden behind a comment before the dot', async () => {
+    const conn = planned([['salesforce', 'lead'], ['hubspot', 'deal']])
+    await expect(run(conn, 'SELECT first_name FROM salesforce/**/.lead CROSS JOIN (SELECT count(*) FROM hubspot.deal) z')).rejects.toMatchObject({ code: 'not_connected' })
+  })
+
+  it('refuses loader bookkeeping and staging tables inside a registered schema', async () => {
+    for (const t of ['_contact_staging', 'fivetran_audit']) {
+      await expect(run(planned([['hubspot', t]]), `SELECT * FROM hubspot.${t}`)).rejects.toMatchObject({ code: 'not_connected' })
+    }
+  })
+
+  it('marks loader columns the shared rules miss: mobile phones, handles, job titles, bodies, raw JSON', async () => {
+    const { markTable } = await import('../src/pipeline-tables.js')
+    const cols = markTable('hubspot', 'contact', [
+      { name: 'property_mobilephone', type: 'text' }, { name: 'property_twitterhandle', type: 'text' }, { name: 'property_jobtitle', type: 'text' },
+      { name: 'title', type: 'text' }, { name: 'body', type: 'text' }, { name: 'html', type: 'text' }, { name: '_airbyte_data', type: 'jsonb' },
+      { name: 'properties', type: 'jsonb' }, { name: 'property_amount', type: 'numeric' }, { name: 'property_dealstage', type: 'text' },
+    ])
+    expect(cols.filter((c) => c.personal).map((c) => c.name)).toEqual(['property_mobilephone', 'property_twitterhandle', 'property_jobtitle', 'title', 'body', 'html', '_airbyte_data', 'properties'])
+  })
+
+
+  it('refuses a personal column read through a view or an expression, by what Postgres reads', async () => {
+    const { query, conn } = hubspot()
+    conn.readOnly = async (sql, params) => sql.startsWith('EXPLAIN')
+      ? [{ 'QUERY PLAN': [{ Plan: { 'Node Type': 'Seq Scan', Schema: 'hubspot', 'Relation Name': 'contact', Output: ['contact.id', 'contact.property_email'] } }] }]
+      : (sql.includes('information_schema') || sql.includes('max(')) ? query(sql, params) : [{ addr: 'x' }]
+    await expect(pipelineQueryRun(conn, [{ schema: 'hubspot', tool: 'fivetran' }], 'SELECT addr FROM hubspot.contact_view', 100, 2)).rejects.toThrow(/property_email is marked personal/)
+  })
+  it('says when deleted source rows are still in the table', async () => {
+    const { query, conn } = fakeDb({ deal: { columns: [['deal_id', 'bigint'], ['_fivetran_deleted', 'boolean'], ['_fivetran_synced', 'timestamptz']], rows: [{ _fivetran_synced: at(1) }] } })
+    conn.readOnly = async (sql, params) => sql.startsWith('EXPLAIN') ? [{ 'QUERY PLAN': [{ Plan: { Schema: 'hubspot', 'Relation Name': 'deal' } }] }] : (sql.includes('information_schema') || sql.includes('max(')) ? query(sql, params) : [{ n: 1 }]
+    const r = await pipelineQueryRun(conn, [{ schema: 'hubspot', tool: 'fivetran' }], 'SELECT count(*) FROM hubspot.deal', 100, 2)
+    expect(r.notes?.join(' ')).toContain('_fivetran_deleted')
   })
 })
 

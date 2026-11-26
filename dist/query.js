@@ -16,7 +16,7 @@ export function assertReadOnlySql(sql) {
         throw new CliError('Run one statement at a time.', 'Remove the extra statement and try again.', 'multiple_statements');
     if (!/^(select|with)\b/i.test(body))
         throw new CliError('Only SELECT queries are allowed.', 'cosmic schema', 'read_only');
-    if (/\b(pg_catalog|information_schema|pg_read_file|pg_ls_dir|dblink|copy)\b/i.test(body)) {
+    if (/\b(pg_catalog|information_schema|pg_read_file|pg_ls_dir|dblink\w*|lo_\w+|copy)\b/i.test(body)) {
         throw new CliError('System tables and file access are blocked.', 'cosmic schema', 'blocked_object');
     }
     return body;
