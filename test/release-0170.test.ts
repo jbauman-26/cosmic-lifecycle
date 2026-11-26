@@ -88,7 +88,7 @@ describe('0.17.0 owner notes', () => {
 describe('0.17.0', () => {
   it('is version 0.17.0 everywhere, with a changelog entry and the metric definitions file', async () => {
     const { VERSION } = await import('../src/version.js')
-    expect(VERSION).toMatch(/^0\.1[789]\.\d+$/)
+    expect(VERSION).toMatch(/^0\.(1[789]|2\d)\.\d+$/)
     expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe(VERSION)
     const log = readFileSync('CHANGELOG.md', 'utf8')
     expect(log).toMatch(/^## 0\.17\.0 \(2026-11-25\)/m)

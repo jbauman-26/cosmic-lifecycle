@@ -6,7 +6,7 @@ import { readCosts } from './costs.js'
 export type CheckStatus = 'pass' | 'warn' | 'fail' | 'skipped'
 export type Check = { name: string; status: CheckStatus; expected: number | null; actual: number | null; diffPct: number | null; detail: string }
 
-// The defaults. Each one can be changed with lifecycle config set, see tolerances().
+// The defaults. Each one can be changed with cosmic config set, see tolerances().
 export const TOLERANCE = { klaviyoOrders: 3, ga4Purchases: 15, attributedShareFlag: 60, freshnessDays: 2, minDifference: 3 }
 // connected: the sources this store has connected now. A check that compares two sources runs only
 // when both are connected; rows left by a source that is not connected (a copied warehouse, a removed
@@ -85,10 +85,11 @@ const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v))
 
 export function compare(name: string, expected: number, actual: number, tolerancePct: number, label: string): Check {
   const diffPct = round(pct(expected, actual))
-  const status: CheckStatus = diffPct <= tolerancePct ? 'pass' : 'fail'
+  // 0.20.1: a zero tolerance means the counts are equal. A rounded percent would let 1 in 20,000 pass.
+  const status: CheckStatus = (tolerancePct === 0 ? expected === actual : diffPct <= tolerancePct) ? 'pass' : 'fail'
   const detail = status === 'pass'
     ? `${label}: ${actual} against ${expected}, within ${tolerancePct}%.`
-    : `${label}: ${actual} against ${expected}, off by ${diffPct}%. Do not trust reports built on this until it is fixed.`
+    : `${label}: ${actual} against ${expected}, off by ${diffPct ? `${diffPct}%` : Math.abs(expected - actual)}. Do not trust reports built on this until it is fixed.`
   return { name, status, expected, actual, diffPct, detail }
 }
 
@@ -242,7 +243,7 @@ export async function reconcile(db: Db, t: Tolerances = tolerances(), ws: Worksp
 // or says plainly that there was none: status `unreferenced`, never a failure.
 export async function trustLine(db: Tx) {
   const rows = await db.query(`SELECT check_name, status, detail FROM meta_reconcile_result`)
-  if (!rows.length) return { status: 'unchecked' as const, line: 'Numbers not checked yet. Run lifecycle reconcile.' }
+  if (!rows.length) return { status: 'unchecked' as const, line: 'Numbers not checked yet. Run cosmic reconcile.' }
   const failed = rows.filter((r) => r.status === 'fail').map((r) => String(r.check_name))
   if (failed.length) return { status: 'failed' as const, line: `DO NOT TRUST THESE NUMBERS YET. Failed checks: ${failed.join(', ')}.` }
   const ref = rows.find((r) => r.check_name === REFERENCE_CHECK)
@@ -283,9 +284,9 @@ export async function runReferenceChecks(db: Tx, t: Tolerances, ws: Workspace): 
 
   // The reference itself: is there one, and has it synced?
   if (ws.reference === 'none') {
-    checks.push({ name: REFERENCE_CHECK, status: 'skipped', expected: null, actual: null, diffPct: null, detail: 'Not checked against a source of truth: this workspace has no reference source set, so each number is its own tool\'s count. Set one with lifecycle config set workspace.reference stripe, hubspot, shopify or ga4.' })
+    checks.push({ name: REFERENCE_CHECK, status: 'skipped', expected: null, actual: null, diffPct: null, detail: 'Not checked against a source of truth: this workspace has no reference source set, so each number is its own tool\'s count. Set one with cosmic config set workspace.reference stripe, hubspot, shopify or ga4.' })
   } else if (!has) {
-    checks.push({ name: REFERENCE_CHECK, status: 'skipped', expected: null, actual: null, diffPct: null, detail: `Not checked against a source of truth yet: ${name} is this workspace's reference and has not synced. Each number is its own tool's count until it does. Connect ${ws.reference}, then lifecycle sync.` })
+    checks.push({ name: REFERENCE_CHECK, status: 'skipped', expected: null, actual: null, diffPct: null, detail: `Not checked against a source of truth yet: ${name} is this workspace's reference and has not synced. Each number is its own tool's count until it does. Connect ${ws.reference}, then cosmic sync.` })
   } else if (ws.reference === 'ga4') {
     checks.push({ name: REFERENCE_CHECK, status: 'warn', expected: null, actual: null, diffPct: null, detail: 'Checked against GA4 only. GA4 is a tracking tool, not a record of sales or pipeline, so treat these numbers as estimates.' })
   } else {
@@ -301,7 +302,7 @@ export async function runReferenceChecks(db: Tx, t: Tolerances, ws: Workspace): 
     // Do Stripe's daily rows add up to every charge the pull saw?
     const counted = await total(db, 'stripe', 'charges_counted')
     const d = await one(db, `SELECT sum(charges + failed_charges) AS n FROM fact_stripe_daily`)
-    checks.push(counted === null ? skip('stripe_daily_complete', 'Synced before 0.14.0. The next lifecycle sync records the count this check needs.') : compare('stripe_daily_complete', counted, num(d.n), 0, 'Charges in the daily table against every charge pulled from Stripe'))
+    checks.push(counted === null ? skip('stripe_daily_complete', 'Synced before 0.14.0. The next cosmic sync records the count this check needs.') : compare('stripe_daily_complete', counted, num(d.n), 0, 'Charges in the daily table against every charge pulled from Stripe'))
     // Do subscription starts minus ends match what is open in Stripe right now? Churn is built on these.
     const open = await total(db, 'stripe', 'subscriptions_open')
     const se = await one(db, `SELECT sum(started) AS started, sum(ended) AS ended FROM fact_stripe_subscriptions_daily`)

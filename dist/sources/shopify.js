@@ -10,7 +10,7 @@ export async function shopifyToken(store, clientId, clientSecret) {
         body: new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret }),
     }, 'Shopify token request');
     if (!body.access_token)
-        throw new CliError('Shopify returned no access token.', 'lifecycle connect shopify');
+        throw new CliError('Shopify returned no access token.', 'cosmic connect shopify');
     return body.access_token;
 }
 // Deliberately asks for no personal field. At Level 1 access Shopify refuses
@@ -27,7 +27,7 @@ const ORDERS_QUERY = (sortKey) => `query($c: String, $q: String) {
     }
   }
 }`;
-const SCOPE_NEXT = 'In the Shopify admin open Settings, then Apps and sales channels, then Develop apps, then your app, then Configuration, and add the read_orders scope, plus read_all_orders for orders older than 60 days. Install the app again, then lifecycle connect shopify.';
+const SCOPE_NEXT = 'In the Shopify admin open Settings, then Apps and sales channels, then Develop apps, then your app, then Configuration, and add the read_orders scope, plus read_all_orders for orders older than 60 days. Install the app again, then cosmic connect shopify.';
 export function scopeDenied(text) {
     const scope = /`?(read_[a-z_]+)`?/.exec(text)?.[1];
     return new CliError(`Shopify did not let this app read orders${scope ? `. It needs the ${scope} scope` : ', because the app is missing a scope'}.`, SCOPE_NEXT, 'scope_denied');
@@ -43,9 +43,9 @@ export function shopifyQueryError(errors) {
     if (denied)
         return scopeDenied(String(denied.message ?? ''));
     if (list.some((e) => e?.extensions?.code === 'THROTTLED')) {
-        return new CliError('Shopify is rate limiting this app.', 'Wait a few minutes, then run lifecycle sync again.', 'rate_limited');
+        return new CliError('Shopify is rate limiting this app.', 'Wait a few minutes, then run cosmic sync again.', 'rate_limited');
     }
-    return new CliError('Shopify rejected the orders query.', 'lifecycle doctor', 'shopify_query');
+    return new CliError('Shopify rejected the orders query.', 'cosmic doctor', 'shopify_query');
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const throttled = (errors) => Array.isArray(errors) && errors.some((e) => e?.extensions?.code === 'THROTTLED');

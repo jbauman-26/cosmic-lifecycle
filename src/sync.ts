@@ -51,6 +51,23 @@ async function recordRun(db: Db, source: string, fn: () => Promise<Omit<SourceRe
   }
 }
 
+// 0.20.0: remember which days a trailing sync pulled, so a period verdict can tell a day with no rows from a
+// day that was never pulled. A window that touches the stored one extends it; one that does not replaces it,
+// because the days between were never pulled. `replace` always replaces (a sync that deletes older rows).
+export async function recordWindow(tx: { query(sql: string, params?: unknown[]): Promise<unknown> }, source: string, metric: string, start: string, end: string, at: string, replace = false) {
+  await tx.query(
+    replace
+      ? `INSERT INTO meta_source_window VALUES ($1, $2, $3, $4, $5) ON CONFLICT (source, metric) DO UPDATE SET window_start = EXCLUDED.window_start, window_end = EXCLUDED.window_end, recorded_at = EXCLUDED.recorded_at`
+      : `INSERT INTO meta_source_window VALUES ($1, $2, $3, $4, $5) ON CONFLICT (source, metric) DO UPDATE SET
+         window_start = CASE WHEN EXCLUDED.window_start <= meta_source_window.window_end + 1 AND EXCLUDED.window_end + 1 >= meta_source_window.window_start
+           THEN LEAST(meta_source_window.window_start, EXCLUDED.window_start) ELSE EXCLUDED.window_start END,
+         window_end = CASE WHEN EXCLUDED.window_start <= meta_source_window.window_end + 1 AND EXCLUDED.window_end + 1 >= meta_source_window.window_start
+           THEN GREATEST(meta_source_window.window_end, EXCLUDED.window_end) ELSE EXCLUDED.window_end END,
+         recorded_at = EXCLUDED.recorded_at`,
+    [source, metric, start.slice(0, 10), end.slice(0, 10), at],
+  )
+}
+
 // Recomputes from the full order history inside one transaction, so a re-run
 // cannot double count and a failed run leaves yesterday's numbers in place.
 export async function writeShopify(db: Db, orders: RawOrder[]) {
@@ -179,7 +196,7 @@ export type IncrementalDeps = {
 // only the days and cohorts they touch are rebuilt. Everything in one transaction, so a failure changes nothing.
 async function incremental(db: Db, deps: IncrementalDeps) {
   const state = await readSyncState(db)
-  if (!state?.cursor || state.keyCheck !== deps.keyer.check) throw new CliError('The stored Shopify sync state was made with another key.', 'lifecycle sync --only shopify --full', 'state_mismatch')
+  if (!state?.cursor || state.keyCheck !== deps.keyer.check) throw new CliError('The stored Shopify sync state was made with another key.', 'cosmic sync --only shopify --full', 'state_mismatch')
   const orders = await deps.changed(changedSince(state.cursor, deps.overlapDays ?? 3))
   const rows = orders.map((o) => stateRow(o, deps.keyer))
   const at = now()
@@ -252,7 +269,7 @@ export async function syncShopifyBulk(db: Db, deps: BulkDeps) {
     }
     if (op.status !== 'COMPLETED') {
       await mark(op, true)
-      throw new CliError(`Shopify's order export ended as ${op.status.toLowerCase()}${op.errorCode ? ` (${op.errorCode})` : ''}.`, 'Run lifecycle sync again to start a new export.', 'export_failed')
+      throw new CliError(`Shopify's order export ended as ${op.status.toLowerCase()}${op.errorCode ? ` (${op.errorCode})` : ''}.`, 'Run cosmic sync again to start a new export.', 'export_failed')
     }
     const cutoff = op.createdAt ? Date.parse(op.createdAt) : Infinity
     const buf = new CompactOrders(cutoff, deps.keyer ? new StateBuffer(deps.keyer) : undefined)
@@ -266,7 +283,7 @@ export async function syncShopifyBulk(db: Db, deps: BulkDeps) {
       }
     }
     if (buf.pulled !== op.objectCount) {
-      throw new CliError(`The Shopify export file had ${buf.pulled} orders, and Shopify says it holds ${op.objectCount}.`, 'Run lifecycle sync again. It reads the same file again.', 'export_incomplete')
+      throw new CliError(`The Shopify export file had ${buf.pulled} orders, and Shopify says it holds ${op.objectCount}.`, 'Run cosmic sync again. It reads the same file again.', 'export_incomplete')
     }
     // Without read_all_orders Shopify hands over only the last 60 days, and every older customer looks new.
     const today = deps.today ?? at.slice(0, 10)
@@ -289,11 +306,12 @@ export async function syncShopifyBulk(db: Db, deps: BulkDeps) {
   })
 }
 
-export async function syncGa4(db: Db, load: () => Promise<Ga4Day[]>) {
+export async function syncGa4(db: Db, load: () => Promise<Ga4Day[]>, window?: { start: string; end: string }) {
   return recordRun(db, 'ga4', async () => {
     const rows = await load()
     const at = now()
     await db.transaction(async (tx) => {
+      if (window) await recordWindow(tx, 'ga4', 'daily', window.start, window.end, at)
       for (const r of rows) {
         await tx.query(
           `INSERT INTO fact_ga4_daily VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (date, channel) DO UPDATE SET sessions = EXCLUDED.sessions, purchases = EXCLUDED.purchases, revenue = EXCLUDED.revenue, source_synced_at = EXCLUDED.source_synced_at`,
@@ -426,9 +444,11 @@ export async function syncStripe(db: Db, load: { charges: () => Promise<RawCharg
     await setTotal(db, 'stripe', 'charges_pulled', charges.length)
     // 0.14.0: what the daily rows must add up to, and how many subscriptions are open right now,
     // so the trust gate can check Stripe's daily tables against the pull itself.
-    await setTotal(db, 'stripe', 'charges_counted', charges.filter((c) => c.status === 'succeeded' || c.status === 'failed').length)
+    await setTotal(db, 'stripe', 'charges_counted', charges.filter((c) => (c.status === 'succeeded' && c.captured !== false) || c.status === 'failed').length)
     if (subs) await setTotal(db, 'stripe', 'subscriptions_pulled', subs.length)
     if (subs) await setTotal(db, 'stripe', 'subscriptions_open', subs.filter((x) => x.status !== 'incomplete_expired' && !x.ended_at).length)
+    // 0.20.1: whether this sync read subscriptions, so an as-of MRR never rests on an older pull.
+    await setTotal(db, 'stripe', 'subscriptions_read', subs ? 1 : 0)
     const notes = [
       subs ? null : opts.via ? `${opts.via} Subscriptions are not read in pipeline mode yet, so MRR and churn are skipped.` : 'This key cannot read subscriptions, so MRR and churn were skipped.',
       unpriced ? `${unpriced} subscription items use tiered or metered prices and are left out of MRR.` : null,
@@ -460,6 +480,8 @@ export async function syncMeta(db: Db, load: (since: string, until: string) => P
     const raw = await load(since, until)
     const { rows } = await writeMeta(db, raw, since, opts.currency ?? '', opts.account ?? '')
     await setTotal(db, 'meta', 'rows_pulled', raw.length)
+    // writeMeta deletes rows from another account, so the window is replaced, never extended.
+    await recordWindow(db, 'meta', 'daily', since, until, now(), true)
     return rows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Meta returned no campaign activity from ${since} to ${until}.` }
   })
 }

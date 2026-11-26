@@ -14,7 +14,7 @@ export function neonPlan(name, region) {
 }
 export async function provisionNeon(key, name, region, fetcher = fetchJson) {
     if (!/^[a-z0-9-]{1,63}$/.test(name))
-        throw new CliError('Use lowercase letters, numbers and dashes for the name.', 'lifecycle provision neon --name lifecycle --yes', 'bad_name');
+        throw new CliError('Use lowercase letters, numbers and dashes for the name.', 'cosmic provision neon --name cosmic --yes', 'bad_name');
     const body = await fetcher(`${NEON_API}/projects`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, accept: 'application/json', 'content-type': 'application/json' },
@@ -22,6 +22,6 @@ export async function provisionNeon(key, name, region, fetcher = fetchJson) {
     }, 'Neon project creation');
     const uri = body?.connection_uris?.[0]?.connection_uri;
     if (!uri)
-        throw new CliError('Neon created the project but returned no connection string.', 'Copy it from the Neon console, then lifecycle init --database-url-env NAME', 'no_uri');
+        throw new CliError('Neon created the project but returned no connection string.', 'Copy it from the Neon console, then cosmic init --database-url-env NAME', 'no_uri');
     return { projectId: String(body?.project?.id ?? ''), region, uri };
 }

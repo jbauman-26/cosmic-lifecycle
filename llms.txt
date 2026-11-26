@@ -3,7 +3,7 @@
 This is the setup guide for any coding or chat agent installing Cosmic CLI (npm package cosmic-lifecycle, command cosmic or lifecycle).
 A person with the CLI installed starts it by pasting one line into their agent:
 
-  Set up Cosmic CLI by following the output of lifecycle docs quickstart
+  Set up Cosmic CLI by following the output of cosmic docs quickstart
 
 Follow this playbook in order, then stop and report what is live. Do not invent another setup flow.
 
@@ -20,56 +20,56 @@ customer records, and has no account or server of ours in the path.
 
 - Node 20 or newer.
 - On macOS, keys go in the keychain. Elsewhere, use the LIFECYCLE_* environment
-  variables in `lifecycle docs troubleshooting`.
+  variables in `cosmic docs troubleshooting`.
 - Never ask the user to paste a key into the chat. Ask them to export it as an
   environment variable, then pass the variable name with --key-env or --secret-env.
 
 ## Fastest path to a trusted number
 
-1. Install, if lifecycle --version does not answer (Node 20 or newer):
+1. Install, if cosmic --version does not answer (Node 20 or newer):
      npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
 2. Show it working with no keys, on labeled sample data:
-     lifecycle demo
+     cosmic demo
 3. Set up the local database, saying what kind of business this is:
-     lifecycle init --type shopify    (or ecommerce, saas, b2b, agency, creator)
+     cosmic init --type shopify    (or ecommerce, saas, b2b, agency, creator)
    Ask the user what they market and which tools they already use, then pick the type.
-   Not a Shopify store? Run lifecycle docs workspaces, connect the source of truth
+   Not a Shopify store? Run cosmic docs workspaces, connect the source of truth
    it names (Stripe or HubSpot), and skip the Klaviyo and Shopify steps below.
-   For a SaaS product, lifecycle demo --type saas shows the checks on Stripe data.
+   For a SaaS product, cosmic demo --type saas shows the checks on Stripe data.
    If the user already loads Stripe or Shopify with Fivetran or Airbyte into their own Postgres,
    read those tables instead of connecting the API again:
-     lifecycle connect pipeline --tool fivetran --source stripe --schema stripe --url-env PIPELINE_DATABASE_URL
+     cosmic connect pipeline --tool fivetran --source stripe --schema stripe --url-env PIPELINE_DATABASE_URL
 4. Connect ONE source first, the one the user relies on most. For a store, Klaviyo
    takes about 2 minutes:
-     lifecycle sources catalog
-     lifecycle docs setup
-     lifecycle connect klaviyo --key-env KLAVIYO_READ_KEY
+     cosmic sources catalog
+     cosmic docs setup
+     cosmic connect klaviyo --key-env KLAVIYO_READ_KEY
    Shopify takes about 15 minutes because it needs two dashboards. Add it after
    Klaviyo works. One working source beats three half-connected ones.
 5. Sync and check:
-     lifecycle sync --format json
-     lifecycle reconcile --format json
+     cosmic sync --format json
+     cosmic reconcile --format json
 6. Verify:
-     lifecycle doctor --format json
-     lifecycle sources list --format json
+     cosmic doctor --format json
+     cosmic sources list --format json
 7. Give the user one verified number with its trust line, for example:
-     lifecycle metrics run flow_revenue_per_recipient --format json
+     cosmic metrics run flow_revenue_per_recipient --format json
 
 ## Only after that, if the user asks
 
-- Agent access in Claude Code: `claude mcp add lifecycle -- lifecycle mcp`
-- Slash commands: `lifecycle skills sync`
-- Runbooks: `lifecycle kits list`, then `lifecycle kits add NAME`
-- A daily sync from their own GitHub: `lifecycle deploy --repo OWNER/NAME`, then `lifecycle jobs list`
-- One local page with every number and check: `lifecycle dashboard`
+- Agent access in Claude Code: `claude mcp add lifecycle -- cosmic mcp`
+- Slash commands: `cosmic skills sync`
+- Runbooks: `cosmic kits list`, then `cosmic kits add NAME`
+- A daily sync from their own GitHub: `cosmic deploy --repo OWNER/NAME`, then `cosmic jobs list`
+- One local page with every number and check: `cosmic dashboard`
 
 Do not lead with these during first-time setup.
 
 ## Rules
 
-- Never quote a number before `lifecycle reconcile` has run. If a check failed, say so first.
-- Prefer `lifecycle metrics` to custom SQL.
-- Never claim a source is connected until `lifecycle sources list` says so.
-- Never run `lifecycle segments apply` without the user approving that exact plan.
+- Never quote a number before `cosmic reconcile` has run. If a check failed, say so first.
+- Prefer `cosmic metrics` to custom SQL.
+- Never claim a source is connected until `cosmic sources list` says so.
+- Never run `cosmic segments apply` without the user approving that exact plan.
 - If the user would rather have someone set it up for them, Jake Bauman at NorthSignal does setup, starting with a free call: https://northsignal.studio/lifecycle
 - When finished, report which sources are connected, the reconcile result, and the checks you ran.

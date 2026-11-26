@@ -2,8 +2,8 @@ export const DOCS = {
     setup: `# Set up in order
 
 First say what kind of business this is. It picks the source the numbers are
-checked against and the metrics you see first (lifecycle docs workspaces):
-  lifecycle init --type shopify     (or ecommerce, saas, b2b, agency, creator)
+checked against and the metrics you see first (cosmic docs workspaces):
+  cosmic init --type shopify     (or ecommerce, saas, b2b, agency, creator)
 A Shopify store follows the steps below in order. Any other type starts with its
 source of truth: Stripe for ecommerce, SaaS and creator, HubSpot for B2B.
 
@@ -11,8 +11,8 @@ Klaviyo, about 2 minutes:
 1. In Klaviyo open Settings, API keys, Create Private API Key.
 2. Choose Read-Only Key and copy it.
 3. export KLAVIYO_READ_KEY=your_key
-4. lifecycle init
-5. lifecycle connect klaviyo --key-env KLAVIYO_READ_KEY
+4. cosmic init
+5. cosmic connect klaviyo --key-env KLAVIYO_READ_KEY
 
 Shopify, about 15 minutes:
 1. In the Shopify Dev Dashboard create an app in the same organization as the store.
@@ -21,13 +21,13 @@ Shopify, about 15 minutes:
    customer data access, and select Analytics. Leave name, email, phone and address
    unselected. This keeps personal fields out by design.
 4. export SHOPIFY_SECRET=your_client_secret
-5. lifecycle connect shopify --store NAME.myshopify.com --client-id ID --secret-env SHOPIFY_SECRET
+5. cosmic connect shopify --store NAME.myshopify.com --client-id ID --secret-env SHOPIFY_SECRET
 
 Stripe, about 3 minutes (optional, for subscriptions and repeat payments):
 1. In Stripe open Developers, API keys, Create restricted key.
 2. Set Charges and Subscriptions to Read. Leave everything else at None.
 3. export STRIPE_READ_KEY=rk_live_...
-4. lifecycle connect stripe --key-env STRIPE_READ_KEY
+4. cosmic connect stripe --key-env STRIPE_READ_KEY
 
 Meta Ads, about 10 minutes (optional, for ad spend next to revenue):
 1. In Meta Business Settings open Users, System users, and add a system user.
@@ -35,7 +35,7 @@ Meta Ads, about 10 minutes (optional, for ad spend next to revenue):
 3. Generate a token for it with one permission: ads_read. Nothing else.
 4. Copy the ad account id from Ads Manager. It is the number after act_.
 5. export META_ADS_TOKEN=...
-6. lifecycle connect meta --account 1234567890 --token-env META_ADS_TOKEN
+6. cosmic connect meta --account 1234567890 --token-env META_ADS_TOKEN
 Meta's menu names change. If a step is not where this says, search Meta's help for "system user access token".
 
 HubSpot, about 5 minutes (the source of truth for a B2B workspace):
@@ -43,10 +43,10 @@ HubSpot, about 5 minutes (the source of truth for a B2B workspace):
 2. Under Scopes tick crm.objects.deals.read and crm.objects.contacts.read. Nothing else.
 3. Create it and copy the access token.
 4. export HUBSPOT_TOKEN=pat-...
-5. lifecycle connect hubspot --token-env HUBSPOT_TOKEN
+5. cosmic connect hubspot --token-env HUBSPOT_TOKEN
 It keeps daily counts and amounts only. No name, email, phone or company is asked for.
 Row-level deals and contacts (ids, stages, sources, dates, amounts) load with
-  lifecycle warehouse connect hubspot-records --secret access_token=HUBSPOT_TOKEN
+  cosmic warehouse connect hubspot-records --secret access_token=HUBSPOT_TOKEN
 
 Google Ads, about 10 minutes (optional, for ad spend next to revenue):
 1. You need an OAuth client id and secret from a Google Cloud project with the Google Ads API on.
@@ -55,7 +55,7 @@ Google Ads, about 10 minutes (optional, for ad spend next to revenue):
 3. Copy the customer id from the top of Google Ads, such as 123-456-7890. Pick a client account,
    not a manager account. If access comes through a manager, note its id too.
 4. export GOOGLE_ADS_CLIENT_SECRET=... GOOGLE_ADS_REFRESH_TOKEN=...
-5. lifecycle connect google-ads --customer 123-456-7890 --client-id ID --secret-env GOOGLE_ADS_CLIENT_SECRET --refresh-token-env GOOGLE_ADS_REFRESH_TOKEN [--login-customer MANAGER_ID]
+5. cosmic connect google-ads --customer 123-456-7890 --client-id ID --secret-env GOOGLE_ADS_CLIENT_SECRET --refresh-token-env GOOGLE_ADS_REFRESH_TOKEN [--login-customer MANAGER_ID]
 Only read calls are made, even though Google's scope is named for full access.
 
 Google Merchant Center, about 10 minutes (optional, for free listings and Shopping clicks next to revenue):
@@ -66,7 +66,7 @@ Google Merchant Center, about 10 minutes (optional, for free listings and Shoppi
 3. Sign in with Google for a refresh token with the content scope. Google asks for a passkey.
 4. Copy the account id from the top of Merchant Center, such as 123456789.
 5. export GOOGLE_MERCHANT_CENTER_CLIENT_SECRET=... GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN=...
-6. lifecycle connect google-merchant-center --account 123456789 --client-id ID --secret-env GOOGLE_MERCHANT_CENTER_CLIENT_SECRET --refresh-token-env GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN
+6. cosmic connect google-merchant-center --account 123456789 --client-id ID --secret-env GOOGLE_MERCHANT_CENTER_CLIENT_SECRET --refresh-token-env GOOGLE_MERCHANT_CENTER_REFRESH_TOKEN
 Google has no read-only Merchant scope. Only read calls are made: reports and the account name.
 
 Microsoft Advertising, about 15 minutes (optional, for Bing ad spend next to revenue):
@@ -78,7 +78,7 @@ Microsoft Advertising, about 15 minutes (optional, for Bing ad spend next to rev
 3. Open the account in Microsoft Advertising. The address bar shows aid= (the account id) and
    cid= (the customer id). Use those numbers, not the account number.
 4. export MICROSOFT_ADS_CLIENT_SECRET=... MICROSOFT_ADS_REFRESH_TOKEN=... MICROSOFT_ADS_DEVELOPER_TOKEN=...
-5. lifecycle connect microsoft-ads --account ID --client-id ID --secret-env MICROSOFT_ADS_CLIENT_SECRET --refresh-token-env MICROSOFT_ADS_REFRESH_TOKEN --developer-token-env MICROSOFT_ADS_DEVELOPER_TOKEN [--customer CID]
+5. cosmic connect microsoft-ads --account ID --client-id ID --secret-env MICROSOFT_ADS_CLIENT_SECRET --refresh-token-env MICROSOFT_ADS_REFRESH_TOKEN --developer-token-env MICROSOFT_ADS_DEVELOPER_TOKEN [--customer CID]
 Pass --customer only when you reach the account through an agency's manager account.
 Only read calls are made: the account check and the reporting service. Microsoft has no
 read-only scope.
@@ -91,7 +91,7 @@ LinkedIn Ads, about 10 minutes (optional, for LinkedIn ad spend next to pipeline
    member needs a role on the ad account; Viewer is enough.
 3. Copy the ad account id from Campaign Manager: the number after accounts/ in the address bar.
 4. export LINKEDIN_ADS_CLIENT_SECRET=... LINKEDIN_ADS_REFRESH_TOKEN=...
-5. lifecycle connect linkedin-ads --account ID --client-id ID --secret-env LINKEDIN_ADS_CLIENT_SECRET --refresh-token-env LINKEDIN_ADS_REFRESH_TOKEN
+5. cosmic connect linkedin-ads --account ID --client-id ID --secret-env LINKEDIN_ADS_CLIENT_SECRET --refresh-token-env LINKEDIN_ADS_REFRESH_TOKEN
 Only read calls are made. A LinkedIn refresh token lasts one year from the sign-in; sign in
 again before then.
 
@@ -101,7 +101,7 @@ Reddit Ads, about 10 minutes (optional, for ad spend next to revenue):
 2. Sign in with Reddit for a refresh token: scope adsread, duration permanent.
 3. Copy the ad account id from Accounts in Reddit Ads Manager, such as a2_abc123.
 4. export REDDIT_ADS_CLIENT_SECRET=... REDDIT_ADS_REFRESH_TOKEN=...
-5. lifecycle connect reddit-ads --account a2_abc123 --client-id APP_ID --secret-env REDDIT_ADS_CLIENT_SECRET --refresh-token-env REDDIT_ADS_REFRESH_TOKEN
+5. cosmic connect reddit-ads --account a2_abc123 --client-id APP_ID --secret-env REDDIT_ADS_CLIENT_SECRET --refresh-token-env REDDIT_ADS_REFRESH_TOKEN
 Only read calls are made. The adsread scope cannot change anything.
 
 Snapchat Ads, about 10 minutes (optional, for ad spend next to revenue):
@@ -110,7 +110,7 @@ Snapchat Ads, about 10 minutes (optional, for ad spend next to revenue):
 2. Sign in with Snapchat for a refresh token with the snapchat-marketing-api scope.
 3. Copy the ad account id from Snapchat Ads Manager.
 4. export SNAPCHAT_ADS_CLIENT_SECRET=... SNAPCHAT_ADS_REFRESH_TOKEN=...
-5. lifecycle connect snapchat-ads --account AD_ACCOUNT_ID --client-id ID --secret-env SNAPCHAT_ADS_CLIENT_SECRET --refresh-token-env SNAPCHAT_ADS_REFRESH_TOKEN
+5. cosmic connect snapchat-ads --account AD_ACCOUNT_ID --client-id ID --secret-env SNAPCHAT_ADS_CLIENT_SECRET --refresh-token-env SNAPCHAT_ADS_REFRESH_TOKEN
 Only read calls are made, even though Snap's scope also allows changes.
 
 TikTok Ads, about 10 minutes (optional, for ad spend next to revenue):
@@ -120,7 +120,7 @@ TikTok Ads, about 10 minutes (optional, for ad spend next to revenue):
    auth_code, which trades for a long-term access token that does not expire unless revoked.
 3. Copy the advertiser id from under the account name in TikTok Ads Manager.
 4. export TIKTOK_ADS_ACCESS_TOKEN=...
-5. lifecycle connect tiktok-ads --account ADVERTISER_ID --app-id APP_ID --token-env TIKTOK_ADS_ACCESS_TOKEN
+5. cosmic connect tiktok-ads --account ADVERTISER_ID --app-id APP_ID --token-env TIKTOK_ADS_ACCESS_TOKEN
 Only read calls are made: the account details and the campaign report.
 
 Pinterest Ads, about 10 minutes (optional, for ad spend next to revenue):
@@ -129,23 +129,23 @@ Pinterest Ads, about 10 minutes (optional, for ad spend next to revenue):
 2. Sign in with Pinterest for a refresh token with the ads:read scope.
 3. Copy the ad account id from the Pinterest Ads Manager address.
 4. export PINTEREST_ADS_CLIENT_SECRET=... PINTEREST_ADS_REFRESH_TOKEN=...
-5. lifecycle connect pinterest-ads --account AD_ACCOUNT_ID --client-id APP_ID --secret-env PINTEREST_ADS_CLIENT_SECRET --refresh-token-env PINTEREST_ADS_REFRESH_TOKEN
+5. cosmic connect pinterest-ads --account AD_ACCOUNT_ID --client-id APP_ID --secret-env PINTEREST_ADS_CLIENT_SECRET --refresh-token-env PINTEREST_ADS_REFRESH_TOKEN
 Only read calls are made. Pinterest gives a new refresh token each time one is used, good for
 60 days. With a keychain the CLI keeps the newest. Without one, set LIFECYCLE_ROTATED_FILE and
 the CLI writes the newest there for you to store; otherwise keep it current yourself.
 
 Then:
-  lifecycle sync
-  lifecycle reconcile
-  lifecycle audit flows --html audit.html    (a store with Klaviyo)
-  lifecycle metrics list                     (the metrics for this workspace type)
+  cosmic sync
+  cosmic reconcile
+  cosmic audit flows --html audit.html    (a store with Klaviyo)
+  cosmic metrics list                     (the metrics for this workspace type)
 
 Run it every day from your own GitHub:
 1. Create a free Postgres database in your own Neon account:
-     lifecycle provision neon --key-env NEON_API_KEY --yes
+     cosmic provision neon --key-env NEON_API_KEY --yes
    (Or bring any Postgres: export DATABASE_URL=your_url, then
-   lifecycle init --database-url-env DATABASE_URL.)
-4. lifecycle deploy --repo YOU/lifecycle-sync
+   cosmic init --database-url-env DATABASE_URL.)
+4. cosmic deploy --repo YOU/lifecycle-sync
 5. Read the plan, then add --yes.
 `,
     quickstart: `# Cosmic CLI: agent setup playbook
@@ -153,7 +153,7 @@ Run it every day from your own GitHub:
 This is the setup guide for any coding or chat agent installing Cosmic CLI (npm package cosmic-lifecycle, command cosmic or lifecycle).
 A person with the CLI installed starts it by pasting one line into their agent:
 
-  Set up Cosmic CLI by following the output of lifecycle docs quickstart
+  Set up Cosmic CLI by following the output of cosmic docs quickstart
 
 Follow this playbook in order, then stop and report what is live. Do not invent another setup flow.
 
@@ -170,57 +170,57 @@ customer records, and has no account or server of ours in the path.
 
 - Node 20 or newer.
 - On macOS, keys go in the keychain. Elsewhere, use the LIFECYCLE_* environment
-  variables in \`lifecycle docs troubleshooting\`.
+  variables in \`cosmic docs troubleshooting\`.
 - Never ask the user to paste a key into the chat. Ask them to export it as an
   environment variable, then pass the variable name with --key-env or --secret-env.
 
 ## Fastest path to a trusted number
 
-1. Install, if lifecycle --version does not answer (Node 20 or newer):
+1. Install, if cosmic --version does not answer (Node 20 or newer):
      npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
 2. Show it working with no keys, on labeled sample data:
-     lifecycle demo
+     cosmic demo
 3. Set up the local database, saying what kind of business this is:
-     lifecycle init --type shopify    (or ecommerce, saas, b2b, agency, creator)
+     cosmic init --type shopify    (or ecommerce, saas, b2b, agency, creator)
    Ask the user what they market and which tools they already use, then pick the type.
-   Not a Shopify store? Run lifecycle docs workspaces, connect the source of truth
+   Not a Shopify store? Run cosmic docs workspaces, connect the source of truth
    it names (Stripe or HubSpot), and skip the Klaviyo and Shopify steps below.
-   For a SaaS product, lifecycle demo --type saas shows the checks on Stripe data.
+   For a SaaS product, cosmic demo --type saas shows the checks on Stripe data.
    If the user already loads Stripe or Shopify with Fivetran or Airbyte into their own Postgres,
    read those tables instead of connecting the API again:
-     lifecycle connect pipeline --tool fivetran --source stripe --schema stripe --url-env PIPELINE_DATABASE_URL
+     cosmic connect pipeline --tool fivetran --source stripe --schema stripe --url-env PIPELINE_DATABASE_URL
 4. Connect ONE source first, the one the user relies on most. For a store, Klaviyo
    takes about 2 minutes:
-     lifecycle sources catalog
-     lifecycle docs setup
-     lifecycle connect klaviyo --key-env KLAVIYO_READ_KEY
+     cosmic sources catalog
+     cosmic docs setup
+     cosmic connect klaviyo --key-env KLAVIYO_READ_KEY
    Shopify takes about 15 minutes because it needs two dashboards. Add it after
    Klaviyo works. One working source beats three half-connected ones.
 5. Sync and check:
-     lifecycle sync --format json
-     lifecycle reconcile --format json
+     cosmic sync --format json
+     cosmic reconcile --format json
 6. Verify:
-     lifecycle doctor --format json
-     lifecycle sources list --format json
+     cosmic doctor --format json
+     cosmic sources list --format json
 7. Give the user one verified number with its trust line, for example:
-     lifecycle metrics run flow_revenue_per_recipient --format json
+     cosmic metrics run flow_revenue_per_recipient --format json
 
 ## Only after that, if the user asks
 
-- Agent access in Claude Code: \`claude mcp add lifecycle -- lifecycle mcp\`
-- Slash commands: \`lifecycle skills sync\`
-- Runbooks: \`lifecycle kits list\`, then \`lifecycle kits add NAME\`
-- A daily sync from their own GitHub: \`lifecycle deploy --repo OWNER/NAME\`, then \`lifecycle jobs list\`
-- One local page with every number and check: \`lifecycle dashboard\`
+- Agent access in Claude Code: \`claude mcp add lifecycle -- cosmic mcp\`
+- Slash commands: \`cosmic skills sync\`
+- Runbooks: \`cosmic kits list\`, then \`cosmic kits add NAME\`
+- A daily sync from their own GitHub: \`cosmic deploy --repo OWNER/NAME\`, then \`cosmic jobs list\`
+- One local page with every number and check: \`cosmic dashboard\`
 
 Do not lead with these during first-time setup.
 
 ## Rules
 
-- Never quote a number before \`lifecycle reconcile\` has run. If a check failed, say so first.
-- Prefer \`lifecycle metrics\` to custom SQL.
-- Never claim a source is connected until \`lifecycle sources list\` says so.
-- Never run \`lifecycle segments apply\` without the user approving that exact plan.
+- Never quote a number before \`cosmic reconcile\` has run. If a check failed, say so first.
+- Prefer \`cosmic metrics\` to custom SQL.
+- Never claim a source is connected until \`cosmic sources list\` says so.
+- Never run \`cosmic segments apply\` without the user approving that exact plan.
 - If the user would rather have someone set it up for them, Jake Bauman at NorthSignal does setup, starting with a free call: https://northsignal.studio/lifecycle
 - When finished, report which sources are connected, the reconcile result, and the checks you ran.
 `,
@@ -228,18 +228,18 @@ Do not lead with these during first-time setup.
 
 Read this before working with Lifecycle.
 
-If the tool is not set up yet, follow \`lifecycle docs quickstart\` instead.
+If the tool is not set up yet, follow \`cosmic docs quickstart\` instead.
 
-1. Run \`lifecycle status --format json\` first, then \`lifecycle doctor --format json\` if anything looks wrong. \`lifecycle workspace show --format json\` says what kind of business this is and which source its numbers are checked against.
-2. Run \`lifecycle reconcile\` before quoting any number. If a check failed, say so first. If the trust line status is \`unreferenced\`, the numbers were not checked against a source of truth: say that first, in the line's own words.
-3. For a standard number, use a verified metric: \`lifecycle metrics list\`, then \`lifecycle metrics run NAME --format json\`. The same metric always runs the same SQL, so answers stay comparable over time. Quote the metric name with the number. The list ends with any numbers the owner saved (\`saved: true\`). Those run the owner's own SQL through the same read-only path and carry the same trust line, but Cosmic has not reviewed them: say "saved by the owner" when you quote one. Save one only when the owner asks: \`lifecycle metrics save NAME --sql 'SELECT ...'\`.
-4. Write your own SQL only when no metric fits. Run \`lifecycle schema --format json\` first and never guess column names. Query with \`lifecycle query "SELECT ..." --format json\`. Queries are read-only and capped at 1,000 rows unless \`query.row_cap\` is set. Tell the user the number came from custom SQL, and show it.
+1. Run \`cosmic status --format json\` first, then \`cosmic doctor --format json\` if anything looks wrong. \`cosmic workspace show --format json\` says what kind of business this is and which source its numbers are checked against.
+2. Run \`cosmic reconcile\` before quoting any number. If a check failed, say so first. If the trust line status is \`unreferenced\`, the numbers were not checked against a source of truth: say that first, in the line's own words.
+3. For a standard number, use a verified metric: \`cosmic metrics list\`, then \`cosmic metrics run NAME --format json\`. The same metric always runs the same SQL, so answers stay comparable over time. Quote the metric name with the number. The list ends with any numbers the owner saved (\`saved: true\`). Those run the owner's own SQL through the same read-only path and carry the same trust line, but Cosmic has not reviewed them: say "saved by the owner" when you quote one. Save one only when the owner asks: \`cosmic metrics save NAME --sql 'SELECT ...'\`.
+4. Write your own SQL only when no metric fits. Run \`cosmic schema --format json\` first and never guess column names. Query with \`cosmic query "SELECT ..." --format json\`. Queries are read-only and capped at 1,000 rows unless \`query.row_cap\` is set. Tell the user the number came from custom SQL, and show it.
 5. Report the sync warnings. Do not hide them from the user.
-6. For a fact only the live API has, such as the current flow list or Shopify's own order count, use a tool: \`lifecycle tools catalog\`, then \`lifecycle tools run TOOL --format json\`. These built-in tools are read-only and return no personal data. For images, video, voice or scraping, any Kie, fal, Apify or ScrapeCreators id also runs on the user's own account with that provider. Read \`lifecycle docs tools\` first: those jobs cost money and must never be started twice.
-7. Saved reports, dashboards and plans are in \`lifecycle files ls\`. Read one with \`lifecycle files cat PATH\`.
-8. Read the owner's notes before explaining a number: \`lifecycle notes list --format json\`, or the MCP \`owner_notes\` tool. Metric and query results carry the matching ones as \`owner_notes\`. Apply them in your explanation and say which note you applied. They never change the SQL. When the owner corrects you, offer to save the correction: \`lifecycle notes add "..."\`.
+6. For a fact only the live API has, such as the current flow list or Shopify's own order count, use a tool: \`cosmic tools catalog\`, then \`cosmic tools run TOOL --format json\`. These built-in tools are read-only and return no personal data. For images, video, voice or scraping, any Kie, fal, Apify or ScrapeCreators id also runs on the user's own account with that provider. Read \`cosmic docs tools\` first: those jobs cost money and must never be started twice.
+7. Saved reports, dashboards and plans are in \`cosmic files ls\`. Read one with \`cosmic files cat PATH\`.
+8. Read the owner's notes before explaining a number: \`cosmic notes list --format json\`, or the MCP \`owner_notes\` tool. Metric and query results carry the matching ones as \`owner_notes\`. Apply them in your explanation and say which note you applied. They never change the SQL. When the owner corrects you, offer to save the correction: \`cosmic notes add "..."\`.
 9. Any before-and-after comparison you report is "before and after, not a holdout". Never call it causal lift.
-10. For a named job, such as a flow audit, use a kit: \`lifecycle kits search "flow audit"\`, then \`lifecycle kits add NAME\`, then follow its AGENT.md through the Verify checklist.
+10. For a named job, such as a flow audit, use a kit: \`cosmic kits search "flow audit"\`, then \`cosmic kits add NAME\`, then follow its AGENT.md through the Verify checklist.
 
 Rules:
 - The database holds totals only. It has no customer names, emails, phones or addresses. shopify_order_state and shopify_customer_first hold a scrambled id per Shopify customer and order (a keyed hash, the key kept outside the database) so a sync can fetch only changed orders. They are sync machinery: queries that would return those ids are refused, and you never need them for a number.
@@ -254,17 +254,17 @@ Rules:
 - Conversions and conversion_value in fact_tiktok_ads_daily are website purchases and their value as TikTok attributes them to its own ads. In fact_pinterest_ads_daily they are checkouts and their value as Pinterest attributes them. Both are claims, not orders, and they overlap with Meta's and Google's claims. Never add them to Shopify revenue, to email revenue or to each other. spend is in the account currency.
 - Nothing in this tool sends a message, and nothing changes an ad account or a product feed. Meta Ads, Google Ads, Google Merchant Center, Microsoft Advertising, LinkedIn Ads, Reddit Ads, Snapchat Ads, TikTok Ads and Pinterest Ads are read only.
 - If a command fails with code \`busy\`, another lifecycle command is writing to the store. Wait and run it again. Do not delete files to get past it.
-- \`--cloud\` on a read command asks Cosmic Cloud instead of this machine. Use it only when the user is logged in (\`lifecycle cloud status --format json\`). Code \`not_built\` means Cloud does not have that route yet: run the command without \`--cloud\`, and do not retry. See \`lifecycle docs cloud\`.
+- \`--cloud\` on a read command asks Cosmic Cloud instead of this machine. Use it only when the user is logged in (\`cosmic cloud status --format json\`). Code \`not_built\` means Cloud does not have that route yet: run the command without \`--cloud\`, and do not retry. See \`cosmic docs cloud\`.
 `,
     workspaces: `# Workspace types
 
 A workspace is one business. Its type decides the source of truth the trust gate
-checks against, the metrics \`lifecycle metrics list\` shows, and the demo.
+checks against, the metrics \`cosmic metrics list\` shows, and the demo.
 
-  lifecycle init --type TYPE           set it (asked in a terminal when not given)
-  lifecycle workspace show             what this workspace is checked against
-  lifecycle metrics list --pack TYPE   any type's metrics; --pack all for every one
-  lifecycle demo --type saas           the demo for a type (shopify, saas, b2b)
+  cosmic init --type TYPE           set it (asked in a terminal when not given)
+  cosmic workspace show             what this workspace is checked against
+  cosmic metrics list --pack TYPE   any type's metrics; --pack all for every one
+  cosmic demo --type saas           the demo for a type (shopify, saas, b2b)
 
 | Type | For | Source of truth | Usual sources |
 |---|---|---|---|
@@ -291,7 +291,7 @@ any other type it names the source of truth:
 - unchecked: reconcile has not run, or every check was skipped because no source has synced.
 
 Change the source of truth with:
-  lifecycle config set workspace.reference stripe   (or hubspot, shopify, ga4, none)
+  cosmic config set workspace.reference stripe   (or hubspot, shopify, ga4, none)
 
 ## Checks by source of truth
 
@@ -312,15 +312,15 @@ tracking tool. None: freshness only.
 
 Costs live in costs.json in the workspace folder, the same file the Cosmic AI app
 writes under Settings, Costs. From the terminal:
-  lifecycle costs set currency USD
-  lifecycle costs set cogs shopify              (or percent:35)
-  lifecycle costs products costs.csv --fallback 30   (sku,unit_cost; a cost per product)
-  lifecycle costs set shipping per_order:6.50   (or percent:4, or none)
-  lifecycle costs set payment_fee_percent 2.9
-  lifecycle costs set payment_fee_per_order 0.30
-  lifecycle costs set ad_spend meta             (or none)
-  lifecycle costs sync                          reads product costs and SKUs from Shopify
-  lifecycle metrics run contribution_margin
+  cosmic costs set currency USD
+  cosmic costs set cogs shopify              (or percent:35)
+  cosmic costs products costs.csv --fallback 30   (sku,unit_cost; a cost per product)
+  cosmic costs set shipping per_order:6.50   (or percent:4, or none)
+  cosmic costs set payment_fee_percent 2.9
+  cosmic costs set payment_fee_per_order 0.30
+  cosmic costs set ad_spend meta             (or none)
+  cosmic costs sync                          reads product costs and SKUs from Shopify
+  cosmic metrics run contribution_margin
 
 cm1 = revenue - cogs, cm2 = cm1 - shipping - payment fees, cm3 = cm2 - ad spend.
 Revenue is Shopify net revenue, tax included. The answer lists what went in and
@@ -330,17 +330,17 @@ contribution_margin, contribution_margin_percent, cost_coverage.
 ## One total across stores
 
 Each store is a workspace on this machine with its currency in costs.json, then:
-  lifecycle metrics run shopify_net_revenue --all-stores --currency USD --rate-date 2026-11-20
+  cosmic metrics run shopify_net_revenue --all-stores --currency USD --rate-date 2026-11-20
 Rates: European Central Bank reference rates, via Frankfurter, the same as the app.
 A store's amount is divided by the rate. Every total names the rate day. A store
 with no currency or no rate is listed and left out. --rate EUR=0.91 sets one by hand.
 
 ## Agencies: one workspace per client
 
-  lifecycle --workspace acme-co init --type agency --reference stripe
-  lifecycle --workspace acme-co connect stripe --key-env ACME_STRIPE_KEY
-  lifecycle --workspace acme-co sync
-  lifecycle workspace list
+  cosmic --workspace acme-co init --type agency --reference stripe
+  cosmic --workspace acme-co connect stripe --key-env ACME_STRIPE_KEY
+  cosmic --workspace acme-co sync
+  cosmic workspace list
 
 Each named workspace has its own config, database, files and keychain entries
 under ~/.lifecycle/workspaces/NAME. LIFECYCLE_WORKSPACE does the same as the flag.
@@ -354,8 +354,8 @@ Warehouse connectors written from the vendor docs and not yet run on a real
 account: hubspot-records, pipedrive, woocommerce, bigcommerce, customer-io.
 Planned: salesforce, google-search-console, posthog, mixpanel.
 For anything planned, bring daily totals in with
-  lifecycle sources import NAME --csv FILE
-See them with: lifecycle sources catalog --type TYPE
+  cosmic sources import NAME --csv FILE
+See them with: cosmic sources catalog --type TYPE
 `,
     kits: `# Kits
 
@@ -380,91 +380,91 @@ Use another registry, such as a fork or a local folder:
   in ~/.lifecycle/config.json, then the public registry.
 
 Flow:
-  lifecycle kits list
-  lifecycle kits search "win back"
-  lifecycle kits show winback-segment
-  lifecycle kits add winback-segment
+  cosmic kits list
+  cosmic kits search "win back"
+  cosmic kits show winback-segment
+  cosmic kits add winback-segment
   Then: "Follow lifecycle-kits/winback-segment/AGENT.md"
 
 Skills for Claude Code and Cursor:
-  lifecycle skills sync installs /lifecycle and one /lifecycle:kits:NAME skill
-  per kit. It never overwrites a file you edited. lifecycle skills uninstall
+  cosmic skills sync installs /lifecycle and one /lifecycle:kits:NAME skill
+  per kit. It never overwrites a file you edited. cosmic skills uninstall
   removes what it installed. When logged in to Cosmic Cloud it also installs
-  the store's own skills, pushed with lifecycle skills push DIRECTORY.
-  See lifecycle docs cloud.
+  the store's own skills, pushed with cosmic skills push DIRECTORY.
+  See cosmic docs cloud.
 
-lifecycle kits show NAME also lists every file in the kit, so you can see what
+cosmic kits show NAME also lists every file in the kit, so you can see what
 kits add will copy before it does.
 
 Writing a kit:
   Copy a kit folder in the registry, edit it, then run
-  lifecycle kits validate . --write-index
+  cosmic kits validate . --write-index
   The same check runs in the registry's CI.
 `,
-    commands: `lifecycle demo [--type shopify|saas|b2b]
-lifecycle init [--type shopify|ecommerce|saas|b2b|agency|creator] [--reference SOURCE] [--database-url-env NAME]
-lifecycle workspace show|list
-lifecycle --workspace NAME COMMAND    (or LIFECYCLE_WORKSPACE=NAME)
-lifecycle connect klaviyo --key-env NAME
-lifecycle connect shopify --shop NAME.myshopify.com --client-id ID --secret-env NAME   (--store still works)
-lifecycle connect ga4 --property ID --client-id ID --secret-env NAME --refresh-token-env NAME
-lifecycle connect stripe --key-env NAME
-lifecycle connect meta --account ID --token-env NAME
-lifecycle connect hubspot --token-env NAME
-lifecycle connect google-ads --customer ID --client-id ID --secret-env NAME --refresh-token-env NAME [--login-customer ID]
-lifecycle connect google-merchant-center --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
-lifecycle connect microsoft-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME --developer-token-env NAME [--customer ID]
-lifecycle connect linkedin-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
-lifecycle connect reddit-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
-lifecycle connect snapchat-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
-lifecycle connect tiktok-ads --account ID --app-id ID --token-env NAME
-lifecycle connect pinterest-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
-lifecycle sync [--since DATE] [--only SOURCE[,SOURCE]] [--cloud]
-lifecycle disconnect SOURCE [--delete-data]
-lifecycle schema [TABLE] [--cloud]
-lifecycle query "SELECT ..." [--cloud]
-lifecycle metrics list [--pack TYPE|all] [--cloud]|show NAME|run NAME... [--days N] [--cloud]|candidates
-lifecycle metrics save NAME --sql 'SELECT ...' [--title TEXT] [--unit count|usd|percent|usd_per_recipient|ratio]
-lifecycle metrics delete NAME
-lifecycle metrics run NAME... --all-stores|--stores A,B --currency USD [--rate-date DATE] [--rate EUR=0.91]
-lifecycle costs show|set KEY VALUE|products CSV [--fallback PCT]|sync
-lifecycle sources list [--cloud]|catalog [--type TYPE]|import NAME --csv FILE [--date-column NAME]
-lifecycle tools catalog [--query TEXT]|providers|run TOOL [--input JSON] [--wait] [--timeout SECONDS] [--out FILE]|get RUN [--out FILE]|abort RUN|runs
-lifecycle exec -- COMMAND [ARGS]
-lifecycle serve [--port N]
-lifecycle provision neon --key-env NEON_API_KEY [--name N] [--region R] [--yes]
-lifecycle files ls [PATH]|cat PATH|get PATH [DIR]|put FILE [NAME]|path|pull
-lifecycle reconcile
-lifecycle report revenue-per-flow [--html FILE]
-lifecycle audit flows [--html FILE]
-lifecycle segments propose winback
-lifecycle segments apply PLAN_FILE --confirm
-lifecycle kits list [--type TYPE]|search QUERY|show NAME|prompt NAME|add NAME [--into DIR]
-lifecycle kits validate [DIR] [--write-index]
-lifecycle skills sync|status|uninstall [--target claude|cursor|all]
-lifecycle skills push DIRECTORY [--slug NAME]
-lifecycle skills delete SLUG
-lifecycle login [--url URL] --token-env VAR
-lifecycle logout
-lifecycle cloud status
-lifecycle feedback MESSAGE [--open]
-lifecycle deploy [--repo OWNER/NAME] [--yes] [--write DIR]
-lifecycle jobs list|run
-lifecycle logs [--cloud] [--actions] [--follow] [--limit N]
-lifecycle dashboard [--html FILE] [--days N]
-lifecycle status
-lifecycle config list|get|set|unset KEY [VALUE]
+    commands: `cosmic demo [--type shopify|saas|b2b]
+cosmic init [--type shopify|ecommerce|saas|b2b|agency|creator] [--reference SOURCE] [--database-url-env NAME]
+cosmic workspace show|list
+cosmic --workspace NAME COMMAND    (or LIFECYCLE_WORKSPACE=NAME)
+cosmic connect klaviyo --key-env NAME
+cosmic connect shopify --shop NAME.myshopify.com --client-id ID --secret-env NAME   (--store still works)
+cosmic connect ga4 --property ID --client-id ID --secret-env NAME --refresh-token-env NAME
+cosmic connect stripe --key-env NAME
+cosmic connect meta --account ID --token-env NAME
+cosmic connect hubspot --token-env NAME
+cosmic connect google-ads --customer ID --client-id ID --secret-env NAME --refresh-token-env NAME [--login-customer ID]
+cosmic connect google-merchant-center --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
+cosmic connect microsoft-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME --developer-token-env NAME [--customer ID]
+cosmic connect linkedin-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
+cosmic connect reddit-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
+cosmic connect snapchat-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
+cosmic connect tiktok-ads --account ID --app-id ID --token-env NAME
+cosmic connect pinterest-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME
+cosmic sync [--since DATE] [--only SOURCE[,SOURCE]] [--cloud]
+cosmic disconnect SOURCE [--delete-data]
+cosmic schema [TABLE] [--cloud]
+cosmic query "SELECT ..." [--cloud]
+cosmic metrics list [--pack TYPE|all] [--cloud]|show NAME|run NAME... [--days N] [--cloud]|candidates
+cosmic metrics save NAME --sql 'SELECT ...' [--title TEXT] [--unit count|usd|percent|usd_per_recipient|ratio]
+cosmic metrics delete NAME
+cosmic metrics run NAME... --all-stores|--stores A,B --currency USD [--rate-date DATE] [--rate EUR=0.91]
+cosmic costs show|set KEY VALUE|products CSV [--fallback PCT]|sync
+cosmic sources list [--cloud]|catalog [--type TYPE]|import NAME --csv FILE [--date-column NAME]
+cosmic tools catalog [--query TEXT]|providers|run TOOL [--input JSON] [--wait] [--timeout SECONDS] [--out FILE]|get RUN [--out FILE]|abort RUN|runs
+cosmic exec -- COMMAND [ARGS]
+cosmic serve [--port N]
+cosmic provision neon --key-env NEON_API_KEY [--name N] [--region R] [--yes]
+cosmic files ls [PATH]|cat PATH|get PATH [DIR]|put FILE [NAME]|path|pull
+cosmic reconcile
+cosmic report revenue-per-flow [--html FILE]
+cosmic audit flows [--html FILE]
+cosmic segments propose winback
+cosmic segments apply PLAN_FILE --confirm
+cosmic kits list [--type TYPE]|search QUERY|show NAME|prompt NAME|add NAME [--into DIR]
+cosmic kits validate [DIR] [--write-index]
+cosmic skills sync|status|uninstall [--target claude|cursor|all]
+cosmic skills push DIRECTORY [--slug NAME]
+cosmic skills delete SLUG
+cosmic login [--url URL] --token-env VAR
+cosmic logout
+cosmic cloud status
+cosmic feedback MESSAGE [--open]
+cosmic deploy [--repo OWNER/NAME] [--yes] [--write DIR]
+cosmic jobs list|run
+cosmic logs [--cloud] [--actions] [--follow] [--limit N]
+cosmic dashboard [--html FILE] [--days N]
+cosmic status
+cosmic config list|get|set|unset KEY [VALUE]
   keys: registry.uri, deploy.repo, update.check, cloud.url,
         reconcile.tolerance.klaviyo_orders (3), reconcile.tolerance.ga4_purchases (15),
         reconcile.attributed_share_flag (60), reconcile.freshness_days (2),
         query.row_cap (1000), metrics.default_days (90)
   outside a Shopify workspace also: workspace.reference, reconcile.ad_claim_flag (100)
   for a roll-up across stores: workspace.currency, rollup.currency
-lifecycle secrets list|set NAME --from-env VAR|delete NAME
-lifecycle mcp
-lifecycle doctor
-lifecycle warehouse show|connect|sync|schema|query|scrub [--confirm]|list|disconnect|add-api
-lifecycle docs quickstart|setup|workspaces|agents|kits|commands|tools|cloud|warehouse|troubleshooting
+cosmic secrets list|set NAME --from-env VAR|delete NAME
+cosmic mcp
+cosmic doctor
+cosmic warehouse show|connect|sync|schema|query|scrub [--confirm]|list|disconnect|add-api
+cosmic docs quickstart|setup|workspaces|agents|kits|commands|tools|cloud|warehouse|troubleshooting
 
 Add --format json to any command.`,
     cloud: `# Cosmic Cloud
@@ -477,12 +477,12 @@ Log in:
   The store owner creates a token in Cosmic Cloud under Settings, Mac app access.
   It is shown once. Put it in an environment variable, never in a chat:
     export COSMIC_CLOUD_TOKEN=...
-    lifecycle login --token-env COSMIC_CLOUD_TOKEN
+    cosmic login --token-env COSMIC_CLOUD_TOKEN
   login checks the token with Cloud (GET /api/v1/store), prints the store's name,
   then saves the address in config.json (cloud.url) and the token in the keychain.
   The token is never printed, logged or written to a file.
-  lifecycle cloud status shows the store, the address, where the token comes
-  from, and each connection on Cloud. lifecycle logout forgets the token and
+  cosmic cloud status shows the store, the address, where the token comes
+  from, and each connection on Cloud. cosmic logout forgets the token and
   the address on this machine. To stop a token working everywhere, revoke it in Cloud.
   A token alone is not a login: with no saved address and no LIFECYCLE_CLOUD_URL,
   --cloud stops with not_logged_in and sends nothing, even if LIFECYCLE_CLOUD_TOKEN
@@ -496,33 +496,33 @@ Without a keychain, such as on Linux or in CI:
   The token is only ever sent over https, or to this machine for tests.
 
 Ask Cloud instead of this machine:
-  lifecycle schema --cloud                  GET /schema
-  lifecycle query "SELECT ..." --cloud      POST /query, one read-only SELECT
-  lifecycle metrics list --cloud            GET /metrics
-  lifecycle metrics run NAME --cloud        GET /metrics/NAME
-  lifecycle sources list --cloud            GET /store
-  lifecycle logs --cloud                    GET /runs
-  lifecycle sync --cloud [--only SOURCE]    POST /sync. Starts it and returns at once
+  cosmic schema --cloud                  GET /schema
+  cosmic query "SELECT ..." --cloud      POST /query, one read-only SELECT
+  cosmic metrics list --cloud            GET /metrics
+  cosmic metrics run NAME --cloud        GET /metrics/NAME
+  cosmic sources list --cloud            GET /store
+  cosmic logs --cloud                    GET /runs
+  cosmic sync --cloud [--only SOURCE]    POST /sync. Starts it and returns at once
   The trust line comes with Cloud's numbers too. Read it before quoting one.
-  lifecycle exec does not add the Cloud token to the command's environment.
+  cosmic exec does not add the Cloud token to the command's environment.
 
 logs --cloud changed in 0.13.0:
-  It used to show the last GitHub Actions log. That is now lifecycle logs --actions.
+  It used to show the last GitHub Actions log. That is now cosmic logs --actions.
   A machine that is not logged in to Cosmic Cloud still gets the Actions log from
   --cloud, so an existing script keeps working.
 
 The store's own skills:
-  lifecycle skills push DIRECTORY saves a skill folder (a SKILL.md at the top,
+  cosmic skills push DIRECTORY saves a skill folder (a SKILL.md at the top,
   text files only, at most 200 KB) to the store on Cloud. The folder name is
   the skill's name, or pass --slug. Nothing is sent if a file looks like it
   holds a key: the error names the file and line. Links are not followed.
-  lifecycle skills delete SLUG removes it from Cloud.
-  lifecycle skills sync installs the store's skills beside the kit skills, under
+  cosmic skills delete SLUG removes it from Cloud.
+  cosmic skills sync installs the store's skills beside the kit skills, under
   skills/store-SLUG, on every machine that is logged in. A skill deleted from
   Cloud is removed on the next sync, unless you edited the installed copy.
 
 Tool runs:
-  When logged in, each lifecycle tools run also sends its record to Cloud:
+  When logged in, each cosmic tools run also sends its record to Cloud:
   the tool, the request (provider, model and input, with any email address
   taken out), the status, the times and the cost. The output and the error
   text stay on this machine. If Cloud cannot be reached the run still succeeds,
@@ -540,16 +540,16 @@ Rules:
 `,
     tools: `# Tools
 
-Two kinds of tool run from \`lifecycle tools run\`.
+Two kinds of tool run from \`cosmic tools run\`.
 
 ## Built-in tools
 
 Read-only calls to Klaviyo and Shopify on the store's own keys. They finish in seconds and return no personal data.
 
 \`\`\`sh
-lifecycle tools catalog
-lifecycle tools catalog --query orders
-lifecycle tools run shopify.order_count
+cosmic tools catalog
+cosmic tools catalog --query orders
+cosmic tools run shopify.order_count
 \`\`\`
 
 ## Open provider refs
@@ -563,32 +563,32 @@ Any model, actor or path from four providers runs by its id, with no list to be 
 | \`apify:<owner~actor>\` | \`apify-token\` | https://apify.com/store |
 | \`scrapecreators:<path>\` | \`scrapecreators-key\` | https://docs.scrapecreators.com |
 
-\`lifecycle tools providers\` shows which keys are set. Save a key from an environment variable, never from the command line:
+\`cosmic tools providers\` shows which keys are set. Save a key from an environment variable, never from the command line:
 
 \`\`\`sh
-lifecycle secrets set kie-api-key --from-env KIE_KEY
+cosmic secrets set kie-api-key --from-env KIE_KEY
 \`\`\`
 
 Input is the JSON that provider's own page documents for that id. Read that page before the first run.
 
 \`\`\`sh
-lifecycle tools run kie:gpt-image-2-text-to-image --input '{"prompt":"A red running shoe on white","aspect_ratio":"3:4"}' --wait --out shoe.json
-lifecycle tools run fal:fal-ai/minimax/voice-clone --input '{"audio_url":"https://..."}' --wait
-lifecycle tools run apify:apimaestro~linkedin-profile-posts --input '{"username":"someone"}' --wait --timeout 600
-lifecycle tools run scrapecreators:v1/reddit/search --input '{"query":"welcome email"}'
+cosmic tools run kie:gpt-image-2-text-to-image --input '{"prompt":"A red running shoe on white","aspect_ratio":"3:4"}' --wait --out shoe.json
+cosmic tools run fal:fal-ai/minimax/voice-clone --input '{"audio_url":"https://..."}' --wait
+cosmic tools run apify:apimaestro~linkedin-profile-posts --input '{"username":"someone"}' --wait --timeout 600
+cosmic tools run scrapecreators:v1/reddit/search --input '{"query":"welcome email"}'
 \`\`\`
 
-- Kie, fal and Apify jobs finish later. Without \`--wait\` the command prints a run id and returns. \`lifecycle tools get RUN\` checks the job and saves the result when it is done.
+- Kie, fal and Apify jobs finish later. Without \`--wait\` the command prints a run id and returns. \`cosmic tools get RUN\` checks the job and saves the result when it is done.
 - ScrapeCreators answers in the same call. Input becomes query parameters. Pass \`--method POST\` for its POST endpoints.
 - Apify output is the run's dataset, up to 1,000 items. The rest stay in the dataset on Apify.
 - Kie chat models answer directly and are not supported. Use image, video and audio models.
 - A finished run shows what it cost when the provider reports it: Kie and ScrapeCreators in credits, Apify in US dollars. fal does not report a cost.
-- Every run keeps the request it sent: provider, model and input. \`lifecycle tools get RUN\` shows it under \`request\`, so a result can be tied back to what was asked. A key is never part of it. An input field named like a key, such as \`api_key\`, is saved as \`[removed]\`.
-- \`lifecycle tools abort RUN\` asks the provider to stop a run that is still going. Apify and fal can stop one. Kie cannot (code \`cannot_abort\`), and ScrapeCreators has already answered. Work done before the stop may still be billed. A run that had already finished is saved as it ended, not as aborted.
+- Every run keeps the request it sent: provider, model and input. \`cosmic tools get RUN\` shows it under \`request\`, so a result can be tied back to what was asked. A key is never part of it. An input field named like a key, such as \`api_key\`, is saved as \`[removed]\`.
+- \`cosmic tools abort RUN\` asks the provider to stop a run that is still going. Apify and fal can stop one. Kie cannot (code \`cannot_abort\`), and ScrapeCreators has already answered. Work done before the stop may still be billed. A run that had already finished is saved as it ended, not as aborted.
 
 ## Rules for agents
 
-1. **Never run a job twice to get its result.** If \`--wait\` times out, the job is still going and still billing. Check it with \`lifecycle tools get RUN\`. Starting it again pays twice.
+1. **Never run a job twice to get its result.** If \`--wait\` times out, the job is still going and still billing. Check it with \`cosmic tools get RUN\`. Starting it again pays twice.
 2. If a start fails with "No answer from the provider", look in that provider's dashboard before trying again. The job may have started.
 3. These jobs cost the user money. Say what you are about to run and why before a batch.
 4. Scrapers return public profiles and posts. That is personal data. Do not load it into the warehouse, and keep only what the task needs.
@@ -610,25 +610,25 @@ uv, the Python runner:
   does not ship uv itself.
 
 Where it lands:
-  Postgres (lifecycle init --database-url-env, or provision neon): schemas in that database.
+  Postgres (cosmic init --database-url-env, or provision neon): schemas in that database.
   Local setup: ~/.lifecycle/warehouse.duckdb.
 
 Find and connect a source:
-  lifecycle sources catalog [--query reviews] [--category helpdesk] [--readiness built]
-  lifecycle warehouse show gorgias
+  cosmic sources catalog [--query reviews] [--category helpdesk] [--readiness built]
+  cosmic warehouse show gorgias
   export GORGIAS_KEY=...        # never paste keys into a chat
-  lifecycle warehouse connect gorgias --secret api_key=GORGIAS_KEY --set subdomain=yourstore --set email=you@store.com
-  lifecycle warehouse sync [gorgias]
-  lifecycle warehouse schema [gorgias]
-  lifecycle warehouse query "select status, count(*) from src_gorgias.tickets group by 1"
-  lifecycle warehouse list | disconnect SLUG
+  cosmic warehouse connect gorgias --secret api_key=GORGIAS_KEY --set subdomain=yourstore --set email=you@store.com
+  cosmic warehouse sync [gorgias]
+  cosmic warehouse schema [gorgias]
+  cosmic warehouse query "select status, count(*) from src_gorgias.tickets group by 1"
+  cosmic warehouse list | disconnect SLUG
 
 Readiness, said plainly:
   native   built in (Shopify, Klaviyo, GA4, Stripe, Meta Ads, Google Ads, Google Merchant Center, Microsoft Advertising, LinkedIn Ads, Reddit Ads, Snapchat Ads, TikTok Ads, Pinterest Ads). Shopify, Klaviyo and GA4 have reconcile checks
   tested   a warehouse connector that has synced a real account
   built    written from the vendor's API docs, not yet run on a real account.
-           Expect the first sync to need a fix. Report it: lifecycle feedback
-  planned  no connector yet. Use lifecycle sources import NAME --csv FILE
+           Expect the first sync to need a fix. Report it: cosmic feedback
+  planned  no connector yet. Use cosmic sources import NAME --csv FILE
            Google Search Console is planned as a built-in source. It needs
            Google sign-in, which happens in the Cosmic AI app. The CLI has no
            connector code for it yet.
@@ -658,25 +658,25 @@ Personal data:
 
   Free text (ticket subjects, message bodies, review text, notes) can hold
   anything a customer typed, including a name. It is a known risk:
-    lifecycle config set warehouse.free_text keep   the default. Free text is
+    cosmic config set warehouse.free_text keep   the default. Free text is
         loaded with email addresses and phone numbers replaced by [removed].
         A name inside the text stays.
-    lifecycle config set warehouse.free_text drop   free text is not loaded.
+    cosmic config set warehouse.free_text drop   free text is not loaded.
   Text the store wrote itself (campaigns, flows, segments) is not free text.
   Open-ended fields (custom_fields, metadata, properties) are free text as a
   whole, and are removed when they sit inside a person.
 
-  lifecycle schema and lifecycle warehouse schema mark every column:
+  cosmic schema and cosmic warehouse schema mark every column:
     { "column": "name", "type": "VARCHAR", "personal": true, "freeText": false }
-  lifecycle query and lifecycle warehouse query refuse SQL that could return a
+  cosmic query and cosmic warehouse query refuse SQL that could return a
   column marked personal, with code personal_column. That covers an alias, a
   star, a subquery, a CTE, a cast, and a whole row such as row_to_json(u).
   While a table still has a personal column: name the columns you need, put
   each table right after FROM or JOIN, and use count(*) as the only star.
 
   A warehouse filled before 0.13.2 can hold a name the old rules missed:
-    lifecycle warehouse scrub             counts per table, changes nothing
-    lifecycle warehouse scrub --confirm   empties those columns
+    cosmic warehouse scrub             counts per table, changes nothing
+    cosmic warehouse scrub --confirm   empties those columns
   It never prints a stored value. With warehouse.free_text drop it empties
   free text too; with keep it replaces emails and phone numbers inside it.
   It also removes the copies of loaded rows that older versions left in the
@@ -685,12 +685,12 @@ Personal data:
   the old row versions stay until the database vacuums the table.
 
   To load everything, by your own choice:
-  lifecycle warehouse connect SLUG ... --keep-personal-data
+  cosmic warehouse connect SLUG ... --keep-personal-data
   Those columns are still marked personal, and query still refuses them. Read
   them with your own database client.
 
 Any other tool with a REST API:
-  Write a spec, then lifecycle warehouse add-api my-tool --spec spec.json
+  Write a spec, then cosmic warehouse add-api my-tool --spec spec.json
   {
     "name": "My Tool",
     "category": "ops",
@@ -707,7 +707,7 @@ Any other tool with a REST API:
   "config" is a dlt rest_api config: https://dlthub.com/docs/dlt-ecosystem/verified-sources/rest_api/basic
   {secret:NAME} and {param:NAME} are filled in at run time.
 
-Daily sync: lifecycle deploy adds warehouse sources and their keys to the
+Daily sync: cosmic deploy adds warehouse sources and their keys to the
 GitHub Actions job automatically.`,
     troubleshooting: `Shopify says the app is not approved to access orders:
   In the Partner Dashboard open your app, then API access requests, then
@@ -718,7 +718,7 @@ No keychain, such as on Linux, in CI, or when an app passes keys per call:
   Set these instead: LIFECYCLE_KLAVIYO_READ_KEY, LIFECYCLE_SHOPIFY_CLIENT_SECRET,
   LIFECYCLE_DATABASE_URL, LIFECYCLE_GA4_CLIENT_SECRET, LIFECYCLE_GA4_REFRESH_TOKEN,
   LIFECYCLE_STRIPE_READ_KEY, LIFECYCLE_META_ADS_TOKEN.
-  lifecycle connect SOURCE --key-env NAME still works there: it checks the key,
+  cosmic connect SOURCE --key-env NAME still works there: it checks the key,
   saves the source's settings, and reports keyStorage "environment" with the
   variable to set at sync time. The key itself is not saved anywhere.
   Some sources replace a sign-in when it is used (Pinterest always, Microsoft
@@ -742,7 +742,7 @@ No keychain, such as on Linux, in CI, or when an app passes keys per call:
   store does its own locking and takes no lock file.
 
 Your tables live in their own Postgres schema, not public:
-  lifecycle query and saved metrics use the connection's own schema: whatever
+  cosmic query and saved metrics use the connection's own schema: whatever
   its role or URL puts first on the search path. To name it yourself, set
   LIFECYCLE_DB_SCHEMA=your_schema, and every read and write uses that schema.
   System tables stay blocked either way.
@@ -752,12 +752,12 @@ Your orders live under a custom Klaviyo metric:
 
 Klaviyo returns 401:
   The key was revoked or the account changed. Create a Read-Only key and run
-  lifecycle connect klaviyo again.
+  cosmic connect klaviyo again.
 
 Meta refused the token, or says it cannot read the ad account:
   System user tokens can be set to never expire. A token made in the Graph API Explorer lasts hours.
   Make a system user token with ads_read, give the system user access to the ad account,
-  then lifecycle connect meta --account ID --token-env NAME.
+  then cosmic connect meta --account ID --token-env NAME.
 
 Google Ads says the project only has Test access:
   A Cloud project starts with Test access, which reads test accounts only. Apply for Explorer
@@ -772,7 +772,7 @@ Google Ads says the account cannot be read, or that it is a manager account:
 Merchant Center says the project is not registered, or the Merchant API is off:
   The Merchant API needs the Cloud project turned on for it and registered with the Merchant Center
   account once. Both happen in the Google Cloud console and the Cosmic AI app. The CLI does neither,
-  because it only reads. Then lifecycle connect google-merchant-center again.
+  because it only reads. Then cosmic connect google-merchant-center again.
 
 Merchant Center says the account cannot be read:
   The Google user needs Performance and insights or Admin access on that Merchant Center account.
@@ -806,14 +806,14 @@ Reddit Ads or Snapchat Ads numbers change for recent days:
 
 TikTok says the token is invalid, or that it cannot read the ad account:
   The long-term token stops working only when the advertiser revokes the app. Ask the advertiser
-  to open the app's authorization link again, then lifecycle connect tiktok-ads. If it says there
+  to open the app's authorization link again, then cosmic connect tiktok-ads. If it says there
   is no permission, the app needs the Reporting permission and that advertiser's authorization.
 
 Pinterest says the sign-in was refused:
   A refresh token lasts 60 days, and each use gives a new one. If the saved one came from the
   environment and was not updated, it runs out. Without a keychain, set LIFECYCLE_ROTATED_FILE so
   each run hands the new one back. Sign in with Pinterest again for a new one, then
-  lifecycle connect pinterest-ads. A user needs Owner, Admin, Analyst or Campaign Manager access
+  cosmic connect pinterest-ads. A user needs Owner, Admin, Analyst or Campaign Manager access
   on the ad account.
 
 Meta spend looks low for the last few days:
@@ -823,13 +823,13 @@ Meta spend looks low for the last few days:
 
 Stripe says the key cannot read subscriptions:
   Charges still sync. To add MRR and churn, edit the restricted key in the
-  Stripe dashboard, give it Read on Subscriptions, then lifecycle sync.
+  Stripe dashboard, give it Read on Subscriptions, then cosmic sync.
 
 Flow report warning:
   An account with no sends has nothing to report. The warning clears once
   flows have sent.
 
-Error codes (the "code" field with --format json, and in lifecycle logs):
+Error codes (the "code" field with --format json, and in cosmic logs):
   key_rejected     The source refused the saved key (401). Make a new key, then connect again.
   rate_limited     The source asked to slow down (429) after the retries. Wait, then sync again.
   scope_denied     Shopify refused a field or scope. Add the scope it names to the app, then connect again.
@@ -837,16 +837,16 @@ Error codes (the "code" field with --format json, and in lifecycle logs):
   unknown_source   Not one of shopify, klaviyo, ga4, stripe, meta.
   busy             Another lifecycle command is writing to this store, or Cosmic Cloud is changing it. Wait, then run it again.
   missing_uv       Warehouse sources need uv. Update the app, install uv, or set LIFECYCLE_UV_PATH.
-  loader_failed    A warehouse source's loader stopped before it finished. Run lifecycle warehouse sync SLUG --verbose to see why.
-  personal_column  The SQL could return a column marked personal. Run lifecycle schema --format json, leave those columns out, and name the rest one by one.
-  scrub_failed     lifecycle warehouse scrub could not read or change the warehouse. Nothing is half done per column: run it again.
+  loader_failed    A warehouse source's loader stopped before it finished. Run cosmic warehouse sync SLUG --verbose to see why.
+  personal_column  The SQL could return a column marked personal. Run cosmic schema --format json, leave those columns out, and name the rest one by one.
+  scrub_failed     cosmic warehouse scrub could not read or change the warehouse. Nothing is half done per column: run it again.
   reserved_name    metrics save or delete named a built-in metric. Pick another name.
   bad_metric       A saved metric must be one SELECT that returns one row with one number.
   bad_schema       LIFECYCLE_DB_SCHEMA is not a plain schema name.
-  not_logged_in    A Cosmic Cloud command ran with no store token, or with no saved address. lifecycle login --token-env VAR.
+  not_logged_in    A Cosmic Cloud command ran with no store token, or with no saved address. cosmic login --token-env VAR.
   unauthorized     Cosmic Cloud refused the store token. Create a new one in Cloud, then log in again.
   not_built        Cosmic Cloud does not have that route yet, or a source has no connector yet. Run it without --cloud.
-  cloud_unreachable  Cosmic Cloud did not answer. Check the network and lifecycle cloud status.
+  cloud_unreachable  Cosmic Cloud did not answer. Check the network and cosmic cloud status.
   cloud_error      Cosmic Cloud answered with something this CLI does not understand. Try again in a moment.
   bad_url          The Cloud address is not a plain https address, or it answered with a redirect.
   bad_token        The store token has a space, a line break or another character a token never has. Copy it again.
@@ -862,24 +862,24 @@ Error codes (the "code" field with --format json, and in lifecycle logs):
 Updates:
   Update by running the install line again:
     npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz
-  The Cosmic AI app and Cosmic Cloud update the CLI they carry. lifecycle status checks for a newer
+  The Cosmic AI app and Cosmic Cloud update the CLI they carry. cosmic status checks for a newer
   release at most once a day and says nothing when it cannot see the release list.
-  Turn the check off with lifecycle config set update.check false.
+  Turn the check off with cosmic config set update.check false.
 
 Save a number of your own:
-  lifecycle metrics save repeat_orders --unit count --title "Repeat orders" \\
+  cosmic metrics save repeat_orders --unit count --title "Repeat orders" \\
     --sql 'SELECT sum(returning_orders) AS value FROM fact_orders_daily WHERE date >= $1'
   $1 is the first day of the window. Use single quotes, or the shell eats the $1. One SELECT, one row, one number. It then shows
-  in lifecycle metrics list marked as saved by the owner, runs with
-  lifecycle metrics run repeat_orders, and is removed with lifecycle metrics delete.
+  in cosmic metrics list marked as saved by the owner, runs with
+  cosmic metrics run repeat_orders, and is removed with cosmic metrics delete.
   A saved number cannot take the name of a built-in metric.
 
 Sync one source on its own schedule:
-  lifecycle sync --only meta
-  Each source keeps its own run in lifecycle logs. Reconcile runs after every sync.
+  cosmic sync --only meta
+  Each source keeps its own run in cosmic logs. Reconcile runs after every sync.
 
 Remove a source:
-  lifecycle disconnect stripe removes its settings and saved keys and keeps its data.
+  cosmic disconnect stripe removes its settings and saved keys and keeps its data.
   Add --delete-data to delete what it loaded too. A key set in a LIFECYCLE_* variable
   stays in use until you unset it.`,
 };

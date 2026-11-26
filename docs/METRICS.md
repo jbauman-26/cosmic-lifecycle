@@ -66,7 +66,7 @@ One definition per metric. Every built-in metric runs the same SQL every time, a
 - `stripe_net_revenue`: Stripe amounts are in the account's main currency for the window: the one with the most charges. Other currencies are left out, not converted. A refund counts against the day of the charge, not the day it was refunded.
 - `stripe_repeat_charge_share`: Charges with no Stripe customer attached are counted as guests, never as repeat.
 - `stripe_failed_payment_rate`: Each retry is its own attempt, so a card retried three times counts three times.
-- `stripe_mrr`: Discounts are not applied. Tiered and metered prices are left out; lifecycle sync reports how many. Stripe amounts are in the account's main currency for the window: the one with the most charges. Other currencies are left out, not converted.
+- `stripe_mrr`: Discounts are not applied. Tiered and metered prices are left out; cosmic sync reports how many. Stripe amounts are in the account's main currency for the window: the one with the most charges. Other currencies are left out, not converted.
 - `meta_ad_spend`: Spend is in the ad account's currency and is not converted. It is shown with a dollar sign either way.
 - `meta_attributed_purchases`: Purchases and purchase value are what Meta attributes to its own ads, in its own attribution window. They are a claim, not orders. Do not add them to Shopify revenue or to email revenue.
 - `meta_reported_roas`: Purchases and purchase value are what Meta attributes to its own ads, in its own attribution window. They are a claim, not orders. Do not add them to Shopify revenue or to email revenue. Spend is in the ad account's currency and is not converted. It is shown with a dollar sign either way.

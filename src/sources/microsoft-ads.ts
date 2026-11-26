@@ -113,7 +113,7 @@ export function unzipFirst(bytes: Uint8Array): string {
   for (let i = b.length - 22; i >= Math.max(0, b.length - 65557); i--) {
     if (b.readUInt32LE(i) === 0x06054b50) { eocd = i; break }
   }
-  const bad = () => new CliError('Microsoft Advertising sent a report file that is not a ZIP archive.', 'Run lifecycle sync --only microsoft-ads again. If it repeats, report it: lifecycle feedback', 'microsoft_ads_error')
+  const bad = () => new CliError('Microsoft Advertising sent a report file that is not a ZIP archive.', 'Run cosmic sync --only microsoft-ads again. If it repeats, report it: cosmic feedback', 'microsoft_ads_error')
   if (eocd < 0 || b.readUInt16LE(eocd + 10) === 0) throw bad()
   const cd = b.readUInt32LE(eocd + 16)
   if (b.readUInt32LE(cd) !== 0x02014b50) throw bad()
@@ -138,7 +138,7 @@ export function pacificToday(at = new Date()): string {
 
 // Only checked dates reach the request.
 export function reportRequest(account: string, since: string, until: string) {
-  if (!DATE.test(since) || !DATE.test(until)) throw new CliError('Dates must be YYYY-MM-DD.', 'lifecycle sync', 'bad_value')
+  if (!DATE.test(since) || !DATE.test(until)) throw new CliError('Dates must be YYYY-MM-DD.', 'cosmic sync', 'bad_value')
   return {
     ReportRequest: {
       ExcludeColumnHeaders: false,
@@ -174,11 +174,11 @@ export async function microsoftAdsAccessToken(clientId: string, clientSecret: st
   ).catch((e: unknown) => {
     // A revoked or expired refresh token, a changed password, or a wrong client comes back as one of these.
     if (e instanceof HttpError && (e.status === 400 || e.status === 401) && /invalid_grant|invalid_client|unauthorized_client|invalid_request/.test(e.body)) {
-      throw new CliError('Microsoft rejected the saved Microsoft Advertising sign-in.', 'Sign in with Microsoft again for a new refresh token, then lifecycle connect microsoft-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME --developer-token-env NAME', 'key_rejected')
+      throw new CliError('Microsoft rejected the saved Microsoft Advertising sign-in.', 'Sign in with Microsoft again for a new refresh token, then cosmic connect microsoft-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME --developer-token-env NAME', 'key_rejected')
     }
     throw e
   })
-  if (!body?.access_token) throw new CliError('Microsoft returned no access token.', 'lifecycle doctor', 'key_rejected')
+  if (!body?.access_token) throw new CliError('Microsoft returned no access token.', 'cosmic doctor', 'key_rejected')
   return { accessToken: String(body.access_token), refreshToken: body.refresh_token ? String(body.refresh_token) : null }
 }
 
@@ -203,12 +203,12 @@ function explain(e: unknown): never {
     const { codes, message } = faultCodes(e.body)
     const has = (list: number[]) => codes.some((c) => list.includes(c))
     const detail = message ? `: ${message}` : '.'
-    if (has(AUTH) || e.status === 401) throw new CliError(`Microsoft Advertising refused the sign-in or the developer token${detail}`, 'Check that the developer token is for production, not sandbox, then sign in with Microsoft again and lifecycle connect microsoft-ads', 'key_rejected')
-    if (codes.includes(117) || e.status === 429) throw new CliError('Microsoft Advertising is rate limiting these calls.', 'Wait a minute, then run lifecycle sync --only microsoft-ads again.', 'rate_limited')
+    if (has(AUTH) || e.status === 401) throw new CliError(`Microsoft Advertising refused the sign-in or the developer token${detail}`, 'Check that the developer token is for production, not sandbox, then sign in with Microsoft again and cosmic connect microsoft-ads', 'key_rejected')
+    if (codes.includes(117) || e.status === 429) throw new CliError('Microsoft Advertising is rate limiting these calls.', 'Wait a minute, then run cosmic sync --only microsoft-ads again.', 'rate_limited')
     if (has(PERMISSION)) throw new CliError(`The signed-in Microsoft user cannot read that account${detail}`, 'Check the account and customer ids, or ask for access to the account in Microsoft Advertising.', 'microsoft_ads_permission')
-    if (has(ACCOUNT)) throw new CliError(`Microsoft Advertising does not know that account${detail}`, 'Use the aid= number from the Microsoft Advertising address bar: lifecycle connect microsoft-ads --account ID', 'microsoft_ads_account')
-    if (e.status === 403) throw new CliError(`Microsoft Advertising refused the request${detail}`, 'lifecycle doctor', 'microsoft_ads_permission')
-    throw new CliError(`Microsoft Advertising answered with status ${e.status}${detail}`, 'Run the command again, then lifecycle doctor.', 'microsoft_ads_error')
+    if (has(ACCOUNT)) throw new CliError(`Microsoft Advertising does not know that account${detail}`, 'Use the aid= number from the Microsoft Advertising address bar: cosmic connect microsoft-ads --account ID', 'microsoft_ads_account')
+    if (e.status === 403) throw new CliError(`Microsoft Advertising refused the request${detail}`, 'cosmic doctor', 'microsoft_ads_permission')
+    throw new CliError(`Microsoft Advertising answered with status ${e.status}${detail}`, 'Run the command again, then cosmic doctor.', 'microsoft_ads_error')
   }
   throw e
 }
@@ -254,7 +254,7 @@ export class MicrosoftAds {
   async check(): Promise<MicrosoftAdsAccount> {
     const body = await this.post(`${CUSTOMER}/Account/Query`, { AccountId: this.account }, 'Microsoft Advertising account check', false)
     const a = body?.Account
-    if (!a?.Id) throw new CliError('Microsoft Advertising returned no account for that id.', 'Use the aid= number from the Microsoft Advertising address bar: lifecycle connect microsoft-ads --account ID', 'microsoft_ads_account')
+    if (!a?.Id) throw new CliError('Microsoft Advertising returned no account for that id.', 'Use the aid= number from the Microsoft Advertising address bar: cosmic connect microsoft-ads --account ID', 'microsoft_ads_account')
     const parent = a.ParentCustomerId ? String(a.ParentCustomerId) : ''
     // The customer header is the manager account the user works from. Without one, it is the account's owner.
     this.customer ??= parent || null
@@ -268,7 +268,7 @@ export class MicrosoftAds {
     if (since > end) return []
     const submitted = await this.post(`${REPORTING}/GenerateReport/Submit`, reportRequest(this.account, since, end), 'Microsoft Advertising report request', true)
     const id = submitted?.ReportRequestId
-    if (!id) throw new CliError('Microsoft Advertising did not queue the report.', 'Run lifecycle sync --only microsoft-ads again.', 'microsoft_ads_error')
+    if (!id) throw new CliError('Microsoft Advertising did not queue the report.', 'Run cosmic sync --only microsoft-ads again.', 'microsoft_ads_error')
     const wait = this.opts.wait ?? sleep
     const maxWait = this.opts.maxWaitMs ?? 10 * 60_000
     let waited = 0
@@ -286,10 +286,10 @@ export class MicrosoftAds {
         }
         return csvRows(unzipFirst(bytes))
       }
-      if (status !== 'Pending') throw new CliError(`Microsoft Advertising could not build the report (status ${status || 'unknown'}).`, 'Run lifecycle sync --only microsoft-ads again. If it repeats, report it: lifecycle feedback', 'microsoft_ads_error')
+      if (status !== 'Pending') throw new CliError(`Microsoft Advertising could not build the report (status ${status || 'unknown'}).`, 'Run cosmic sync --only microsoft-ads again. If it repeats, report it: cosmic feedback', 'microsoft_ads_error')
       // Most reports finish in seconds to minutes. Waits grow from 2 to 15 seconds.
       const ms = Math.min(15_000, 2000 * 2 ** Math.min(attempt, 3))
-      if (waited + ms > maxWait) throw new CliError('The Microsoft Advertising report was not ready after 10 minutes.', 'Run lifecycle sync --only microsoft-ads again later.', 'microsoft_ads_error')
+      if (waited + ms > maxWait) throw new CliError('The Microsoft Advertising report was not ready after 10 minutes.', 'Run cosmic sync --only microsoft-ads again later.', 'microsoft_ads_error')
       await wait(ms)
       waited += ms
     }

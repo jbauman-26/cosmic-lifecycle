@@ -49,7 +49,7 @@ export function parseCsv(text) {
 const column = (h) => h.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 export function prepareImport(name, text, dateColumn = 'date') {
     if (!SLUG.test(name))
-        throw new CliError('Name the source with lowercase letters, numbers and underscores.', 'lifecycle sources import meta_ads --csv FILE', 'bad_name');
+        throw new CliError('Name the source with lowercase letters, numbers and underscores.', 'cosmic sources import meta_ads --csv FILE', 'bad_name');
     const rows = parseCsv(text);
     if (rows.length < 2)
         throw new CliError('The CSV needs a header row and at least one data row.', 'Check the export.', 'empty_csv');

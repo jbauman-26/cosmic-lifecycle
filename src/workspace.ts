@@ -54,12 +54,12 @@ export const TYPES: Record<WorkspaceType, TypeInfo> = {
   },
   agency: {
     type: 'agency', title: 'Agency client', forWhom: 'An agency keeping one workspace per client, each with that client\'s own source of truth.',
-    reference: 'none', referenceWhy: 'Every client keeps its truth somewhere different. Set it per client with lifecycle config set workspace.reference stripe, hubspot, shopify or ga4. Until then numbers carry a line saying they are unchecked.',
+    reference: 'none', referenceWhy: 'Every client keeps its truth somewhere different. Set it per client with cosmic config set workspace.reference stripe, hubspot, shopify or ga4. Until then numbers carry a line saying they are unchecked.',
     sources: ['ga4', 'meta', 'stripe', 'hubspot', 'shopify'],
   },
   creator: {
     type: 'creator', title: 'Creator or media', forWhom: 'A creator, newsletter or media business selling memberships, products or sponsorships.',
-    reference: 'stripe', referenceWhy: 'Stripe holds memberships and product sales when they run through it. Sponsorship and ad income usually live in a spreadsheet: bring it in with lifecycle sources import.',
+    reference: 'stripe', referenceWhy: 'Stripe holds memberships and product sales when they run through it. Sponsorship and ad income usually live in a spreadsheet: bring it in with cosmic sources import.',
     sources: ['stripe', 'ga4', 'meta', 'mailchimp', 'klaviyo'],
   },
 }
@@ -71,7 +71,7 @@ export const isReference = (v: string): v is Reference => (REFERENCES as readonl
 
 export function assertType(v: string): WorkspaceType {
   const t = v.trim().toLowerCase()
-  if (!isWorkspaceType(t)) throw new CliError(`Unknown workspace type ${v}.`, `Use one of ${WORKSPACE_TYPES.join(', ')}. See lifecycle docs workspaces`, 'bad_type')
+  if (!isWorkspaceType(t)) throw new CliError(`Unknown workspace type ${v}.`, `Use one of ${WORKSPACE_TYPES.join(', ')}. See cosmic docs workspaces`, 'bad_type')
   return t
 }
 

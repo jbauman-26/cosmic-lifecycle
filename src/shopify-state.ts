@@ -22,7 +22,7 @@ export const newCustomerKey = () => randomBytes(32).toString('hex')
 
 export function checkCustomerKey(key: string) {
   if (!/^[0-9a-f]{64}$/i.test(key)) {
-    throw new CliError(`${KEY_ENV} is not a store key. It is 64 hex characters, made by the app or by lifecycle sync.`, `Unset ${KEY_ENV} to let lifecycle sync make one, or pass the one the app made.`, 'bad_customer_key')
+    throw new CliError(`${KEY_ENV} is not a store key. It is 64 hex characters, made by the app or by cosmic sync.`, `Unset ${KEY_ENV} to let cosmic sync make one, or pass the one the app made.`, 'bad_customer_key')
   }
   return key.toLowerCase()
 }
@@ -45,7 +45,7 @@ export function keyer(key: string): Keyer {
 export type StateRow = { orderKey: string; customerKey: string | null; processedAt: string; processedDay: string; net: number; discounts: number; cancelled: boolean; updatedAt: string | null }
 
 export function stateRow(o: RawOrder, k: Keyer): StateRow {
-  if (!o.id) throw new CliError('Shopify sent an order without an id.', 'lifecycle sync --full', 'shopify_query')
+  if (!o.id) throw new CliError('Shopify sent an order without an id.', 'cosmic sync --full', 'shopify_query')
   return {
     orderKey: k.id(o.id),
     customerKey: o.customer ? k.id(o.customer.id) : null,

@@ -5,7 +5,7 @@ import { appHome } from './paths.js';
 import { aggregateCosts } from './sources/shopify-costs.js';
 // The owner's cost inputs for contribution margin, in the file the Cosmic AI app writes:
 // $LIFECYCLE_HOME/costs.json. The shape is the app's (cosmic-ai-desktop/docs/margin-contract.md,
-// src/shared/margin.ts). `lifecycle costs set` writes the same file, whole, so either side can edit it.
+// src/shared/margin.ts). `cosmic costs set` writes the same file, whole, so either side can edit it.
 export const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'JPY', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'MXN', 'BRL', 'SGD', 'HKD', 'KRW', 'INR', 'ZAR', 'ILS', 'TRY', 'CNY'];
 export const costsPath = () => join(appHome(), 'costs.json');
 const SKU = /^[\w.\-/ ]{1,64}$/;
@@ -13,14 +13,14 @@ const amount = (v, max = 1_000_000) => {
     const n = typeof v === 'number' ? v : Number(String(v ?? '').trim().replace(/,/g, ''));
     return Number.isFinite(n) && n >= 0 && n <= max ? Math.round(n * 100) / 100 : null;
 };
-const bad = (m, next = 'lifecycle costs show') => new CliError(m, next, 'bad_value');
+const bad = (m, next = 'cosmic costs show') => new CliError(m, next, 'bad_value');
 // The same checks the app makes before it saves. Anything else is refused with one sentence.
 export function checkCosts(raw) {
     const o = (raw ?? {});
     if (o.version !== undefined && o.version !== 1)
         throw bad('costs.json is a version this CLI does not know.');
     if (!CURRENCIES.includes(o.currency))
-        throw bad("Pick the currency this store's Shopify amounts are in.", 'lifecycle costs set currency USD');
+        throw bad("Pick the currency this store's Shopify amounts are in.", 'cosmic costs set currency USD');
     const c = o.cogs ?? {};
     let cogs;
     if (c.mode === 'shopify')
@@ -50,7 +50,7 @@ export function checkCosts(raw) {
         cogs = { mode: 'per_product', items: clean, fallback_percent: f };
     }
     else
-        throw bad('Cost of goods must come from Shopify, a percent, or a cost per product.', 'lifecycle costs set cogs shopify');
+        throw bad('Cost of goods must come from Shopify, a percent, or a cost per product.', 'cosmic costs set cogs shopify');
     const s = o.shipping ?? { mode: 'none' };
     let shipping;
     if (s.mode === 'none')
@@ -60,7 +60,7 @@ export function checkCosts(raw) {
     else if (s.mode === 'percent' && amount(s.percent, 100) !== null)
         shipping = { mode: 'percent', percent: amount(s.percent, 100) };
     else
-        throw bad('Shipping is none, an amount per order, or a percent of revenue from 0 to 100.', 'lifecycle costs set shipping per_order:6.50');
+        throw bad('Shipping is none, an amount per order, or a percent of revenue from 0 to 100.', 'cosmic costs set shipping per_order:6.50');
     const pf = o.payment_fees ?? {};
     const percent = amount(pf.percent ?? 0, 100);
     const perOrder = amount(pf.per_order ?? 0);
@@ -106,7 +106,7 @@ export function setCost(key, value) {
         c.payment_fees.per_order = value;
     else if (key === 'ad_spend') {
         if (value !== 'meta' && value !== 'none')
-            throw bad('Ad spend is meta or none.', 'lifecycle costs set ad_spend meta');
+            throw bad('Ad spend is meta or none.', 'cosmic costs set ad_spend meta');
         c.ad_spend = { sources: value === 'meta' ? ['meta'] : [] };
     }
     else

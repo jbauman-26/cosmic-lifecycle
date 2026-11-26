@@ -11,7 +11,7 @@ const httpMessage = (label: string, status: number) =>
   status === 401 ? `${label} failed: the key was rejected.` : status === 429 ? `${label} failed: the service is rate limiting this key.` : `${label} failed with status ${status}.`
 
 const httpNext = (status: number) =>
-  status === 401 || status === 403 ? 'lifecycle doctor' : status === 429 ? 'Wait a few minutes, then run the command again.' : 'Run the command again, then lifecycle doctor.'
+  status === 401 || status === 403 ? 'cosmic doctor' : status === 429 ? 'Wait a few minutes, then run the command again.' : 'Run the command again, then cosmic doctor.'
 
 export class HttpError extends CliError {
   constructor(label: string, public status: number, public body: string) {

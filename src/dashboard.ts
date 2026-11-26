@@ -60,7 +60,7 @@ export function dashboardHtml(d: Awaited<ReturnType<typeof buildDashboard>>) {
     `<p class="m">Last ${d.days} days.</p>`,
     d.checklist.done < d.checklist.total ? `<h2>Setup: ${d.checklist.done} of ${d.checklist.total} steps done</h2><ul>${d.checklist.steps.map((s) => `<li>${s.done ? 'Done' : 'To do'}: ${esc(s.step)}${s.next ? `<br><span class="m">Next: <code>${esc(s.next)}</code></span>` : ''}</li>`).join('')}</ul>` : '',
     `<div class="grid">${cards}</div>`,
-    `<h2>Reconcile</h2><table><tr><th>Check</th><th>Result</th><th>Detail</th></tr>${checks || '<tr><td colspan="3">Not checked yet. Run lifecycle reconcile.</td></tr>'}</table>`,
+    `<h2>Reconcile</h2><table><tr><th>Check</th><th>Result</th><th>Detail</th></tr>${checks || '<tr><td colspan="3">Not checked yet. Run cosmic reconcile.</td></tr>'}</table>`,
     `<h2>Revenue per flow</h2><table><tr><th>Flow</th><th class="n">Recipients</th><th class="n">Attributed revenue</th><th class="n">Per recipient</th></tr>${flows || '<tr><td colspan="4">No flow sends in this window.</td></tr>'}</table>`,
     `<h2>What to fix</h2>${findings ? `<ul>${findings}</ul>` : '<p>No findings.</p>'}`,
     `<h2>Recent syncs</h2><table><tr><th>Source</th><th>Result</th><th class="n">Rows</th><th>Started</th></tr>${runs || '<tr><td colspan="4">Nothing synced yet.</td></tr>'}</table>`,

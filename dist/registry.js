@@ -89,7 +89,7 @@ export function ensureRegistry(opts = {}) {
     if (isLocalUri(uri)) {
         const dir = localPath(uri);
         if (!existsSync(join(dir, 'index.json')))
-            throw new CliError(`No index.json in ${dir}.`, 'Point --registry at a registry folder, or run lifecycle kits validate DIR --write-index', 'bad_registry');
+            throw new CliError(`No index.json in ${dir}.`, 'Point --registry at a registry folder, or run cosmic kits validate DIR --write-index', 'bad_registry');
         return { dir, uri, source: 'local' };
     }
     const dir = cacheDir();
@@ -121,7 +121,7 @@ export function ensureRegistry(opts = {}) {
 export function readManifest(kitDir) {
     const p = join(kitDir, 'kit.yaml');
     if (!existsSync(p))
-        throw new CliError(`No kit.yaml in ${kitDir}.`, 'lifecycle kits validate', 'bad_kit');
+        throw new CliError(`No kit.yaml in ${kitDir}.`, 'cosmic kits validate', 'bad_kit');
     return KitManifest.parse(parse(readFileSync(p, 'utf8')));
 }
 export function readIndex(reg) {
@@ -148,7 +148,7 @@ export function searchKits(reg, query) {
 function findKit(reg, name) {
     const entry = readIndex(reg).find((k) => k.name === name);
     if (!entry)
-        throw new CliError(`No kit named ${name}.`, 'lifecycle kits list', 'unknown_kit');
+        throw new CliError(`No kit named ${name}.`, 'cosmic kits list', 'unknown_kit');
     return { entry, dir: join(reg.dir, entry.path) };
 }
 export function showKit(reg, name) {

@@ -29,7 +29,7 @@ export const NATIVE_TABLES = {
     shopify: ['fact_orders_daily', 'fact_cohort_monthly'],
     klaviyo: ['dim_flow', 'dim_campaign', 'dim_segment', 'fact_flow_daily', 'fact_flow_window', 'fact_klaviyo_orders_daily'],
     ga4: ['fact_ga4_daily'],
-    stripe: ['fact_stripe_daily', 'fact_stripe_subscriptions_daily', 'fact_stripe_mrr'],
+    stripe: ['fact_stripe_daily', 'fact_stripe_subscriptions_daily', 'fact_stripe_mrr', 'meta_stripe_report_month', 'meta_stripe_report_run'],
     meta: ['fact_meta_ads_daily'],
     hubspot: ['fact_crm_deals_daily', 'fact_crm_pipeline_open', 'fact_crm_contacts_daily'],
     'google-ads': ['fact_google_ads_campaign_daily', 'fact_google_ads_ad_group_daily'],
@@ -51,7 +51,7 @@ export function parseOnly(values) {
         return null;
     const unknown = list.filter((s) => !isNative(s));
     if (unknown.length) {
-        throw new CliError(`Not a built-in source: ${unknown.join(', ')}.`, `Use one or more of ${NATIVE.join(', ')}. Warehouse sources sync with lifecycle warehouse sync SLUG.`, 'unknown_source');
+        throw new CliError(`Not a built-in source: ${unknown.join(', ')}.`, `Use one or more of ${NATIVE.join(', ')}. Warehouse sources sync with cosmic warehouse sync SLUG.`, 'unknown_source');
     }
     return list;
 }
@@ -63,7 +63,7 @@ export function chooseSources(only, connected) {
         return NATIVE.filter((s) => connected[s]);
     const missing = only.filter((s) => !connected[s]);
     if (missing.length) {
-        throw new CliError(`Not connected: ${missing.join(', ')}.`, `lifecycle connect ${missing[0]} (see lifecycle sources list)`, 'not_connected');
+        throw new CliError(`Not connected: ${missing.join(', ')}.`, `cosmic connect ${missing[0]} (see cosmic sources list)`, 'not_connected');
     }
     return NATIVE.filter((s) => only.includes(s));
 }
@@ -71,7 +71,7 @@ export function chooseSources(only, connected) {
 // kept unless deleteData is set, so a person can reconnect without losing history.
 export async function disconnectNative(source, opts = {}) {
     if (!isNative(source)) {
-        throw new CliError(`Not a built-in source: ${source}.`, `Use one of ${NATIVE.join(', ')}. For a warehouse source: lifecycle warehouse disconnect SLUG`, 'unknown_source');
+        throw new CliError(`Not a built-in source: ${source}.`, `Use one of ${NATIVE.join(', ')}. For a warehouse source: cosmic warehouse disconnect SLUG`, 'unknown_source');
     }
     const remove = opts.remove ?? ((name) => deleteSecret(name).removed);
     const hadConfig = source in readRawConfig();
@@ -79,7 +79,7 @@ export async function disconnectNative(source, opts = {}) {
     const stillInEnvironment = NATIVE_SECRETS[source].map(envName).filter((env) => Boolean(process.env[env]));
     const hadPipeline = removePipelineSource(source);
     if (!hadConfig && !hadPipeline && !keysRemoved.length && !stillInEnvironment.length) {
-        throw new CliError(`${source} is not connected.`, 'lifecycle sources list', 'not_connected');
+        throw new CliError(`${source} is not connected.`, 'cosmic sources list', 'not_connected');
     }
     const configRemoved = removeConfigSection(source);
     const dataDeleted = [];
@@ -102,7 +102,7 @@ export async function disconnectNative(source, opts = {}) {
         await opts.db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status, rows_written, detail) VALUES ($1, $2, $3, $3, 'disconnected', 0, $4)`, [randomUUID(), source, at, opts.deleteData ? 'Disconnected. Its data was deleted.' : 'Disconnected. Its data was kept.']);
     }
     else if (opts.deleteData) {
-        throw new CliError('The database could not be opened, so no data was deleted.', 'lifecycle doctor, then lifecycle disconnect SOURCE --delete-data again', 'no_database');
+        throw new CliError('The database could not be opened, so no data was deleted.', 'cosmic doctor, then cosmic disconnect SOURCE --delete-data again', 'no_database');
     }
     const notes = [
         source === 'shopify' && opts.db ? 'Its store key and the scrambled customer ids made with it were deleted.' : '',

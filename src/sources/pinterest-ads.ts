@@ -77,7 +77,7 @@ export function toDaily(rows: RawAnalyticsRow[], names: Map<string, string> = ne
 
 // The earliest start date the analytics call accepts, one day inside its 90-day limit.
 export function clampSince(since: string, today: string): string {
-  if (!DATE.test(since) || !DATE.test(today)) throw new CliError('Dates must be YYYY-MM-DD.', 'lifecycle sync', 'bad_value')
+  if (!DATE.test(since) || !DATE.test(today)) throw new CliError('Dates must be YYYY-MM-DD.', 'cosmic sync', 'bad_value')
   const floor = new Date(Date.parse(`${today}T00:00:00Z`) - MAX_DAYS_BACK * 86400000).toISOString().slice(0, 10)
   return since < floor ? floor : since
 }
@@ -96,11 +96,11 @@ export async function pinterestAccessToken(clientId: string, clientSecret: strin
     'Pinterest token request',
   ).catch((e: unknown) => {
     if (e instanceof HttpError && (e.status === 400 || e.status === 401 || e.status === 403)) {
-      throw new CliError('Pinterest rejected the saved Pinterest Ads sign-in.', 'Sign in with Pinterest again for a new refresh token, then lifecycle connect pinterest-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME', 'key_rejected')
+      throw new CliError('Pinterest rejected the saved Pinterest Ads sign-in.', 'Sign in with Pinterest again for a new refresh token, then cosmic connect pinterest-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME', 'key_rejected')
     }
     throw e
   })
-  if (!body?.access_token) throw new CliError('Pinterest returned no access token.', 'lifecycle doctor', 'key_rejected')
+  if (!body?.access_token) throw new CliError('Pinterest returned no access token.', 'cosmic doctor', 'key_rejected')
   return { accessToken: String(body.access_token), refreshToken: body.refresh_token ? String(body.refresh_token) : null }
 }
 
@@ -111,11 +111,11 @@ function explain(e: unknown): never {
       message = String(JSON.parse(e.body)?.message ?? '')
     } catch {}
     const detail = message ? `: ${message}` : '.'
-    if (e.status === 401) throw new CliError(`Pinterest refused the sign-in${detail}`, 'Sign in with Pinterest again, then lifecycle connect pinterest-ads', 'key_rejected')
-    if (e.status === 403) throw new CliError(`The signed-in Pinterest user cannot read that ad account${detail}`, 'The user needs Owner, Admin, Analyst or Campaign Manager access to the ad account. Then lifecycle connect pinterest-ads again.', 'pinterest_ads_permission')
-    if (e.status === 404) throw new CliError(`Pinterest cannot find that ad account${detail}`, 'Check the ad account id in the Pinterest Ads Manager address, then lifecycle connect pinterest-ads --account ID', 'pinterest_ads_account')
-    if (e.status === 429) throw new CliError('Pinterest is rate limiting this app.', 'Wait a few minutes, then run lifecycle sync --only pinterest-ads again. Trial access allows 1,000 analytics calls a day.', 'rate_limited')
-    throw new CliError(`Pinterest answered with status ${e.status}${detail}`, e.status === 400 ? 'Check the ad account id: lifecycle connect pinterest-ads --account ID' : 'Run the command again, then lifecycle doctor.', 'pinterest_ads_error')
+    if (e.status === 401) throw new CliError(`Pinterest refused the sign-in${detail}`, 'Sign in with Pinterest again, then cosmic connect pinterest-ads', 'key_rejected')
+    if (e.status === 403) throw new CliError(`The signed-in Pinterest user cannot read that ad account${detail}`, 'The user needs Owner, Admin, Analyst or Campaign Manager access to the ad account. Then cosmic connect pinterest-ads again.', 'pinterest_ads_permission')
+    if (e.status === 404) throw new CliError(`Pinterest cannot find that ad account${detail}`, 'Check the ad account id in the Pinterest Ads Manager address, then cosmic connect pinterest-ads --account ID', 'pinterest_ads_account')
+    if (e.status === 429) throw new CliError('Pinterest is rate limiting this app.', 'Wait a few minutes, then run cosmic sync --only pinterest-ads again. Trial access allows 1,000 analytics calls a day.', 'rate_limited')
+    throw new CliError(`Pinterest answered with status ${e.status}${detail}`, e.status === 400 ? 'Check the ad account id: cosmic connect pinterest-ads --account ID' : 'Run the command again, then cosmic doctor.', 'pinterest_ads_error')
   }
   throw e
 }
@@ -153,12 +153,12 @@ export class PinterestAds {
       if (!next || next === bookmark) return names
       bookmark = next
     }
-    throw new CliError('Pinterest kept sending pages past 1,000.', 'Run lifecycle sync --only pinterest-ads again. If it repeats, report it: lifecycle feedback', 'pinterest_ads_error')
+    throw new CliError('Pinterest kept sending pages past 1,000.', 'Run cosmic sync --only pinterest-ads again. If it repeats, report it: cosmic feedback', 'pinterest_ads_error')
   }
 
   // Daily campaign totals, 250 campaigns a call. timezone set means the account's own days, as Meta and Google use.
   async analytics(ids: string[], since: string, until: string, timezone = ''): Promise<RawAnalyticsRow[]> {
-    if (!DATE.test(since) || !DATE.test(until)) throw new CliError('Dates must be YYYY-MM-DD.', 'lifecycle sync', 'bad_value')
+    if (!DATE.test(since) || !DATE.test(until)) throw new CliError('Dates must be YYYY-MM-DD.', 'cosmic sync', 'bad_value')
     const out: RawAnalyticsRow[] = []
     for (let i = 0; i < ids.length; i += MAX_CAMPAIGNS) {
       const params: [string, string][] = [

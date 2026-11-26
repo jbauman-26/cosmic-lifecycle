@@ -494,7 +494,7 @@ describe('skills push, delete and sync with the store\'s own skills', () => {
     }
     expect(findSecrets([{ path: 'config/.env', content: 'A=1' }, { path: 'deploy.pem', content: 'x' }]).map((x) => x.path)).toEqual(['config/.env', 'deploy.pem'])
     // Ordinary writing about keys is not a key.
-    expect(findSecrets([{ path: 'SKILL.md', content: 'Set api_key=$KLAVIYO_KEY\ncurl -H "Authorization: Bearer $COSMIC_CLOUD_TOKEN"\nexport TOKEN=<your token>\nNever paste a password: use lifecycle secrets set.\ntoken: your_token_goes_here_please_replace\nmax_tokens: 4000\n' }])).toEqual([])
+    expect(findSecrets([{ path: 'SKILL.md', content: 'Set api_key=$KLAVIYO_KEY\ncurl -H "Authorization: Bearer $COSMIC_CLOUD_TOKEN"\nexport TOKEN=<your token>\nNever paste a password: use cosmic secrets set.\ntoken: your_token_goes_here_please_replace\nmax_tokens: 4000\n' }])).toEqual([])
 
     const dir = skillDir({ 'SKILL.md': '# Skill\n', 'run.sh': `curl -H "x: 1"\nexport STRIPE=${stripe}\n` }, 'leaky')
     let e: CliError | undefined
@@ -640,7 +640,7 @@ describe('busy, reviewed', () => {
 
 describe('docs and release', () => {
   it('documents every new command, code and variable', () => {
-    for (const cmd of ['lifecycle login [--url URL] --token-env VAR', 'lifecycle logout', 'lifecycle cloud status', 'skills sync|status|uninstall', 'skills push DIRECTORY', 'skills delete SLUG', 'abort RUN', '--cloud']) expect(DOCS.commands, cmd).toContain(cmd)
+    for (const cmd of ['cosmic login [--url URL] --token-env VAR', 'cosmic logout', 'cosmic cloud status', 'skills sync|status|uninstall', 'skills push DIRECTORY', 'skills delete SLUG', 'abort RUN', '--cloud']) expect(DOCS.commands, cmd).toContain(cmd)
     for (const c of ['not_logged_in', 'unauthorized', 'not_built', 'cloud_unreachable', 'cloud_error', 'bad_url', 'bad_token', 'unknown_table', 'loader_failed', 'busy', 'too_large', 'secret_found', 'bad_skill', 'unknown_skill', 'cannot_abort', 'not_running']) {
       expect(DOCS.troubleshooting, c).toMatch(new RegExp(`^  ${c}\\s`, 'm'))
     }
@@ -657,7 +657,7 @@ describe('docs and release', () => {
 
   it('is a 0.13 release, and the Cloud token is a secret like any other, with its own variable', () => {
     // 0.14.0: was /^0\.13\.\d+$/; a version bump has to change it. The token checks are untouched.
-    expect(VERSION).toMatch(/^0\.(1[3-9])\.\d+$/)
+    expect(VERSION).toMatch(/^0\.(1[3-9]|2\d)\.\d+$/)
     expect(SECRET_NAMES).toContain('cloud-token')
     expect(envName('cloud-token')).toBe('LIFECYCLE_CLOUD_TOKEN')
   })

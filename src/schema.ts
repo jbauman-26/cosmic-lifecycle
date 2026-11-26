@@ -160,6 +160,16 @@ export const MIGRATIONS = [
   // key in hand made the stored ids. The check is an HMAC of a fixed text, not the key.
   `CREATE TABLE IF NOT EXISTS meta_shopify_sync (
     id INT PRIMARY KEY, cursor_at TIMESTAMPTZ, last_full_at TIMESTAMPTZ, key_check TEXT, window_limited BOOLEAN NOT NULL DEFAULT false)`,
+  // 0.20.1: Stripe's own totals for each finished month, from its Reports API (itemized balance activity), by the
+  // day each charge was created: charges, gross and the refunds against them up to through_at. Totals only.
+  `CREATE TABLE IF NOT EXISTS meta_stripe_report_month (
+    month TEXT NOT NULL, currency TEXT NOT NULL, charges BIGINT NOT NULL, gross NUMERIC NOT NULL, refunds NUMERIC NOT NULL,
+    through_at TIMESTAMPTZ NOT NULL, fetched_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (month, currency))`,
+  // Rows Stripe's report could not place in a month; any makes that month's check fail toward withholding.
+  `ALTER TABLE meta_stripe_report_month ADD COLUMN IF NOT EXISTS unplaced BIGINT NOT NULL DEFAULT 0`,
+  // A report run Stripe is still preparing, picked up by the next sync.
+  `CREATE TABLE IF NOT EXISTS meta_stripe_report_run (
+    run_id TEXT PRIMARY KEY, interval_start BIGINT NOT NULL, interval_end BIGINT NOT NULL, started_at TIMESTAMPTZ NOT NULL)`,
 ]
 
 // The only columns that hold a per-customer (or per-order) value. They are scrambled ids, and a query is

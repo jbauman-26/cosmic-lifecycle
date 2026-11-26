@@ -228,7 +228,7 @@ describe('the trust gate for each workspace type', () => {
   it('asks a SaaS workspace for Stripe in the setup checklist, and a store for Shopify and Klaviyo as before', () => {
     const base = { setUp: true, sources: [], trust: null, deployed: false, skills: false }
     expect(setupChecklist(base).steps[1]!.step).toBe('Connect Shopify and Klaviyo')
-    expect(setupChecklist({ ...base, workspace: ws('saas') }).steps[1]).toMatchObject({ step: "Connect Stripe, this workspace's source of truth", next: 'lifecycle connect stripe' })
+    expect(setupChecklist({ ...base, workspace: ws('saas') }).steps[1]).toMatchObject({ step: "Connect Stripe, this workspace's source of truth", next: 'cosmic connect stripe' })
     expect(setupChecklist({ ...base, workspace: ws('agency') }).steps[1]!.next).toMatch(/workspace.reference/)
   })
 })
@@ -326,7 +326,7 @@ describe('connectors added in 0.14.0 strip personal data from recorded responses
   const slugs = readdirSync(FIXTURES).map((f) => f.replace(/\.json$/, '')).sort()
   it('has a recorded response for every built connector added in this release', () => {
     expect(slugs).toEqual(['bigcommerce', 'customer-io', 'hubspot-records', 'pipedrive', 'woocommerce'])
-    // LinkedIn Ads became a built-in source (lifecycle connect linkedin-ads), so it left the warehouse catalog.
+    // LinkedIn Ads became a built-in source (cosmic connect linkedin-ads), so it left the warehouse catalog.
     expect(WAREHOUSE_CATALOG.find((x) => x.slug === 'linkedin-ads')).toBeUndefined()
     for (const s of ['salesforce', 'posthog', 'mixpanel']) expect(WAREHOUSE_CATALOG.find((x) => x.slug === s)?.readiness, s).toBe('planned')
   })
@@ -563,7 +563,7 @@ describe('0.14.0', () => {
     const { VERSION } = await import('../src/version.js')
     const { DOCS } = await import('../src/docs.js')
     // 0.14.1: was toBe('0.14.0'); 0.15.0: was a 0.14.x match. A version bump has to change it. package.json and the lock must still agree.
-    expect(VERSION).toMatch(/^0\.1[4-9]\.\d+$/)
+    expect(VERSION).toMatch(/^0\.(1[4-9]|2\d)\.\d+$/)
     expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe(VERSION)
     expect(readFileSync('CHANGELOG.md', 'utf8')).toMatch(/^## 0\.14\.0 \(2026-11-24\)/m)
     expect(DOCS.workspaces).toMatch(/unreferenced/)
@@ -592,7 +592,7 @@ describe('0.15.0', () => {
   it('is version 0.15.1 everywhere a version is written, and its changelog has no dash a person would not type', async () => {
     const { VERSION } = await import('../src/version.js')
     // 0.17.0: was toBe('0.15.1'); the exact version now lives in release-0170.test.ts.
-    expect(VERSION).toMatch(/^0\.1[5-9]\.\d+$/)
+    expect(VERSION).toMatch(/^0\.(1[5-9]|2\d)\.\d+$/)
     expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe(VERSION)
     const log = readFileSync('CHANGELOG.md', 'utf8')
     expect(log).toMatch(/^## 0\.15\.1 \(2026-11-25\)/m)

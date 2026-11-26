@@ -72,21 +72,21 @@ export function customSources(): WarehouseSource[] {
 }
 
 export function addCustomSource(slug: string, specPath: string) {
-  if (!SLUG.test(slug)) throw new CliError('Use a short name of lowercase letters, numbers and dashes.', 'lifecycle warehouse add-api my-tool --spec spec.json', 'bad_value')
-  if (WAREHOUSE_CATALOG.some((s) => s.slug === slug)) throw new CliError(`${slug} is already in the catalog.`, `lifecycle warehouse connect ${slug}`, 'bad_value')
+  if (!SLUG.test(slug)) throw new CliError('Use a short name of lowercase letters, numbers and dashes.', 'cosmic warehouse add-api my-tool --spec spec.json', 'bad_value')
+  if (WAREHOUSE_CATALOG.some((s) => s.slug === slug)) throw new CliError(`${slug} is already in the catalog.`, `cosmic warehouse connect ${slug}`, 'bad_value')
   let raw: unknown
   try {
     raw = JSON.parse(readFileSync(specPath, 'utf8'))
   } catch {
-    throw new CliError(`${specPath} is not readable JSON.`, 'lifecycle docs warehouse', 'bad_value')
+    throw new CliError(`${specPath} is not readable JSON.`, 'cosmic docs warehouse', 'bad_value')
   }
   const parsed = CustomSpec.safeParse(raw)
-  if (!parsed.success) throw new CliError(`The spec is missing fields: ${parsed.error.issues.map((i) => i.path.join('.')).join(', ')}`, 'lifecycle docs warehouse', 'bad_value')
+  if (!parsed.success) throw new CliError(`The spec is missing fields: ${parsed.error.issues.map((i) => i.path.join('.')).join(', ')}`, 'cosmic docs warehouse', 'bad_value')
   const resources = (parsed.data.config as { resources?: unknown[] }).resources
-  if (!Array.isArray(resources) || !resources.length) throw new CliError('The spec config needs at least one resource.', 'lifecycle docs warehouse', 'bad_value')
+  if (!Array.isArray(resources) || !resources.length) throw new CliError('The spec config needs at least one resource.', 'cosmic docs warehouse', 'bad_value')
   mkdirSync(customDir(), { recursive: true, mode: 0o700 })
   writeFileSync(join(customDir(), `${slug}.json`), JSON.stringify(parsed.data, null, 2) + '\n', { mode: 0o600 })
-  return { added: slug, next: `lifecycle warehouse connect ${slug}` }
+  return { added: slug, next: `cosmic warehouse connect ${slug}` }
 }
 
 export function allSources(): WarehouseSource[] {
@@ -95,7 +95,7 @@ export function allSources(): WarehouseSource[] {
 
 export function findSource(slug: string): WarehouseSource {
   const s = allSources().find((x) => x.slug === slug)
-  if (!s) throw new CliError(`No warehouse source named ${slug}.`, 'lifecycle sources catalog', 'unknown_source')
+  if (!s) throw new CliError(`No warehouse source named ${slug}.`, 'cosmic sources catalog', 'unknown_source')
   return s
 }
 
@@ -158,7 +158,7 @@ type Destination = { kind: 'postgres'; url_env: string } | { kind: 'duckdb'; pat
 function destination(config: Config): { dest: Destination; env: Record<string, string> } {
   if (config.database.kind === 'postgres') {
     const url = getSecret('database-url')
-    if (!url) throw new CliError('No database URL saved.', 'Set LIFECYCLE_DATABASE_URL, or run lifecycle init for the local database.', 'no_database')
+    if (!url) throw new CliError('No database URL saved.', 'Set LIFECYCLE_DATABASE_URL, or run cosmic init for the local database.', 'no_database')
     return { dest: { kind: 'postgres', url_env: 'LIFECYCLE_WAREHOUSE_URL' }, env: { LIFECYCLE_WAREHOUSE_URL: url } }
   }
   mkdirSync(appHome(), { recursive: true, mode: 0o700 })
@@ -193,7 +193,7 @@ export function runRunner(job: Record<string, unknown>, env: Record<string, stri
       try {
         resolve(JSON.parse(last) as RunnerResult)
       } catch {
-        reject(new CliError(`The connector runner stopped without a result. ${err.trim().split('\n').slice(-3).join(' ')}`.trim(), 'lifecycle warehouse sync --verbose', 'runner_failed'))
+        reject(new CliError(`The connector runner stopped without a result. ${err.trim().split('\n').slice(-3).join(' ')}`.trim(), 'cosmic warehouse sync --verbose', 'runner_failed'))
       }
     })
     // A loader that dies before it reads the job breaks the pipe. Without a listener that error
@@ -207,7 +207,7 @@ function secretEnv(source: WarehouseSource, fromEnv?: Record<string, string>) {
   const env: Record<string, string> = {}
   for (const c of source.credentials) {
     const value = fromEnv?.[c.name] ?? getSourceSecret(source.slug, c.name)
-    if (!value) throw new CliError(`${source.name}: ${c.label || c.name} is missing.`, `lifecycle warehouse connect ${source.slug} --secret ${c.name}=ENV_VAR_NAME`, 'missing_secret')
+    if (!value) throw new CliError(`${source.name}: ${c.label || c.name} is missing.`, `cosmic warehouse connect ${source.slug} --secret ${c.name}=ENV_VAR_NAME`, 'missing_secret')
     env[`LIFECYCLE_SRC_SECRET_${c.name.toUpperCase()}`] = value
   }
   return env
@@ -226,16 +226,16 @@ const KV = /^([A-Za-z0-9_]+)=(.+)$/
 
 export async function connectSource(slug: string, opts: { secret?: string[]; set?: string[]; keepPersonalData?: boolean; skipCheck?: boolean }) {
   const source = findSource(slug)
-  if (source.readiness === 'native') throw new CliError(`${source.name} is a built-in source.`, `lifecycle connect ${slug} --help`, 'bad_value')
+  if (source.readiness === 'native') throw new CliError(`${source.name} is a built-in source.`, `cosmic connect ${slug} --help`, 'bad_value')
   if (!source.config) {
-    throw new CliError(`${source.name} has no connector yet.`, `Export daily totals to CSV, then lifecycle sources import ${slug} --csv FILE. Or describe its API: lifecycle docs warehouse`, 'not_built')
+    throw new CliError(`${source.name} has no connector yet.`, `Export daily totals to CSV, then cosmic sources import ${slug} --csv FILE. Or describe its API: cosmic docs warehouse`, 'not_built')
   }
   const config = readConfig()
   const secrets: Record<string, string> = {}
   for (const pair of opts.secret ?? []) {
     const m = KV.exec(pair)
-    if (!m) throw new CliError(`Use --secret FIELD=ENV_VAR_NAME, not ${pair.split('=')[0]}=...`, `lifecycle warehouse connect ${slug} --secret ${source.credentials[0]?.name ?? 'api_key'}=MY_KEY_VAR`, 'bad_value')
-    if (!source.credentials.some((c) => c.name === m[1])) throw new CliError(`${source.name} has no credential called ${m[1]}.`, `lifecycle warehouse show ${slug}`, 'bad_value')
+    if (!m) throw new CliError(`Use --secret FIELD=ENV_VAR_NAME, not ${pair.split('=')[0]}=...`, `cosmic warehouse connect ${slug} --secret ${source.credentials[0]?.name ?? 'api_key'}=MY_KEY_VAR`, 'bad_value')
+    if (!source.credentials.some((c) => c.name === m[1])) throw new CliError(`${source.name} has no credential called ${m[1]}.`, `cosmic warehouse show ${slug}`, 'bad_value')
     const value = process.env[m[2]!]
     if (!value) throw new CliError(`Environment variable ${m[2]} is empty.`, 'Export the key, then pass its variable name. Do not paste keys into a chat.', 'missing_secret')
     secrets[m[1]!] = value
@@ -243,19 +243,19 @@ export async function connectSource(slug: string, opts: { secret?: string[]; set
   const params: Record<string, string> = { ...(config.warehouse?.sources[slug]?.params ?? {}) }
   for (const pair of opts.set ?? []) {
     const m = KV.exec(pair)
-    if (!m) throw new CliError(`Use --set NAME=VALUE.`, `lifecycle warehouse show ${slug}`, 'bad_value')
+    if (!m) throw new CliError(`Use --set NAME=VALUE.`, `cosmic warehouse show ${slug}`, 'bad_value')
     params[m[1]!] = m[2]!
   }
   const missingParams = source.params.filter((p) => !params[p.name])
   if (missingParams.length) {
-    throw new CliError(`${source.name} needs ${missingParams.map((p) => p.name).join(', ')}.`, `lifecycle warehouse connect ${slug} ${missingParams.map((p) => `--set ${p.name}=${p.example}`).join(' ')}`, 'bad_value')
+    throw new CliError(`${source.name} needs ${missingParams.map((p) => p.name).join(', ')}.`, `cosmic warehouse connect ${slug} ${missingParams.map((p) => `--set ${p.name}=${p.example}`).join(' ')}`, 'bad_value')
   }
   const env = secretEnv(source, secrets)
   let check: Record<string, unknown> | null = null
   if (!opts.skipCheck) {
     const { dest, env: destEnv } = destination(config)
     const r = await runRunner({ action: 'check', source: { slug, config: source.config, strip_fields: source.stripFields ?? [] }, params, rules: PERSONAL_RULES, free_text: freeTextMode(config), destination: dest, dataset: datasetFor(slug), pipelines_dir: pipelinesDir() }, { ...env, ...destEnv })
-    if (!r.ok) throw new CliError(`${source.name} check failed: ${explain(r.error)}`, `lifecycle warehouse show ${slug}`, 'check_failed')
+    if (!r.ok) throw new CliError(`${source.name} check failed: ${explain(r.error)}`, `cosmic warehouse show ${slug}`, 'check_failed')
     check = r
   }
   // Save only after the key has proven itself. Without a keychain (CI, Linux), syncs
@@ -278,7 +278,7 @@ export async function connectSource(slug: string, opts: { secret?: string[]; set
     check: check ? { resource: check.resource, rows: check.rows } : 'skipped',
     readiness: source.readiness,
     keysSavedTo: envNotes.length ? `environment only: set ${envNotes.join(', ')} wherever syncs run` : 'keychain',
-    next: `lifecycle warehouse sync ${slug}`,
+    next: `cosmic warehouse sync ${slug}`,
   }
 }
 
@@ -286,7 +286,7 @@ export function disconnectSource(slug: string) {
   const config = readConfig()
   const source = allSources().find((s) => s.slug === slug)
   const sources = { ...(config.warehouse?.sources ?? {}) }
-  if (!sources[slug]) throw new CliError(`${slug} is not connected.`, 'lifecycle warehouse list', 'bad_value')
+  if (!sources[slug]) throw new CliError(`${slug} is not connected.`, 'cosmic warehouse list', 'bad_value')
   delete sources[slug]
   writeConfig({ ...config, warehouse: { ...config.warehouse, sources } })
   const removed = (source?.credentials ?? []).map((c) => deleteSourceSecret(slug, c.name))
@@ -303,15 +303,15 @@ export type WarehouseSyncResult = { source: string; status: 'ok' | 'failed'; row
 
 // The loader runs in its own process. When that process dies without a result, the cause is in its
 // log, which can hold anything, so the owner gets one plain sentence and the command to see the log.
-export const loaderFailed = (name: string, slug: string) => `The loader for ${name} stopped before it finished, so this sync did not complete. Data loaded by earlier syncs is still there. To see why, run lifecycle warehouse sync ${slug} --verbose.`
+export const loaderFailed = (name: string, slug: string) => `The loader for ${name} stopped before it finished, so this sync did not complete. Data loaded by earlier syncs is still there. To see why, run cosmic warehouse sync ${slug} --verbose.`
 
 export async function syncSources(slugs: string[] | undefined, opts: { verbose?: boolean; record?: (r: WarehouseSyncResult, startedAt: string) => Promise<void> } = {}) {
   const config = readConfig()
   const connected = connectedSources(config)
-  if (!connected.length) throw new CliError('No warehouse sources connected.', 'lifecycle sources catalog', 'no_sources')
+  if (!connected.length) throw new CliError('No warehouse sources connected.', 'cosmic sources catalog', 'no_sources')
   const chosen = slugs?.length ? connected.filter((c) => slugs.includes(c.slug)) : connected
   const unknown = (slugs ?? []).filter((s) => !connected.some((c) => c.slug === s))
-  if (unknown.length) throw new CliError(`Not connected: ${unknown.join(', ')}.`, 'lifecycle warehouse list', 'bad_value')
+  if (unknown.length) throw new CliError(`Not connected: ${unknown.join(', ')}.`, 'cosmic warehouse list', 'bad_value')
   const { dest, env: destEnv } = destination(config)
   const results: WarehouseSyncResult[] = []
   for (const c of chosen) {
@@ -355,7 +355,7 @@ type RawColumn = { schema: string; table: string; column: string; type: string; 
 // Local warehouses are DuckDB files, read through the runner. Postgres warehouses are read by the caller.
 async function duckColumns(slug: string | undefined, everything: boolean): Promise<RawColumn[]> {
   const r = await runRunner({ action: 'schema', destination: { kind: 'duckdb', path: warehouseDuckPath() }, dataset: slug ? datasetFor(slug) : undefined, everything }, {})
-  if (!r.ok) throw new CliError(r.error, 'lifecycle warehouse sync', 'query_failed')
+  if (!r.ok) throw new CliError(r.error, 'cosmic warehouse sync', 'query_failed')
   return r.columns as RawColumn[]
 }
 
@@ -368,7 +368,7 @@ export async function duckQuery(sql: string, limit = 1000) {
   // The list of columns comes first. If it cannot be read, the query does not run.
   if (existsSync(warehouseDuckPath())) assertNoPersonalColumns(body, markCatalog(await duckColumns(undefined, true), sourceOfSchema))
   const r = await runRunner({ action: 'query', sql: body, limit, destination: { kind: 'duckdb', path: warehouseDuckPath() } }, {})
-  if (!r.ok) throw new CliError(r.error, 'lifecycle warehouse schema', 'query_failed')
+  if (!r.ok) throw new CliError(r.error, 'cosmic warehouse schema', 'query_failed')
   const clean = scrubRows(r.rows as Record<string, unknown>[])
   return { columns: r.columns as string[], rows: clean.rows, ...(clean.redacted ? { redacted: clean.redacted } : {}) }
 }
@@ -470,13 +470,13 @@ function scrubReport(steps: ScrubStep[], applied: boolean, database: 'local' | '
     note: [
       applied ? `Emptied or rewrote ${values} stored values.` : `Dry run: nothing was changed. ${values} stored values would be emptied or rewritten.`,
       files ? (applied ? `Removed ${files} file(s) of finished loads from the loader's folder, where copies of loaded rows were kept.` : `${files} file(s) of finished loads are in the loader's folder, where copies of loaded rows were kept. They would be removed.`) : '',
-      extra.loaderFiles.pending ? `${extra.loaderFiles.pending} load(s) did not finish and still hold rows in the loader's folder. Run lifecycle warehouse sync to finish them, then scrub again.` : '',
+      extra.loaderFiles.pending ? `${extra.loaderFiles.pending} load(s) did not finish and still hold rows in the loader's folder. Run cosmic warehouse sync to finish them, then scrub again.` : '',
       blocked ? `${blocked} column(s) may not be empty and have no row id to stand in, so they were left alone.` : '',
       applied && extra.rebuilt === true ? 'The database file was rebuilt, so the old values are gone from the file as well.' : '',
       applied && extra.rebuilt === false ? 'Queries no longer return the old values, but the database file could not be rebuilt and can still hold old bytes.' : '',
       applied && database === 'postgres' && values ? 'Queries no longer return the old values. Postgres keeps old row versions until it vacuums the table.' : '',
     ].filter(Boolean).join(' '),
-    next: applied ? (blocked || failed ? 'For a column that could not be emptied: lifecycle warehouse disconnect SLUG, then drop its schema.' : 'lifecycle warehouse schema --format json') : 'lifecycle warehouse scrub --confirm',
+    next: applied ? (blocked || failed ? 'For a column that could not be emptied: cosmic warehouse disconnect SLUG, then drop its schema.' : 'cosmic warehouse schema --format json') : 'cosmic warehouse scrub --confirm',
   }
 }
 
@@ -492,12 +492,12 @@ export async function scrubWarehouse(opts: { confirm?: boolean; db?: Db | null }
     const plan = scrubPlan(await duckColumns(undefined, true), mode)
     const todo = plan.filter((p) => p.action !== 'blocked')
     const r = await runRunner({ action: 'scrub', plan: todo, apply, destination: { kind: 'duckdb', path: warehouseDuckPath() } }, {})
-    if (!r.ok) throw new CliError(r.error, 'lifecycle warehouse schema', 'scrub_failed')
+    if (!r.ok) throw new CliError(r.error, 'cosmic warehouse schema', 'scrub_failed')
     const done = r.steps as ScrubStep[]
     return scrubReport([...done, ...plan.filter((p) => p.action === 'blocked').map((p) => ({ ...p, rows: 0, status: 'blocked' as const }))], apply, 'local', mode, { loaderFiles: loaderLeftovers(apply), rebuilt: typeof r.rebuilt === 'boolean' ? r.rebuilt : null })
   }
   const db = opts.db
-  if (!db) throw new CliError('The database could not be opened.', 'lifecycle doctor', 'no_database')
+  if (!db) throw new CliError('The database could not be opened.', 'cosmic doctor', 'no_database')
   const rows = await db.query(`SELECT table_schema, table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema LIKE 'src\\_%' ORDER BY 1, 2, ordinal_position`)
   const plan = scrubPlan(rows.map((r) => ({ schema: String(r.table_schema), table: String(r.table_name), column: String(r.column_name), type: String(r.data_type), nullable: String(r.is_nullable) !== 'NO' })), mode)
   const steps: ScrubStep[] = []

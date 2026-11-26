@@ -2,6 +2,120 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.21.0 (2026-11-25)
+
+Any table Fivetran or Airbyte loads into your own Postgres, for any connector, read in place with a freshness check.
+
+### Added
+
+- **`cosmic connect pipeline --tool fivetran|airbyte --schema NAME --url-env NAME`, without `--source`.** It lists every table in the schema (leaving out loader bookkeeping such as `fivetran_audit`), marks each column with the personal data rules, checks freshness and saves the schema. Nothing is copied, and the database URL stays in the environment variable.
+- **`cosmic schema NAME` and `cosmic schema NAME.TABLE`** list those tables with their personal columns left out. `cosmic schema` names the connected pipeline schemas.
+- **`cosmic query`** runs a query that names a connected pipeline schema on that database, in a read-only transaction with a 30-second limit and the usual row cap. Personal columns are refused before it runs. Email addresses and phone numbers in returned text are replaced. Schemas in the same database can be joined. The MCP `query` and `explore_schema` tools do the same.
+- **A freshness check per table** from `_fivetran_synced` or `_airbyte_extracted_at`, against `reconcile.freshness_days`, on connect, on every answer and on `cosmic sync`. The trust line for these tables says "Freshness only... They are not reconciled against any other source." It never says passed, and a stale table starts with STALE.
+- `cosmic sources list` shows each pipeline schema. `cosmic disconnect pipeline:NAME` forgets it.
+
+### Changed
+
+- Every "Next:" hint and error step says `cosmic`, not `lifecycle`. Both commands still work. The daily sync workflow `cosmic deploy` writes still runs `npx lifecycle`, so older installs keep working.
+- `init` and `cosmic workspace` suggest only sources that can connect today, so a SaaS workspace is no longer pointed at PostHog, which is planned.
+- `cosmic sources list` puts the workspace type's usual sources first, so a SaaS workspace starts with Stripe, GA4, Meta and HubSpot. A Shopify store keeps its order.
+- `init` and `sources list` point to the easy path: paste one sentence into Claude Code, Cursor or Codex and let the agent run `cosmic docs quickstart`.
+- A `cosmic sync` with only pipeline schemas connected checks their freshness instead of failing with "No sources connected", and prints no reconcile line.
+- `cosmic sync` rediscovers each pipeline schema's tables, so a table the loader added later gets a freshness check. Freshness on connect and sync runs inside the same 30-second read-only limit as queries. A pipeline database that cannot be read fails the sync (exit 1).
+- Cosmic Cloud's default address is now https://cloud.cosmicai.tech. The old address keeps working for existing installs.
+
+### Security (independent review and Codex review)
+
+- **Only connected tables can be read.** Before a pipeline query runs, Postgres plans it (EXPLAIN, which does not run it), and any table it would read that is not a connected loader table is refused: another schema, a staging or audit table, or a table hidden behind a comment.
+- **Personal columns are checked in the plan too,** so a view or an expression that renames a personal column is refused. The query is planned wrapped and limited, as it runs, so a `SELECT *` view over a connected table names every column it returns.
+- **Only built-in names resolve without a schema.** Pipeline queries run with the search path set to `pg_catalog`, so every table, view, function or operator outside it has to be written `schema.name`, which the checks see. Tables are already named that way (`hubspot.deal`).
+- **Functions:** blocked functions (such as `query_to_xml`) are checked both in the SQL and on Postgres's own spelling of the plan, so an escaped name is caught, and so is a call the plan folds away or hides in `LIMIT`. A function from any schema but `pg_catalog`, which could read any table unseen, is refused, and so is `OPERATOR(...)`. Operators outside `pg_catalog` (an extension's `=`, for example) are not on the search path, so ordinary comparisons keep working.
+- **Prefixed strings and names** (`E'..'`, `U&".."`) are refused in every pipeline query.
+- **Types defined in the database** (`::public.mytype`, `CAST(x AS public.mytype)`) are refused, because a cast or a domain check can run a function. Columns of an extension or custom type (citext, an enum) are treated as personal and left out.
+- **Views and materialized views are never read** in pipeline queries, because they can rename personal columns past the rules. Query the loader table instead. A bare view name does not resolve, and a schema-qualified one is refused.
+- **Routing ignores strings and comments.** A schema name inside a string or a comment never routes a local query to the pipeline database.
+- **More columns are treated as personal in loader tables:** phones, social handles, job titles, free-text bodies and raw JSON records. Views are not registered.
+
+### Not covered yet
+
+- BigQuery and Snowflake (Postgres only).
+- Pipeline tables have no count checks and are not part of `cosmic verdict`.
+- Stripe and Shopify through `--source` keep their deep checks, unchanged.
+
+## 0.20.1 (2026-11-25)
+
+Stripe charge KPIs can be reported in `cosmic verdict`, held against Stripe's own report. MRR is reported as of the last sync, never as a month figure.
+
+### The rule for Stripe
+
+- **A Stripe charge KPI** (net revenue, average charge, charges) is reportable for a finished month only when the month's Stripe totals here match **Stripe's own report** for that month. The report is Stripe's itemized balance activity from its Reports API, built from Stripe's ledger and not from the charges list the sync reads. The usual coverage rules also apply: the source synced through the month's end, the sync is fresh, and the month is over.
+  - **What is matched, exactly:** the charge count, gross, and net (gross minus refunds against those charges), per currency, in each charge's own currency and amount (not the settlement currency), summed in cents.
+  - **What counts as a charge, on both sides:** a bank debit that fails after posting is no sale, and an authorization that was never captured is not counted (here it was counted before). A partial capture does not match, so its month is withheld.
+  - **Not in the match:** disputes and fees. The KPI's notes say so.
+  - **When net waits:** Stripe's report always ends a little before the sync that read it. A lower net here can be refunds made in between, so net waits for a later report, and KPIs that use net wait too. A higher net here fails.
+  - **The label:** `"basis": "matches Stripe's own report"` in JSON, and "(matches Stripe's own report)" in text.
+- **Checks counted from the same pull never make a Stripe KPI reportable.** `stripe_daily_complete` and `subscriptions_balance` only hold KPIs back when they fail.
+- **Not covered by the report:** KPIs built on new customers, repeat, guest or failed charges stay withheld, and say which column the report does not cover.
+- **MRR, as of a sync.** `stripe_mrr` is reported in a new `as_of` section, as of the last Stripe sync, when all four hold:
+  - that sync read subscriptions;
+  - `subscriptions_balance` passes;
+  - the sync is within the freshness limit;
+  - a snapshot exists from that sync's day.
+
+  It is labelled "as of TIME" (when that sync read Stripe), and never appears among a month's KPIs. It stays in `not_by_period`. Its completeness rests on `subscriptions_balance`, which counts the same pull, so MRR's own label says it is from Stripe's subscription pull.
+
+### Added
+
+- **`cosmic sync` reads Stripe's own report** for the last 3 finished months: `balance_change_from_activity.itemized.3`, with only `reporting_category`, `customer_facing_currency`, `customer_facing_amount`, `charge_created_utc` and `created_utc`, never a customer, card or address column. Only totals are kept, in `meta_stripe_report_month`.
+  - **When it reads:** at most once a day. The interval ends a second before Stripe's data does, and a month that starts before Stripe's data is left out.
+  - **Runs that take time:** Stripe prepares the report in the background, and a report that is not ready is read by a later sync within a week. A run Stripe refuses is dropped and asked for again; a network failure keeps it.
+  - **A row with no charge date** withholds the months in that report rather than shrinking them.
+  - **Errors:** a refused request is reported with Stripe's own error. Only a refused key is reported as the missing permission.
+- **Key permission:** a restricted key needs one more read permission, "Report runs and report types" (`report_runs_and_report_types_read`). The sync line says so when it is missing.
+- **Test keys:** Stripe runs reports only for live keys, so for a test key the check is skipped and Stripe charge KPIs stay withheld.
+- **New JSON keys:** `kpis[].basis`, and `as_of` (`at` plus its own `kpis`). No key was renamed or removed.
+- Each Stripe sync records whether it read subscriptions (`subscriptions_read`).
+- `cosmic disconnect stripe --delete-data` also deletes Stripe's report totals.
+
+### Changed
+
+- **A zero-tolerance count check is exact.** A rounded percent used to let 1 in 20,000 through. This also tightens `orders_complete`.
+
+### Not covered yet
+
+- **Never run against a live account.** Stripe's Reports API works only with live keys, and Cosmic's Stripe account is in test mode, so this release is tested on recorded report files and a mocked client. The first live run may show a column or timing case not covered here.
+- Only the last 3 finished months are checked against Stripe's report.
+- Subscriptions started and ended for a month have no independent check, so they stay withheld.
+
+## 0.20.0 (2026-11-25)
+
+The period verdict: for one workspace and one month, which KPIs can go in a client report and which are held back, with the reason and the next step.
+
+### Added
+
+- GA4 and Meta syncs record the days they pulled in `meta_source_window`.
+- **`cosmic verdict --period YYYY-MM`** (with the global `--workspace NAME` and `--format json`). It runs reconcile, then for each KPI of the workspace whose sources are connected says `reportable` (with its value for the month) or `withheld` (with the reason, such as "14 orders missing: 787 against 801 (orders_complete)", and `next_checks`). The output names the workspace, the month, each KPI's sources and checks, and each source's last sync and how far back its data reaches.
+- Exit codes: 0 when every KPI can be reported, 3 when any is withheld or there is none to report, 1 for bad input such as `--period banana`.
+- `verdictFor(db, period)` in `src/verdict.ts`, the same shape Cosmic Cloud's adapter uses.
+
+### How a KPI is decided
+
+Everything comes from what this CLI synced and the checks it ran now. Nothing is read from a caller, and a stored check result is never reused. A KPI is withheld when, for any source it needs:
+- the source is not connected, is syncing, or has not finished a sync since it was connected;
+- its data was pulled through a time before the month ended (the sync's start, or Shopify's cursor: a bulk export's cut-off or the newest change an incremental sync saw), or its last sync is past the freshness limit;
+- its data may not reach the 1st: Shopify limited to 60 days, counted by the clock so a month starting exactly 60 days before the sync is withheld (recorded by a keyed sync, or seen as an oldest order inside that window), a Klaviyo window that starts on or after the 1st (it is stored as dates only) or ends early, a GA4 or Meta month outside the days their syncs actually pulled (recorded at sync time from this release, so a GA4 or Meta workspace synced earlier is withheld until it syncs again), or daily rows that start mid-month.
+
+It is also withheld when any check on its sources failed, or when a table its SQL reads has no verifying check that ran on a window including the month. Each table needs its own check: a passing Klaviyo order count does not certify flow revenue. The Klaviyo and GA4 comparison checks cover only the last `metrics.default_days`, so they vouch only for months inside that window.
+
+A month still running, and one that has not started, hold every KPI back. A checked ratio with nothing to divide by (AOV in a month with no orders) is reportable with no value and a note. Each KPI carries its metric's notes, such as the currency a money value is in. Tolerances and `metrics.default_days` changed from the defaults are listed in `settings_changed`.
+
+### Not covered yet
+
+- Meta, and every table without a verifying check, are always withheld. Stripe's two checks count from the same pull they check, so they guard but do not verify. (0.20.1: Stripe charge KPIs can be reported when they match Stripe's own report.)
+- Point-in-time metrics (MRR, open pipeline), metrics counted from the first Meta day, and margin metrics have no monthly value. They are listed in `not_by_period`.
+- Money values are in each metric's main currency, not converted; the notes say so.
+- Tested against built test databases, not yet against a real client account.
+
 ## 0.19.0 (2026-11-25)
 
 Bring your own pipeline: read Stripe or Shopify from tables your own Fivetran or Airbyte already loads into your Postgres.

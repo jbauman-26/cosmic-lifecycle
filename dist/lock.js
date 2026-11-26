@@ -138,7 +138,7 @@ function held() {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export function busyError(info) {
     const who = info ? ` (${info.command || 'a command'}, started ${info.startedAt.slice(11, 19)} UTC, process ${info.pid})` : '';
-    return new CliError(`Another lifecycle command is writing to this store${who}.`, 'Wait for it to finish, then run this again. Reading commands such as lifecycle metrics run still work.', 'busy');
+    return new CliError(`Another lifecycle command is writing to this store${who}.`, 'Wait for it to finish, then run this again. Reading commands such as cosmic metrics run still work.', 'busy');
 }
 // Takes the lock without waiting. Returns the release function, or null when someone else holds it.
 export function tryWriteLock(command, opts = {}) {

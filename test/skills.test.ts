@@ -28,7 +28,7 @@ describe('skills sync', () => {
     expect(r!.written).toContain('.claude-plugin/plugin.json')
     const kit = readFileSync(join(dir(), 'skills', 'kit-flow-audit', 'SKILL.md'), 'utf8')
     expect(kit).toMatch(/name: "kits:flow-audit"/)
-    expect(kit).toMatch(/lifecycle kits add flow-audit/)
+    expect(kit).toMatch(/cosmic kits add flow-audit/)
     expect(readFileSync(join(dir(), 'SKILL.md'), 'utf8')).toMatch(/\/lifecycle:kits:winback-segment/)
   })
 

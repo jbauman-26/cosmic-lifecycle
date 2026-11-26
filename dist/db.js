@@ -113,7 +113,7 @@ export async function openDb() {
     }
     const url = getSecret('database-url');
     if (!url)
-        throw new CliError('No database URL saved.', 'Set LIFECYCLE_DATABASE_URL, or run lifecycle init for the local database.', 'no_database');
+        throw new CliError('No database URL saved.', 'Set LIFECYCLE_DATABASE_URL, or run cosmic init for the local database.', 'no_database');
     const schema = dbSchema();
     // With LIFECYCLE_DB_SCHEMA set, reads and writes both land in that schema.
     return wrapPg(new pg.Pool({ connectionString: url, max: 2 }), schema);

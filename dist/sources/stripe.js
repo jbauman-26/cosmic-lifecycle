@@ -14,12 +14,147 @@ export function toMajor(amount, currency) {
 }
 export const stripeMode = (key) => (/^(sk|rk)_test_/.test(key) ? 'test' : 'live');
 export const isRestrictedKey = (key) => key.startsWith('rk_');
+export const ACTIVITY_REPORT = 'balance_change_from_activity.itemized.3';
+// customer_facing_* are the charge's own currency and amount (what the sync stores), not the settlement currency.
+export const ACTIVITY_COLUMNS = ['reporting_category', 'customer_facing_currency', 'customer_facing_amount', 'charge_created_utc', 'created_utc'];
+// Splits one CSV line, quotes and commas inside quotes included.
+function csvLine(line) {
+    const out = [];
+    let cell = '', quoted = false;
+    for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (quoted) {
+            if (c === '"' && line[i + 1] === '"') {
+                cell += '"';
+                i++;
+            }
+            else if (c === '"')
+                quoted = false;
+            else
+                cell += c;
+        }
+        else if (c === '"')
+            quoted = true;
+        else if (c === ',') {
+            out.push(cell);
+            cell = '';
+        }
+        else
+            cell += c;
+    }
+    out.push(cell);
+    return out.map((x) => x.trim());
+}
+export function parseActivityCsv(csv) {
+    const lines = csv.trim().split(/\r?\n/).filter(Boolean);
+    if (!lines.length)
+        return [];
+    const head = csvLine(lines[0]);
+    const idx = ACTIVITY_COLUMNS.map((c) => head.indexOf(c));
+    if (idx.some((i) => i < 0))
+        throw new CliError('Stripe\'s activity report did not have the expected columns.', 'cosmic feedback "stripe activity report columns"', 'stripe_report_columns');
+    const [cat, cur, gross, created, own] = idx;
+    return lines.slice(1).map((l) => {
+        const f = csvLine(l);
+        const category = f[cat];
+        // A charge row's own time is its charge time when Stripe leaves charge_created_utc empty.
+        const chargeCreated = f[created] ? f[created] : category === 'charge' && f[own] ? f[own] : null;
+        return { reportingCategory: category, currency: (f[cur] ?? '').toLowerCase(), gross: Number(f[gross]), chargeCreated };
+    });
+}
+// Summed in minor units, so an exact comparison is not thrown off by floating point.
+const cents = (n) => Math.round(n * 100);
+export function monthTotals(rows) {
+    const by = new Map();
+    const get = (month, currency) => {
+        const key = `${month}\0${currency}`;
+        const m = by.get(key) ?? { month, currency, charges: 0, gross: 0, refunds: 0, unplaced: 0 };
+        by.set(key, m);
+        return m;
+    };
+    for (const r of rows) {
+        const counted = ['charge', 'charge_failure', 'refund', 'refund_failure'].includes(r.reportingCategory);
+        if (!counted)
+            continue;
+        // A row that cannot be placed in a month makes that currency's totals unknown, never silently smaller.
+        if (!r.chargeCreated) {
+            get('?', r.currency).unplaced++;
+            continue;
+        }
+        const m = get(r.chargeCreated.slice(0, 7), r.currency);
+        const amount = Math.abs(cents(r.gross));
+        // A bank debit that fails after posting is a charge row followed by a charge_failure row: no sale.
+        if (r.reportingCategory === 'charge') {
+            m.charges += 1;
+            m.gross += amount;
+        }
+        else if (r.reportingCategory === 'charge_failure') {
+            m.charges -= 1;
+            m.gross -= amount;
+        }
+        else if (r.reportingCategory === 'refund')
+            m.refunds -= amount;
+        else
+            m.refunds += amount;
+    }
+    return [...by.values()].map((m) => ({ ...m, gross: m.gross / 100, refunds: m.refunds / 100 }));
+}
+const fetchText = async (url, init, label) => {
+    const res = await fetch(url, init);
+    const text = await res.text();
+    if (!res.ok)
+        throw new HttpError(label, res.status, text.slice(0, 400));
+    return text;
+};
 export class Stripe {
     key;
     fetcher;
-    constructor(key, fetcher = fetchJson) {
+    textFetcher;
+    constructor(key, fetcher = fetchJson, textFetcher = fetchText) {
         this.key = key;
         this.fetcher = fetcher;
+        this.textFetcher = textFetcher;
+    }
+    get mode() {
+        return stripeMode(this.key);
+    }
+    post(path, form, label) {
+        return this.fetcher(`${apiBase('stripe', API)}${path}`, { method: 'POST', headers: { authorization: `Bearer ${this.key}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(form).toString() }, label);
+    }
+    /** The range Stripe's activity report has data for, in epoch seconds. Null when the key lacks the permission. */
+    async activityAvailability() {
+        try {
+            const t = await this.get(`/reporting/report_types/${ACTIVITY_REPORT}`, {}, 'Stripe report type request');
+            return typeof t.data_available_end === 'number' ? { start: Number(t.data_available_start ?? 0), end: t.data_available_end } : null;
+        }
+        catch (e) {
+            if (e instanceof HttpError && (e.status === 401 || e.status === 403))
+                return null;
+            throw e;
+        }
+    }
+    /** Starts a run of the itemized activity report for [start, end) in UTC. Null when the key lacks the permission. */
+    async startActivityRun(start, end) {
+        try {
+            const cols = Object.fromEntries(ACTIVITY_COLUMNS.map((c, i) => [`parameters[columns][${i}]`, c]));
+            const r = await this.post('/reporting/report_runs', { report_type: ACTIVITY_REPORT, 'parameters[interval_start]': String(start), 'parameters[interval_end]': String(end), 'parameters[timezone]': 'Etc/UTC', ...cols }, 'Stripe report run request');
+            return { id: String(r.id), status: r.status, url: r.result?.url ?? null };
+        }
+        catch (e) {
+            // Only a refused key means a missing permission. Any other refusal is reported with Stripe's own message.
+            if (e instanceof HttpError && (e.status === 401 || e.status === 403))
+                return null;
+            throw e;
+        }
+    }
+    async reportRun(id) {
+        const r = await this.get(`/reporting/report_runs/${encodeURIComponent(id)}`, {}, 'Stripe report run status request');
+        return { id: String(r.id), status: r.status, url: r.result?.url ?? null };
+    }
+    async reportRows(url) {
+        if (!/^https:\/\/files\.stripe\.com\//.test(url))
+            throw new CliError('Stripe gave a report file address that is not on files.stripe.com.', 'cosmic feedback "stripe report url"', 'stripe_report_url');
+        return parseActivityCsv(await this.textFetcher(url, { headers: { authorization: `Bearer ${this.key}` } }, 'Stripe report file request'));
     }
     async get(path, params, label) {
         const qs = new URLSearchParams(params).toString();
@@ -84,6 +219,9 @@ export function aggregateCharges(charges) {
     for (const c of [...charges].sort((a, b) => a.created - b.created)) {
         if (c.status !== 'succeeded' && c.status !== 'failed')
             continue;
+        // An authorization never captured is not a sale, and Stripe's ledger has no row for it.
+        if (c.status === 'succeeded' && c.captured === false)
+            continue;
         const date = day(c.created);
         const currency = c.currency.toLowerCase();
         const id = `${date}|${currency}`;
@@ -92,6 +230,9 @@ export function aggregateCharges(charges) {
             d.failed++;
         }
         else {
+            // Gross stays the charge amount, as in 0.20.0: on API versions before 2025-03-31.basil Stripe records the
+            // uncaptured part of a partial capture as a refund, so subtracting amount_refunded from a captured gross would
+            // remove it twice. A partial capture then does not match Stripe's report, and its month is withheld.
             const gross = toMajor(c.amount, currency);
             const refunded = toMajor(c.amount_refunded, currency);
             d.charges++;

@@ -452,7 +452,7 @@ describe('the query check, statement by statement', () => {
       expect(e).toBeInstanceOf(CliError)
       expect((e as CliError).code).toBe('personal_column')
       expect((e as CliError).message).toMatch(/users\.name is marked personal/)
-      expect((e as CliError).next).toMatch(/lifecycle schema --format json/)
+      expect((e as CliError).next).toMatch(/cosmic schema --format json/)
     }
   })
 })
@@ -539,7 +539,7 @@ describe('query, schema and scrub on a Postgres warehouse', () => {
     const reviews = r.tables.find((t) => t.table === 'src_judge_me.reviews')!
     expect(reviews.columns.find((c) => c.column === 'reviewer__email')).toMatchObject({ action: 'replace', rows: 1 })
     expect(r.tables.find((t) => t.table === 'src_judge_me.shop_info')!.columns).toEqual([{ column: 'lat', why: 'personal', action: 'blocked', rows: 0, status: 'blocked' }])
-    expect(r.next).toBe('lifecycle warehouse scrub --confirm')
+    expect(r.next).toBe('cosmic warehouse scrub --confirm')
     // The report holds counts and column names, never a stored value.
     expect(JSON.stringify(r)).not.toMatch(/Fixtureperson|example\.org|zedfx|010-0142/)
     expect((await db.query(`SELECT count(name) AS n FROM src_zendesk.users`))[0]!.n).toBe(2)
@@ -838,14 +838,14 @@ describe.skipIf(!uvAvailable())('a local warehouse, end to end', () => {
 describe('docs and release', () => {
   it('is version 0.13.2 everywhere a version is written', () => {
     // 0.14.0: was toBe('0.13.2'); a version bump has to change it. package.json and the lock must still agree.
-    expect(VERSION).toMatch(/^0\.(13\.2|1[4-9]\.\d+)$/)
+    expect(VERSION).toMatch(/^0\.(13\.2|1[4-9]\.\d+|2\d\.\d+)$/)
     expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe(VERSION)
     expect(readFileSync('CHANGELOG.md', 'utf8')).toMatch(/^## 0\.13\.2 \(2026-11-24\)/m)
   })
 
   it('documents the command, the code, the setting and the rules', () => {
     expect(DOCS.commands).toContain('scrub')
-    expect(DOCS.warehouse).toContain('lifecycle warehouse scrub')
+    expect(DOCS.warehouse).toContain('cosmic warehouse scrub')
     expect(DOCS.warehouse).toContain('warehouse.free_text')
     for (const c of ['personal_column', 'scrub_failed']) expect(DOCS.troubleshooting, c).toMatch(new RegExp(`^  ${c}\\s`, 'm'))
     const changelog = readFileSync('CHANGELOG.md', 'utf8')

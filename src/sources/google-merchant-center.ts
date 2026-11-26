@@ -111,7 +111,7 @@ export function countStatuses(rows: RawProductRow[]): ProductCounts {
 
 // Only these strings ever reach the query, and dates are checked first, so nothing outside can change it.
 function dateRange(since: string, until: string) {
-  if (!DATE.test(since) || !DATE.test(until)) throw new CliError('Dates must be YYYY-MM-DD.', 'lifecycle sync', 'bad_value')
+  if (!DATE.test(since) || !DATE.test(until)) throw new CliError('Dates must be YYYY-MM-DD.', 'cosmic sync', 'bad_value')
   return `date BETWEEN '${since}' AND '${until}'`
 }
 
@@ -131,11 +131,11 @@ export async function merchantAccessToken(clientId: string, clientSecret: string
   ).catch((e: unknown) => {
     // A revoked refresh token, or one from a Testing-mode app older than seven days, comes back as invalid_grant.
     if (e instanceof HttpError && (e.status === 400 || e.status === 401) && /invalid_grant|invalid_client|unauthorized_client/.test(e.body)) {
-      throw new CliError('Google rejected the saved Merchant Center sign-in.', 'Sign in with Google again for a new refresh token, then lifecycle connect google-merchant-center --account ID --client-id ID --secret-env NAME --refresh-token-env NAME', 'key_rejected')
+      throw new CliError('Google rejected the saved Merchant Center sign-in.', 'Sign in with Google again for a new refresh token, then cosmic connect google-merchant-center --account ID --client-id ID --secret-env NAME --refresh-token-env NAME', 'key_rejected')
     }
     throw e
   })
-  if (!body?.access_token) throw new CliError('Google returned no access token.', 'lifecycle doctor', 'key_rejected')
+  if (!body?.access_token) throw new CliError('Google returned no access token.', 'cosmic doctor', 'key_rejected')
   return String(body.access_token)
 }
 
@@ -154,8 +154,8 @@ function explain(e: unknown): never {
   if (e instanceof HttpError) {
     const { status, message, reasons } = errorInfo(e.body)
     const detail = message ? `: ${message}` : '.'
-    if (e.status === 401 || status === 'UNAUTHENTICATED') throw new CliError(`Merchant Center refused the sign-in${detail}`, 'Sign in with Google again, then lifecycle connect google-merchant-center', 'key_rejected')
-    if (e.status === 429 || status === 'RESOURCE_EXHAUSTED') throw new CliError('Merchant Center is rate limiting this project.', 'Wait a few minutes, then run lifecycle sync --only google-merchant-center again.', 'rate_limited')
+    if (e.status === 401 || status === 'UNAUTHENTICATED') throw new CliError(`Merchant Center refused the sign-in${detail}`, 'Sign in with Google again, then cosmic connect google-merchant-center', 'key_rejected')
+    if (e.status === 429 || status === 'RESOURCE_EXHAUSTED') throw new CliError('Merchant Center is rate limiting this project.', 'Wait a few minutes, then run cosmic sync --only google-merchant-center again.', 'rate_limited')
     if (e.status === 403 || status === 'PERMISSION_DENIED') {
       if (reasons.includes('SERVICE_DISABLED') || /has not been used|is disabled/i.test(message)) {
         throw new CliError(`The Merchant API is not turned on for this Google Cloud project${detail}`, 'Turn on the Merchant API in the Cloud project, wait a few minutes, then connect again.', 'merchant_center_permission')
@@ -165,8 +165,8 @@ function explain(e: unknown): never {
       }
       throw new CliError(`The signed-in Google account cannot read that Merchant Center account${detail}`, 'Check the account id, and that the Google user has Performance and insights or Admin access in Merchant Center.', 'merchant_center_permission')
     }
-    if (e.status === 404 || status === 'NOT_FOUND') throw new CliError(`Merchant Center has no account with that id${detail}`, 'Check the id at the top of Merchant Center, then lifecycle connect google-merchant-center --account ID', 'merchant_center_account')
-    if (message) throw new CliError(`Merchant Center answered with status ${e.status}${detail}`, e.status === 400 ? 'Check the account id: lifecycle connect google-merchant-center --account ID' : 'Run the command again, then lifecycle doctor.', 'merchant_center_error')
+    if (e.status === 404 || status === 'NOT_FOUND') throw new CliError(`Merchant Center has no account with that id${detail}`, 'Check the id at the top of Merchant Center, then cosmic connect google-merchant-center --account ID', 'merchant_center_account')
+    if (message) throw new CliError(`Merchant Center answered with status ${e.status}${detail}`, e.status === 400 ? 'Check the account id: cosmic connect google-merchant-center --account ID' : 'Run the command again, then cosmic doctor.', 'merchant_center_error')
   }
   throw e
 }
@@ -201,7 +201,7 @@ export class MerchantCenter {
       if (!next || next === pageToken) return out
       pageToken = next
     }
-    throw new CliError('Merchant Center kept sending pages past 1,000.', 'Run lifecycle sync --only google-merchant-center again. If it repeats, report it: lifecycle feedback', 'merchant_center_error')
+    throw new CliError('Merchant Center kept sending pages past 1,000.', 'Run cosmic sync --only google-merchant-center again. If it repeats, report it: cosmic feedback', 'merchant_center_error')
   }
 
   // Proves the sign-in can read reports for this account before anything is saved: a one-day performance

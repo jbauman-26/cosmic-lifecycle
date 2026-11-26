@@ -55,7 +55,7 @@ export function toDaily(rows, names) {
 const restDate = (d) => `(year:${Number(d.slice(0, 4))},month:${Number(d.slice(5, 7))},day:${Number(d.slice(8, 10))})`;
 export function analyticsUrl(account, since, until) {
     if (!DATE.test(since) || !DATE.test(until))
-        throw new CliError('Dates must be YYYY-MM-DD.', 'lifecycle sync', 'bad_value');
+        throw new CliError('Dates must be YYYY-MM-DD.', 'cosmic sync', 'bad_value');
     return `${API}/adAnalytics?q=analytics&pivot=CAMPAIGN&timeGranularity=DAILY&dateRange=(start:${restDate(since)},end:${restDate(until)})&accounts=List(${encodeURIComponent(`urn:li:sponsoredAccount:${normalizeAccountId(account)}`)})&fields=${FIELDS.join(',')}`;
 }
 // Search criteria are required, so every campaign status is listed: removed campaigns still have history.
@@ -73,12 +73,12 @@ export async function linkedinAccessToken(clientId, clientSecret, refreshToken, 
     }, 'LinkedIn token request').catch((e) => {
         // An expired (past its year), revoked or wrong refresh token, or a wrong client, comes back as 400 or 401.
         if (e instanceof HttpError && (e.status === 400 || e.status === 401)) {
-            throw new CliError('LinkedIn rejected the saved LinkedIn Ads sign-in.', 'Sign in with LinkedIn again for a new refresh token, then lifecycle connect linkedin-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME', 'key_rejected');
+            throw new CliError('LinkedIn rejected the saved LinkedIn Ads sign-in.', 'Sign in with LinkedIn again for a new refresh token, then cosmic connect linkedin-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME', 'key_rejected');
         }
         throw e;
     });
     if (!body?.access_token)
-        throw new CliError('LinkedIn returned no access token.', 'lifecycle doctor', 'key_rejected');
+        throw new CliError('LinkedIn returned no access token.', 'cosmic doctor', 'key_rejected');
     return String(body.access_token);
 }
 // LinkedIn errors are { status, serviceErrorCode, code?, message }.
@@ -96,17 +96,17 @@ function explain(e) {
         const { message } = errorInfo(e.body);
         const detail = message ? `: ${message}` : '.';
         if (e.status === 401)
-            throw new CliError(`LinkedIn refused the sign-in${detail}`, 'Sign in with LinkedIn again, then lifecycle connect linkedin-ads', 'key_rejected');
+            throw new CliError(`LinkedIn refused the sign-in${detail}`, 'Sign in with LinkedIn again, then cosmic connect linkedin-ads', 'key_rejected');
         if (e.status === 403)
             throw new CliError(`The signed-in LinkedIn member cannot read that ad account${detail}`, 'The member needs a role on the ad account (Viewer is enough), and the sign-in needs r_ads and r_ads_reporting.', 'linkedin_ads_permission');
         // LinkedIn also answers 404 when the app has no Advertising API access, so both causes are named.
         if (e.status === 404)
             throw new CliError(`LinkedIn does not know that ad account${detail}`, 'Check the id after accounts/ in Campaign Manager, and that the app is approved for the Advertising API.', 'linkedin_ads_account');
         if (e.status === 429)
-            throw new CliError('LinkedIn is rate limiting this app.', 'Wait a few minutes, then run lifecycle sync --only linkedin-ads again.', 'rate_limited');
+            throw new CliError('LinkedIn is rate limiting this app.', 'Wait a few minutes, then run cosmic sync --only linkedin-ads again.', 'rate_limited');
         if (e.status === 426)
-            throw new CliError(`LinkedIn no longer accepts Marketing API version ${API_VERSION}.`, 'Update Cosmic Lifecycle, then run lifecycle sync --only linkedin-ads again.', 'linkedin_ads_error');
-        throw new CliError(`LinkedIn answered with status ${e.status}${detail}`, 'Run the command again, then lifecycle doctor.', 'linkedin_ads_error');
+            throw new CliError(`LinkedIn no longer accepts Marketing API version ${API_VERSION}.`, 'Update Cosmic Lifecycle, then run cosmic sync --only linkedin-ads again.', 'linkedin_ads_error');
+        throw new CliError(`LinkedIn answered with status ${e.status}${detail}`, 'Run the command again, then cosmic doctor.', 'linkedin_ads_error');
     }
     throw e;
 }
@@ -146,7 +146,7 @@ export class LinkedinAds {
                 return names;
             token = next;
         }
-        throw new CliError('LinkedIn kept sending campaign pages past 1,000.', 'Run lifecycle sync --only linkedin-ads again. If it repeats, report it: lifecycle feedback', 'linkedin_ads_error');
+        throw new CliError('LinkedIn kept sending campaign pages past 1,000.', 'Run cosmic sync --only linkedin-ads again. If it repeats, report it: cosmic feedback', 'linkedin_ads_error');
     }
     // One request per window. A window that comes back at the 15,000 element cap may be cut short, so it is
     // split in half and asked again, down to a single day.
@@ -156,7 +156,7 @@ export class LinkedinAds {
         if (rows.length < MAX_ELEMENTS)
             return rows;
         if (since === until)
-            throw new CliError(`LinkedIn returned its ${MAX_ELEMENTS.toLocaleString('en-US')} row limit for ${since} alone.`, 'Report it: lifecycle feedback', 'linkedin_ads_error');
+            throw new CliError(`LinkedIn returned its ${MAX_ELEMENTS.toLocaleString('en-US')} row limit for ${since} alone.`, 'Report it: cosmic feedback', 'linkedin_ads_error');
         const mid = nextDay(since, Math.floor(daysBetween(since, until) / 2));
         return [...(await this.analytics(since, mid)), ...(await this.analytics(nextDay(mid), until))];
     }

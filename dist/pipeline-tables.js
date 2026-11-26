@@ -1,0 +1,383 @@
+import pg from 'pg';
+import { CliError } from './errors.js';
+import { assertReadOnlySql } from './query.js';
+import { assertNoBlockedFunctions, assertNoPersonalColumns, markCatalog, tokenize } from './sql-guard.js';
+import { scrubRows } from './personal.js';
+import { PIPELINE_TOOLS } from './pipeline.js';
+export const LOADED_AT = { fivetran: '_fivetran_synced', airbyte: '_airbyte_extracted_at' };
+const IDENT = /^[a-z_][a-z0-9_]{0,62}$/;
+// Loader bookkeeping, not the person's data.
+const SKIP = /^(_|fivetran_audit$|fivetran_audit_warning$|airbyte_)/;
+export function checkSchemaSettings(tool, schema, urlEnv) {
+    if (!PIPELINE_TOOLS.includes(tool))
+        throw new CliError(`Unknown pipeline tool: ${tool}. Use fivetran or airbyte.`, 'cosmic connect pipeline --tool fivetran --schema hubspot --url-env PIPELINE_DATABASE_URL', 'bad_value');
+    if (!IDENT.test(schema))
+        throw new CliError(`Not a schema name: ${schema}. Use lowercase letters, numbers and underscores.`, 'The schema is the one your loader writes to, such as hubspot.', 'bad_value');
+    if (/^(public|pg_\w*|information_schema|src_\w*)$/.test(schema))
+        throw new CliError(`The ${schema} schema is not a loader's schema.`, 'Name the schema your Fivetran or Airbyte connector writes to, such as hubspot.', 'bad_value');
+    if (!/^[A-Z][A-Z0-9_]{0,63}$/.test(urlEnv))
+        throw new CliError(`Not an environment variable name: ${urlEnv}.`, 'export PIPELINE_DATABASE_URL=postgres://... then pass --url-env PIPELINE_DATABASE_URL', 'bad_value');
+}
+// The connector's name, for the personal data rules: Fivetran and Airbyte name the schema after the connector by default.
+const sourceOf = (schema) => schema.replace(/_\d+$/, '').replace(/_/g, '-');
+// Loader tables hold whole records, so on top of the shared rules these are treated as personal too: contact
+// handles, job titles, free-text bodies (an email's text, a ticket comment, a note) and raw JSON records.
+const LOADER_PERSONAL = /(phone|mobile|fax|twitter|linkedin|facebook|instagram|handle|job_?title|^title$|_title$|salutation|^body$|_body$|^text$|_text$|html|message|comment|^note|_note|description|subject|signature|ip_?address|user_?agent|birth|gender|salary|^_airbyte_data$|_raw$)/i;
+const RAW_TYPES = /^(json|jsonb|xml|bytea|user-defined|array)$/i;
+export function markTable(schema, table, cols) {
+    const marked = markCatalog(cols.map((c) => ({ schema, table, column: c.name, type: c.type })), sourceOf);
+    return marked.map((c) => ({ name: c.column, type: c.type ?? '', personal: c.personal || LOADER_PERSONAL.test(c.column) || RAW_TYPES.test(c.type ?? '') }));
+}
+// Any identifier, quoted, so a mixed-case or odd table name is never dropped or spliced in raw.
+export const quoteIdent = (name) => `"${name.replace(/"/g, '""')}"`;
+export async function discoverTables(query, tool, schema) {
+    // Base tables only: a view can rename a personal column past the rules, so views are not registered.
+    const rows = await query(`SELECT c.table_name, c.column_name, c.data_type FROM information_schema.columns c
+    JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name AND t.table_type = 'BASE TABLE'
+    WHERE c.table_schema = $1 ORDER BY c.table_name, c.ordinal_position`, [schema]);
+    const byTable = new Map();
+    for (const r of rows) {
+        const t = String(r.table_name);
+        if (SKIP.test(t))
+            continue;
+        byTable.set(t, [...(byTable.get(t) ?? []), { name: String(r.column_name), type: String(r.data_type) }]);
+    }
+    if (!byTable.size)
+        throw new CliError(`No tables in the ${schema} schema of the pipeline database.`, 'Check the schema name your loader writes to: cosmic connect pipeline --tool fivetran --schema NAME --url-env NAME', 'pipeline_table_missing');
+    return [...byTable].map(([table, cols]) => ({
+        table,
+        loadedAtColumn: cols.some((c) => c.name === LOADED_AT[tool]) ? LOADED_AT[tool] : null,
+        columns: markTable(schema, table, cols),
+    }));
+}
+export async function tableFreshness(query, tool, schema, tables, maxDays, now = Date.now()) {
+    const col = LOADED_AT[tool];
+    const out = [];
+    for (const table of tables) {
+        const has = (await query(`SELECT 1 FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 AND column_name = $3`, [schema, table, col])).length > 0;
+        if (!has) {
+            out.push({ table, lastLoaded: null, ageHours: null, status: 'unknown' });
+            continue;
+        }
+        const r = (await query(`SELECT max(${quoteIdent(col)}) AS at FROM ${quoteIdent(schema)}.${quoteIdent(table)}`))[0];
+        const at = r?.at ? new Date(r.at).toISOString() : null;
+        const age = at ? (now - Date.parse(at)) / 3600000 : null;
+        out.push({ table, lastLoaded: at, ageHours: age === null ? null : Math.round(age * 10) / 10, status: age === null ? 'unknown' : age > maxDays * 24 ? 'stale' : 'fresh' });
+    }
+    return out;
+}
+const ago = (h) => (h < 1 ? 'less than an hour ago' : h < 48 ? `${Math.round(h)} hours ago` : `${Math.floor(h / 24)} days ago`);
+export const FRESHNESS_ONLY = 'Freshness only: Cosmic checks when the loader last wrote these tables, not whether their numbers are right. They are not reconciled against any other source.';
+/** The trust line for answers from these tables. It never says "passed". */
+export function freshnessTrust(schema, fresh, maxDays) {
+    const stale = fresh.filter((f) => f.status === 'stale');
+    const unknown = fresh.filter((f) => f.status === 'unknown');
+    const parts = fresh.filter((f) => f.status === 'fresh').map((f) => `${schema}.${f.table} loaded ${ago(f.ageHours)}`);
+    if (stale.length) {
+        return { status: 'stale', tables: fresh, line: `STALE: ${stale.map((f) => `${schema}.${f.table} last loaded ${f.lastLoaded ? ago(f.ageHours) : 'never'}`).join(', ')}, past the ${maxDays}-day limit, so these numbers may be behind. ${FRESHNESS_ONLY}` };
+    }
+    const tail = unknown.length ? `No load time for ${unknown.map((f) => `${schema}.${f.table}`).join(', ')}.` : '';
+    const head = parts.length ? `${parts.join(', ')}.` : '';
+    return { status: 'freshness_only', tables: fresh, line: `${[head, tail].filter(Boolean).join(' ') || 'No load times found.'} ${FRESHNESS_ONLY}` };
+}
+/** The registered schemas a query names, such as hubspot in "SELECT ... FROM hubspot.deal". */
+// Strings and comments removed first, so 'hubspot.deal' as a label or in a comment never routes a local query.
+// Routing only picks the database: what the query may read is decided by the plan check in pipelineQueryRun.
+export const codeOnly = (sql) => sql
+    .replace(/'(?:[^']|'')*'/g, "''")
+    .replace(/\$([A-Za-z_]*)\$[\s\S]*?\$\1\$/g, "''")
+    .replace(/--[^\n]*/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ');
+export function schemasIn(sql, schemas) {
+    const code = codeOnly(sql);
+    return schemas.filter((s) => new RegExp(`(^|[^a-z0-9_"])"?${s}"?\\s*\\.`, 'i').test(code));
+}
+export function catalogFor(schema, tables) {
+    return tables.flatMap((t) => t.columns.map((c) => ({ schema, table: t.table, column: c.name, type: c.type, personal: c.personal })));
+}
+export function pipelineConn(urlEnv, env = process.env) {
+    const url = env[urlEnv];
+    if (!url)
+        throw new CliError(`${urlEnv} is not set.`, `export ${urlEnv}=postgres://user:password@host/db (the database your loader writes to)`, 'missing_key');
+    const pool = new pg.Pool({ connectionString: url, max: 1 });
+    const wrap = async (fn) => {
+        try {
+            return await fn();
+        }
+        catch (e) {
+            if (e instanceof CliError)
+                throw e;
+            const err = e;
+            const why = err.message || err.code || err.errors?.map((x) => x.code).filter(Boolean).join(', ') || 'no answer';
+            // A SQL error has a five-character SQLSTATE that is not a connection (08) or login (28) class.
+            if (err.code && /^[0-9A-Z]{5}$/.test(err.code) && !/^(08|28|3D|57P)/.test(err.code))
+                throw new CliError(`Query failed: ${why}`, 'cosmic schema NAME lists the tables and columns you can use', 'query_failed');
+            throw new CliError(`Could not read the pipeline database in ${urlEnv}: ${why}.`, 'Check that the database is running and the URL is right. The CLI only reads.', 'pipeline_unreachable');
+        }
+    };
+    return {
+        query: (sql, params) => wrap(async () => (await pool.query(sql, params)).rows),
+        // A read-only transaction is what actually stops a write; the SQL check before it gives the clear message.
+        readOnly: (sql, params) => wrap(async () => {
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN READ ONLY');
+                await client.query(`SET LOCAL statement_timeout = '30s'`);
+                // Only built-in names resolve without a schema, so every table, view, function or operator a query reaches
+                // outside pg_catalog is written schema.name, which the checks see.
+                await client.query(`SET LOCAL search_path = pg_catalog`);
+                return (await client.query(sql, params)).rows;
+            }
+            finally {
+                await client.query('ROLLBACK').catch(() => undefined);
+                client.release();
+            }
+        }),
+        close: () => pool.end(),
+    };
+}
+// Words in plan expressions (outputs, filters, keys, conditions), so a column read through a view, a function or a
+// cast is still seen under its real name.
+export function words(v, out) {
+    if (typeof v === 'string')
+        for (const m of v.matchAll(/"((?:[^"]|"")+)"|([A-Za-z_][A-Za-z0-9_$]*)/g))
+            out.add((m[1] ?? m[2]).replace(/""/g, '"').toLowerCase());
+    else if (Array.isArray(v))
+        v.forEach((x) => typeof x !== 'object' && words(x, out));
+}
+// Every expression string in the plan, as Postgres prints it: function names decoded, whatever the SQL spelled.
+function strings(v, out) {
+    if (typeof v === 'string')
+        out.push(v);
+    else if (Array.isArray(v))
+        v.forEach((x) => typeof x !== 'object' && strings(x, out));
+}
+function walk(node, tables, tokens, text = [], functions = []) {
+    for (const [k, v] of Object.entries(node))
+        if (k !== 'Plans' && k !== 'Node Type' && k !== 'Relation Name' && k !== 'Schema' && k !== 'Alias')
+            strings(v, text);
+    if (typeof node['Function Name'] === 'string')
+        functions.push({ schema: typeof node.Schema === 'string' ? node.Schema : null, name: node['Function Name'] });
+    const scan = Boolean(node['Relation Name']);
+    if (scan) {
+        const key = `${node.Schema ?? ''}\0${node['Relation Name']}`;
+        const r = tables.get(key) ?? { schema: node.Schema ?? '', table: node['Relation Name'], outputs: [] };
+        if (Array.isArray(node.Output))
+            r.outputs.push(node.Output);
+        tables.set(key, r);
+    }
+    for (const [k, v] of Object.entries(node)) {
+        if (k === 'Plans')
+            continue;
+        // A scan's output is judged with the table's column list (see pipelineQueryRun); everything else counts here.
+        if (scan && k === 'Output')
+            continue;
+        words(v, tokens);
+    }
+    for (const v of Object.values(node)) {
+        if (Array.isArray(v))
+            v.forEach((x) => typeof x === 'object' && x && walk(x, tables, tokens, text, functions));
+        else if (typeof v === 'object' && v)
+            walk(v, tables, tokens, text, functions);
+    }
+}
+export async function tablesRead(conn, body) {
+    // The query is planned the way it runs: wrapped and limited. The top node then always lists the columns returned,
+    // so a SELECT * view that flattens into a bare scan still names every column it hands back.
+    const rows = await conn.readOnly(`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM (\n${body}\n) AS q LIMIT 1`);
+    const plan = rows[0]?.['QUERY PLAN'];
+    const parsed = (typeof plan === 'string' ? JSON.parse(plan) : plan);
+    const tables = new Map();
+    const tokens = new Set();
+    const text = [];
+    const functions = [];
+    for (const p of parsed ?? [])
+        walk(p.Plan, tables, tokens, text, functions);
+    return { tables: [...tables.values()], tokens, text, functions };
+}
+// Function names called in the plan's expressions: name( or schema.name(.
+const CALLS = /(?:"?([A-Za-z_][\w$]*)"?\.)?"?([A-Za-z_][\w$]*)"?\s*\(/g;
+export function callsIn(text) {
+    const out = [];
+    for (const t of text)
+        for (const m of t.replace(/'(?:[^']|'')*'/g, "''").matchAll(CALLS))
+            out.push({ schema: m[1] ?? null, name: m[2].toLowerCase() });
+    return out;
+}
+/**
+ * Rules on the SQL itself, before Postgres plans it, for what a plan can hide: a call folded at plan time or sitting
+ * in LIMIT, a view whose columns were renamed on the way up, an operator someone defined. Strict on purpose: a
+ * pipeline query reads loader tables with built-in functions, and nothing else.
+ */
+export async function assertPlainQuery(conn, body) {
+    // The tokenizer refuses prefixed strings and names (E'..', U&".."), control characters and other escapes, for
+    // every pipeline query, whatever the catalog holds.
+    const tokens = tokenize(body);
+    const refuse = (why, next = 'Use the loader tables cosmic schema lists, with built-in functions such as count, sum, date_trunc and coalesce.') => {
+        throw new CliError(`Refused: ${why}`, next, 'blocked_object');
+    };
+    if (tokens.some((t) => t.kind === 'ident' && !t.quoted && t.value === 'operator'))
+        refuse('the query uses OPERATOR(...), which can call a function defined in this database.');
+    // Every call in the text, strings excluded: name( or schema.name(.
+    const calls = [];
+    for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i];
+        const next = tokens[i + 1];
+        if (t.kind !== 'ident' || !next || next.kind !== 'op' || next.value !== '(')
+            continue;
+        const qualified = tokens[i - 1]?.kind === 'op' && tokens[i - 1].value === '.' && tokens[i - 2]?.kind === 'ident';
+        calls.push({ schema: qualified ? tokens[i - 2].value : null, name: t.value });
+    }
+    assertNoBlockedFunctions(calls.map((c) => `${c.name}(`).join(' '));
+    // With the search path set to pg_catalog, an unqualified call can only be a built-in. A qualified one outside it
+    // is a function defined in this database (or an extension's) and is refused.
+    const own = [...new Set(calls.filter((c) => c.schema && c.schema !== 'pg_catalog').map((c) => `${c.schema}.${c.name}`))];
+    if (own.length)
+        refuse(`the query calls ${own.join(', ')}, a function defined in this database. Only built-in functions can be used on pipeline tables.`);
+    // A type from a schema other than pg_catalog, after :: or AS: a cast or a domain check can run a function that reads
+    // other tables, and neither the text nor the plan shows it.
+    for (let i = 2; i < tokens.length; i++) {
+        const t = tokens[i];
+        if (t.kind !== 'ident' || tokens[i - 1]?.kind !== 'op' || tokens[i - 1].value !== '.' || tokens[i - 2]?.kind !== 'ident')
+            continue;
+        const before = tokens[i - 3];
+        const cast = (before?.kind === 'op' && before.value === ':' && tokens[i - 4]?.kind === 'op' && tokens[i - 4].value === ':') || (before?.kind === 'ident' && !before.quoted && before.value === 'as');
+        if (cast && tokens[i - 2].value !== 'pg_catalog')
+            refuse(`the query casts to ${tokens[i - 2].value}.${t.value}, a type defined in this database. A cast or a domain can run a function, so only built-in types can be used.`);
+    }
+    // Views and materialized views: their columns can be renamed past the column rules, so they are never read. Any
+    // view outside pg_catalog can only be reached as schema.name (see the search path above), in any position.
+    const refs = [];
+    for (let i = 2; i < tokens.length; i++) {
+        const t = tokens[i];
+        if (t.kind === 'ident' && tokens[i - 1]?.kind === 'op' && tokens[i - 1].value === '.' && tokens[i - 2]?.kind === 'ident')
+            refs.push({ schema: tokens[i - 2].value, name: t.value });
+    }
+    if (refs.length) {
+        const candidates = await conn.query(`SELECT lower(c.relname) AS name, lower(n.nspname) AS schema FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relkind IN ('v', 'm') AND n.nspname NOT IN ('pg_catalog', 'information_schema') AND lower(c.relname) = ANY($1)`, [[...new Set(refs.map((r) => r.name))]]);
+        const views = candidates.filter((v) => refs.some((r) => r.name === v.name && r.schema === v.schema)).map((r) => `${r.schema}.${r.name}`);
+        if (views.length)
+            refuse(`the query names ${views.join(', ')}, a view. Views can rename personal columns, so pipeline queries read loader tables only.`, 'Query the loader table the view is built on, naming the columns you need.');
+    }
+}
+/**
+ * One read-only query against registered pipeline schemas in the same database (a query may join hubspot and
+ * salesforce tables one loader wrote). Two checks run before it: every table Postgres would read must be a
+ * registered loader table, and no column it names may be personal. Protection never depends on spotting a schema
+ * name in the SQL text.
+ */
+export async function pipelineQueryRun(conn, schemas, sql, cap, maxDays) {
+    const body = assertReadOnlySql(sql);
+    const found = await Promise.all(schemas.map(async (s) => ({ ...s, tables: await discoverTables(conn.query, s.tool, s.schema) })));
+    const allowed = new Set(found.flatMap((f) => f.tables.map((t) => `${f.schema}\0${t.table}`)));
+    assertNoPersonalColumns(body, found.flatMap((f) => catalogFor(f.schema, f.tables)));
+    await assertPlainQuery(conn, body);
+    const plan = await tablesRead(conn, body);
+    // Blocked functions, checked on Postgres's own spelling of the plan, so an escaped name (U&"...") is seen as itself.
+    assertNoBlockedFunctions(callsIn(plan.text).map((c) => `${c.name}(`).join(' '));
+    // A function outside pg_catalog in the plan (printed schema-qualified, since the search path is pg_catalog) or
+    // a function scan from another schema can read any table unseen, so it is refused.
+    const called = [...callsIn(plan.text), ...plan.functions.map((f) => ({ schema: f.schema, name: f.name.toLowerCase() }))];
+    const own = [...new Set(called.filter((c) => c.schema && !['pg_catalog', 'information_schema'].includes(c.schema.toLowerCase())).map((c) => `${c.schema}.${c.name}`))];
+    if (own.length)
+        throw new CliError(`Refused: the query calls ${own.join(', ')}, a function defined in this database. Only built-in functions can be used on pipeline tables.`, 'Use built-in functions such as count, sum, date_trunc and coalesce.', 'blocked_object');
+    const read = plan.tables;
+    const outside = read.filter((r) => !allowed.has(`${r.schema}\0${r.table}`));
+    if (outside.length) {
+        throw new CliError(`Refused: the query reads ${outside.map((r) => `${r.schema}.${r.table}`).join(', ')}, which ${outside.length === 1 ? 'is' : 'are'} not a connected pipeline table.`, `Only the tables cosmic schema ${schemas.map((s) => s.schema).join(' or ')} lists can be read. Connect another schema with cosmic connect pipeline --schema NAME`, 'not_connected');
+    }
+    // The same column rule, applied to what Postgres reads from each base table, so a view or an expression that
+    // renames a personal column is refused too.
+    for (const r of read) {
+        const table = found.find((f) => f.schema === r.schema)?.tables.find((t) => t.table === r.table);
+        const all = table.columns.map((c) => c.name.toLowerCase());
+        const tokens = new Set(plan.tokens);
+        for (const out of r.outputs) {
+            // Postgres may hand up every column of the row (a physical tuple) whatever the query uses; that list says
+            // nothing about what is read, so only a real projection counts.
+            const names = out.map((o) => o.replace(/^"?[^".]+"?\./, '').replace(/^"(.*)"$/, '$1').toLowerCase());
+            if (names.length === all.length && names.every((n, i) => n === all[i]))
+                continue;
+            for (const o of out)
+                words(o, tokens);
+        }
+        const hit = table.columns.filter((c) => c.personal && tokens.has(c.name.toLowerCase())).map((c) => c.name);
+        if (hit.length)
+            throw new CliError(`That query was refused because it could return personal details. ${r.table}.${hit[0]} is marked personal.`, `cosmic schema ${r.schema}.${r.table} lists the columns you can use.`, 'personal_column');
+    }
+    // A newline before the closing parenthesis, so a query that ends in a -- comment still parses.
+    const rows = await conn.readOnly(`SELECT * FROM (\n${body}\n) AS q LIMIT ${cap + 1}`);
+    const truncated = rows.length > cap;
+    const clean = scrubRows(truncated ? rows.slice(0, cap) : rows);
+    // Freshness for exactly the tables Postgres reads, inside the same 30-second limit.
+    const timed = (q, params) => conn.readOnly(q, params);
+    const trusts = [];
+    const notes = [];
+    for (const f of found) {
+        const mine = read.filter((r) => r.schema === f.schema).map((r) => r.table);
+        if (!mine.length)
+            continue;
+        trusts.push({ schema: f.schema, t: freshnessTrust(f.schema, await tableFreshness(timed, f.tool, f.schema, mine, maxDays), maxDays) });
+        const deleted = f.tables.filter((t) => mine.includes(t.table) && t.columns.some((c) => c.name === '_fivetran_deleted')).map((t) => `${f.schema}.${t.table}`);
+        if (deleted.length)
+            notes.push(`${deleted.join(', ')} keep${deleted.length === 1 ? 's' : ''} rows deleted in the source, marked _fivetran_deleted = true. Add WHERE NOT _fivetran_deleted to leave them out.`);
+    }
+    const stale = trusts.some((x) => x.t.status === 'stale');
+    const line = trusts.length ? `${trusts.map((x) => x.t.line.replace(` ${FRESHNESS_ONLY}`, '')).join(' ')} ${FRESHNESS_ONLY}` : FRESHNESS_ONLY;
+    return {
+        pipeline: schemas,
+        rows: clean.rows, rowCount: Math.min(rows.length, cap), truncated,
+        ...(clean.redacted ? { redacted: clean.redacted } : {}),
+        ...(notes.length ? { notes } : {}),
+        trust: { status: stale ? 'stale' : 'freshness_only', line, tables: trusts.flatMap((x) => x.t.tables.map((y) => ({ schema: x.schema, ...y }))) },
+    };
+}
+/** Tables and columns of a registered schema, personal columns left out. */
+export async function pipelineSchemaInfo(conn, tool, schema) {
+    const tables = await discoverTables(conn.query, tool, schema);
+    return tables.map((t) => ({
+        table: `${schema}.${t.table}`,
+        columns: t.columns.filter((c) => !c.personal).map((c) => `${c.name} ${c.type}`),
+        leftOut: t.columns.filter((c) => c.personal).length,
+    }));
+}
+/** Runs the query on the pipeline database when it names a registered schema; null when it names none. */
+// A hand-edited config.json could hold any string; only plain schema names are ever used.
+const valid = (list) => list.filter((p) => IDENT.test(p.schema) && PIPELINE_TOOLS.includes(p.tool));
+export async function queryNamedPipeline(sql, all, cap, maxDays) {
+    const registered = valid(all);
+    const named = registered.filter((p) => schemasIn(sql, [p.schema]).length);
+    if (!named.length)
+        return null;
+    if (new Set(named.map((p) => p.urlEnv)).size > 1)
+        throw new CliError('These schemas are in different pipeline databases, so one query cannot read them together.', 'Query one database at a time.', 'bad_value');
+    // Every registered schema in that database is checked, not only the ones the SQL text seems to name.
+    const sameDb = registered.filter((p) => p.urlEnv === named[0].urlEnv);
+    const conn = pipelineConn(named[0].urlEnv);
+    try {
+        return await pipelineQueryRun(conn, sameDb.map((p) => ({ schema: p.schema, tool: p.tool })), sql, cap, maxDays);
+    }
+    finally {
+        await conn.close().catch(() => undefined);
+    }
+}
+/** Every registered schema's tables and their non-personal columns, for an agent's schema listing. */
+export async function pipelineListing(registered) {
+    const out = {};
+    for (const p of valid(registered)) {
+        let conn;
+        try {
+            conn = pipelineConn(p.urlEnv);
+            for (const t of await pipelineSchemaInfo(conn, p.tool, p.schema))
+                out[t.table] = [...t.columns, `(${p.tool} table read in place: freshness checked only, not reconciled${t.leftOut ? `; ${t.leftOut} personal columns left out` : ''})`];
+        }
+        catch (e) {
+            out[`${p.schema}.*`] = [`(could not be read: ${e instanceof Error ? e.message : String(e)})`];
+        }
+        finally {
+            await conn?.close().catch(() => undefined);
+        }
+    }
+    return out;
+}
