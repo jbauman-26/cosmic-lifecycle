@@ -563,7 +563,7 @@ describe('0.14.0', () => {
     const { VERSION } = await import('../src/version.js')
     const { DOCS } = await import('../src/docs.js')
     // 0.14.1: was toBe('0.14.0'); 0.15.0: was a 0.14.x match. A version bump has to change it. package.json and the lock must still agree.
-    expect(VERSION).toMatch(/^0\.1[4-9]\.\d+$/)
+    expect(VERSION).toMatch(/^0\.(1[4-9]|2\d)\.\d+$/)
     expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe(VERSION)
     expect(readFileSync('CHANGELOG.md', 'utf8')).toMatch(/^## 0\.14\.0 \(2026-11-24\)/m)
     expect(DOCS.workspaces).toMatch(/unreferenced/)
@@ -592,7 +592,7 @@ describe('0.15.0', () => {
   it('is version 0.15.1 everywhere a version is written, and its changelog has no dash a person would not type', async () => {
     const { VERSION } = await import('../src/version.js')
     // 0.17.0: was toBe('0.15.1'); the exact version now lives in release-0170.test.ts.
-    expect(VERSION).toMatch(/^0\.1[5-9]\.\d+$/)
+    expect(VERSION).toMatch(/^0\.(1[5-9]|2\d)\.\d+$/)
     expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe(VERSION)
     const log = readFileSync('CHANGELOG.md', 'utf8')
     expect(log).toMatch(/^## 0\.15\.1 \(2026-11-25\)/m)

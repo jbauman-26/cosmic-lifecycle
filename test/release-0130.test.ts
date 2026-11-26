@@ -657,7 +657,7 @@ describe('docs and release', () => {
 
   it('is a 0.13 release, and the Cloud token is a secret like any other, with its own variable', () => {
     // 0.14.0: was /^0\.13\.\d+$/; a version bump has to change it. The token checks are untouched.
-    expect(VERSION).toMatch(/^0\.(1[3-9])\.\d+$/)
+    expect(VERSION).toMatch(/^0\.(1[3-9]|2\d)\.\d+$/)
     expect(SECRET_NAMES).toContain('cloud-token')
     expect(envName('cloud-token')).toBe('LIFECYCLE_CLOUD_TOKEN')
   })

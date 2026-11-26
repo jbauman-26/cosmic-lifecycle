@@ -51,6 +51,23 @@ async function recordRun(db: Db, source: string, fn: () => Promise<Omit<SourceRe
   }
 }
 
+// 0.20.0: remember which days a trailing sync pulled, so a period verdict can tell a day with no rows from a
+// day that was never pulled. A window that touches the stored one extends it; one that does not replaces it,
+// because the days between were never pulled. `replace` always replaces (a sync that deletes older rows).
+export async function recordWindow(tx: { query(sql: string, params?: unknown[]): Promise<unknown> }, source: string, metric: string, start: string, end: string, at: string, replace = false) {
+  await tx.query(
+    replace
+      ? `INSERT INTO meta_source_window VALUES ($1, $2, $3, $4, $5) ON CONFLICT (source, metric) DO UPDATE SET window_start = EXCLUDED.window_start, window_end = EXCLUDED.window_end, recorded_at = EXCLUDED.recorded_at`
+      : `INSERT INTO meta_source_window VALUES ($1, $2, $3, $4, $5) ON CONFLICT (source, metric) DO UPDATE SET
+         window_start = CASE WHEN EXCLUDED.window_start <= meta_source_window.window_end + 1 AND EXCLUDED.window_end + 1 >= meta_source_window.window_start
+           THEN LEAST(meta_source_window.window_start, EXCLUDED.window_start) ELSE EXCLUDED.window_start END,
+         window_end = CASE WHEN EXCLUDED.window_start <= meta_source_window.window_end + 1 AND EXCLUDED.window_end + 1 >= meta_source_window.window_start
+           THEN GREATEST(meta_source_window.window_end, EXCLUDED.window_end) ELSE EXCLUDED.window_end END,
+         recorded_at = EXCLUDED.recorded_at`,
+    [source, metric, start.slice(0, 10), end.slice(0, 10), at],
+  )
+}
+
 // Recomputes from the full order history inside one transaction, so a re-run
 // cannot double count and a failed run leaves yesterday's numbers in place.
 export async function writeShopify(db: Db, orders: RawOrder[]) {
@@ -289,11 +306,12 @@ export async function syncShopifyBulk(db: Db, deps: BulkDeps) {
   })
 }
 
-export async function syncGa4(db: Db, load: () => Promise<Ga4Day[]>) {
+export async function syncGa4(db: Db, load: () => Promise<Ga4Day[]>, window?: { start: string; end: string }) {
   return recordRun(db, 'ga4', async () => {
     const rows = await load()
     const at = now()
     await db.transaction(async (tx) => {
+      if (window) await recordWindow(tx, 'ga4', 'daily', window.start, window.end, at)
       for (const r of rows) {
         await tx.query(
           `INSERT INTO fact_ga4_daily VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (date, channel) DO UPDATE SET sessions = EXCLUDED.sessions, purchases = EXCLUDED.purchases, revenue = EXCLUDED.revenue, source_synced_at = EXCLUDED.source_synced_at`,
@@ -460,6 +478,8 @@ export async function syncMeta(db: Db, load: (since: string, until: string) => P
     const raw = await load(since, until)
     const { rows } = await writeMeta(db, raw, since, opts.currency ?? '', opts.account ?? '')
     await setTotal(db, 'meta', 'rows_pulled', raw.length)
+    // writeMeta deletes rows from another account, so the window is replaced, never extended.
+    await recordWindow(db, 'meta', 'daily', since, until, now(), true)
     return rows ? { status: 'ok' as const, rows } : { status: 'warning' as const, rows, detail: `Meta returned no campaign activity from ${since} to ${until}.` }
   })
 }

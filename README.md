@@ -137,6 +137,8 @@ A workspace with no source of truth connected still works: its numbers carry a l
 | `flow_totals` | Daily flow rows against Klaviyo's own totals |
 | `freshness` | How long ago each source synced |
 
+**Says which numbers can go in a client report.** `cosmic verdict --period 2026-10` reruns the checks, then lists each KPI for that month as reportable, with its value, or withheld, with the reason ("14 orders missing: 787 against 801") and what to do next. A month still running, a stale or partial sync, or a check that did not run holds the KPI back. Exit code 3 means something was held back.
+
 **Finds what to fix.** `cosmic audit flows` looks for missing core flows, flows that stopped sending, falling revenue per recipient, and high spam rates. Each finding comes with its evidence.
 
 **Ranks your flows.** `cosmic report revenue-per-flow` ranks flows by attributed revenue per recipient, next to your Shopify revenue.
