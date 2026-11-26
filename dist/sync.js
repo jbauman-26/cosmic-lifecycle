@@ -348,7 +348,7 @@ export async function writeStripe(db, charges, subs, today = now().slice(0, 10))
     });
     return { rows: daily.length + (s ? s.daily.length + s.mrr.length : 0), unpriced: s ? s.mrr.reduce((n, m) => n + m.unpricedItems, 0) : 0 };
 }
-export async function syncStripe(db, load) {
+export async function syncStripe(db, load, opts = {}) {
     return recordRun(db, 'stripe', async () => {
         const charges = await load.charges();
         const subs = await load.subscriptions();
@@ -362,7 +362,7 @@ export async function syncStripe(db, load) {
         if (subs)
             await setTotal(db, 'stripe', 'subscriptions_open', subs.filter((x) => x.status !== 'incomplete_expired' && !x.ended_at).length);
         const notes = [
-            subs ? null : 'This key cannot read subscriptions, so MRR and churn were skipped.',
+            subs ? null : opts.via ? `${opts.via} Subscriptions are not read in pipeline mode yet, so MRR and churn are skipped.` : 'This key cannot read subscriptions, so MRR and churn were skipped.',
             unpriced ? `${unpriced} subscription items use tiered or metered prices and are left out of MRR.` : null,
         ].filter(Boolean);
         return { status: notes.length ? 'warning' : 'ok', rows, detail: notes.length ? notes.join(' ') : undefined };

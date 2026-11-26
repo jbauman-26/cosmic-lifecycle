@@ -2,6 +2,26 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.19.0 (2026-11-25)
+
+Bring your own pipeline: read Stripe or Shopify from tables your own Fivetran or Airbyte already loads into your Postgres.
+
+### Added
+
+- **`cosmic connect pipeline --tool fivetran|airbyte --source stripe|shopify --schema NAME --url-env NAME`.** It checks the table is there and has the columns a total needs, counts the rows, notes when the loader last wrote, and saves the settings. The database URL stays in the named environment variable and is never written to config.json.
+- **`cosmic sync` reads those tables** through the same Stripe and Shopify sync code a native connection uses, so the daily tables, reconcile, every metric and the MCP server work unchanged. Only the needed columns are selected: never names, emails or addresses. Fivetran rows with `_fivetran_deleted` and Shopify test orders are left out.
+- The sync line says where the rows came from, what is not covered, and flags a loader that has not written for two days (status warning).
+- `sources list` shows "Stripe (through Fivetran tables in stripe)"; `doctor` counts a pipeline source of truth as connected; `disconnect stripe` forgets the pipeline settings too. Reconcile treats a pipeline source as connected.
+- A pipeline database that cannot be reached fails with `pipeline_unreachable` and a plain message, not an empty error.
+
+### Not covered yet
+
+- Stripe subscriptions (MRR and churn are skipped), Shopify's own order count (`orders_complete` is skipped), Fivetran Shopify refunds unless the table has `current_total_price`, BigQuery and Snowflake, and any source besides Stripe and Shopify.
+
+### What is proven and what is not
+
+- Column names come from Fivetran's dbt_stripe and dbt_shopify source models (github.com/fivetran/dbt_stripe, github.com/fivetran/dbt_shopify) and Airbyte's Stripe and Shopify streams. Tests build tables in those shapes on PGlite. An end-to-end run on a local Postgres 16 server with 200 Fivetran-shaped charges matched a direct SQL query exactly ($1,987.35 net, 187 successful charges) and reconcile passed 200 against 200. Not yet run on a real Fivetran or Airbyte load.
+
 ## 0.18.0 (2026-11-25)
 
 For anyone who markets something, not only stores, and a shorter command.

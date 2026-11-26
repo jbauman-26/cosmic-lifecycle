@@ -10,6 +10,7 @@ For anyone who markets something: founders and SaaS teams, marketers and freelan
 
 - **14 native sources:** Stripe, Google Analytics 4, HubSpot, Meta Ads, Google Ads, Microsoft Advertising, LinkedIn Ads, TikTok Ads, Pinterest Ads, Reddit Ads, Snapchat Ads, Google Merchant Center, Shopify and Klaviyo. Every connected source gets a freshness check, and the ones that overlap are checked against your source of truth (Stripe, Shopify or HubSpot).
 - **100 more in the warehouse catalog, with readiness shown for each:** 30 have connector code (such as Mailchimp, Brevo, Customer.io, Pipedrive, WooCommerce, BigCommerce, Zendesk, Freshdesk) and 70 are planned. `cosmic sources catalog` lists every one with its status.
+- **Your own pipeline:** already load Stripe or Shopify with Fivetran or Airbyte into your Postgres? `cosmic connect pipeline` reads those tables. See below.
 - **Anything else:** `cosmic sources import NAME --csv FILE` brings in daily totals from any tool.
 
 Only Shopify, Klaviyo and Stripe have synced against real accounts so far. Every other connector is tested against recorded answers. The full test record is under "Where this is today" below.
@@ -58,6 +59,26 @@ claude mcp add cosmic -- cosmic mcp
 ```
 
 Any other MCP client takes the same command: `cosmic mcp`. It starts before setup, so you can add it right after installing. `cosmic docs quickstart` (the same text as [llms.txt](llms.txt)) is the setup playbook your agent follows.
+
+## Already run Fivetran or Airbyte? Bring your own pipeline
+
+If a loader already copies Stripe or Shopify into your own Postgres, point the CLI at those tables instead of connecting the API again. The CLI only reads, takes only the columns a total needs (never names, emails or addresses), and feeds them into the same daily tables, so every check, metric and the MCP server work the same.
+
+```sh
+export PIPELINE_DATABASE_URL=postgres://user:password@host/db   # the database your loader writes to
+cosmic connect pipeline --tool fivetran --source stripe --schema stripe --url-env PIPELINE_DATABASE_URL
+cosmic sync
+cosmic reconcile
+```
+
+| Loader | Stripe | Shopify |
+|---|---|---|
+| Fivetran | `charge` table | `order` table; refunds are not subtracted unless the table has `current_total_price` |
+| Airbyte | `charges` stream | `orders` stream (`current_total_price` is used) |
+
+What it does not cover yet: Stripe subscriptions (so MRR and churn are skipped), Shopify's own order count (so the `orders_complete` check is skipped), BigQuery and Snowflake (Postgres only), and sources other than Stripe and Shopify. A loader that has not written for two days is flagged on the sync line. The URL stays in your environment variable; set it wherever `cosmic sync` runs, including the GitHub Actions secrets for `cosmic deploy`.
+
+Column names come from Fivetran's published dbt source models and Airbyte's Stripe and Shopify streams. Tested on tables built in that shape and on a local Postgres 16 server, not yet on a real Fivetran or Airbyte load.
 
 ## Same answer every time
 

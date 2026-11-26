@@ -50,6 +50,8 @@ import { defaultDays, metricCandidates } from './metrics.js'
 import { recordCustomQuery } from './query.js'
 import { basename } from 'node:path'
 import { addNote, notesFor, NOTES_RULE, readNotes, removeNote } from './notes.js'
+import { checkSettings, lastLoaded, loadCharges, loadOrders, pipelineQuery, type PipelineSettings, type PipelineSource, type PipelineTool } from './pipeline.js'
+import { syncFromPipeline } from './pipeline-sync.js'
 import { spawnSync } from 'node:child_process'
 import { saveArtifact, filesDir, listFiles, readFile, getFile, putFile, pullCloud } from './files.js'
 import { customTables, importCsv } from './custom-sources.js'
@@ -248,6 +250,37 @@ connect.command('stripe').description('Read-only: charges, refunds, subscription
   emit(format(), r, () => [`Connected to Stripe (${r.mode} mode)${r.subscriptions ? '' : '. This key cannot read subscriptions, so MRR is off.'}`, r.note, r.keyNote].filter(Boolean).join('\n'))
 }))
 
+// 0.19.0: bring your own pipeline. Stripe or Shopify tables a Fivetran or Airbyte load keeps in the person's own Postgres.
+connect.command('pipeline').description('Read Stripe or Shopify from tables your own Fivetran or Airbyte loads into your Postgres. Totals only; checks, metrics and MCP work the same')
+  .requiredOption('--tool <tool>', 'fivetran or airbyte')
+  .requiredOption('--source <source>', 'stripe or shopify')
+  .requiredOption('--schema <name>', 'the schema the loader writes to, such as stripe or shopify')
+  .requiredOption('--url-env <name>', 'environment variable holding the Postgres URL the loader writes to. Read only; never saved')
+  .action(write('connect pipeline', async (opts) => {
+  checkSettings(opts.tool, opts.source, opts.schema, opts.urlEnv)
+  const source = opts.source as PipelineSource, tool = opts.tool as PipelineTool
+  const config = readConfig()
+  if (config[source]) throw new CliError(`${source === 'stripe' ? 'Stripe' : 'Shopify'} is already connected directly. One source, one path.`, `cosmic disconnect ${source}, then connect the pipeline`, 'already_connected')
+  const conn = pipelineQuery(opts.urlEnv)
+  let rows = 0, loaded: string | null = null, refunds = true
+  try {
+    if (source === 'stripe') rows = (await loadCharges(conn.query, tool, opts.schema)).length
+    else { const o = await loadOrders(conn.query, tool, opts.schema); rows = o.orders.length; refunds = o.refundsSubtracted }
+    loaded = await lastLoaded(conn.query, tool, source, opts.schema)
+  } finally {
+    await conn.close().catch(() => undefined)
+  }
+  const settings: PipelineSettings = { tool, schema: opts.schema, urlEnv: opts.urlEnv, connectedAt: new Date().toISOString() }
+  writeConfig({ ...config, pipeline: { sources: { ...(config.pipeline?.sources ?? {}), [source]: settings } } })
+  const r = { source, ...settings, rows, lastLoaded: loaded, refundsSubtracted: source === 'shopify' ? refunds : undefined }
+  emit(format(), r, () => [
+    `Connected ${source === 'stripe' ? 'Stripe' : 'Shopify'} through ${tool === 'fivetran' ? 'Fivetran' : 'Airbyte'} tables in ${opts.schema}: ${rows} ${source === 'stripe' ? 'charges' : 'orders'} found${loaded ? `, last loaded ${loaded.slice(0, 16).replace('T', ' ')} UTC` : ''}.`,
+    source === 'shopify' && !refunds ? 'This loader keeps the order total at the time of the order, so refunds are not subtracted.' : '',
+    `The database URL stays in ${opts.urlEnv}; set it wherever cosmic sync runs.`,
+    'Next: cosmic sync',
+  ].filter(Boolean).join('\n'))
+}))
+
 connect.command('meta').description('Read-only: daily spend and results by campaign. No audiences, people or creative.').option('--account <id>', 'ad account id from Ads Manager').option('--token-env <name>', 'environment variable holding a system user token with ads_read').action(write('connect meta', async (opts) => {
   const r = await connectMeta(opts)
   emit(format(), r, () => `Connected to Meta ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: lifecycle sync`)
@@ -401,11 +434,13 @@ program.command('sync').description('Pull fresh totals from connected sources, t
   const tiktokToken = getSecret('tiktok-ads-access-token')
   const pinsSecret = getSecret('pinterest-ads-client-secret')
   const pinsRefresh = getSecret('pinterest-ads-refresh-token')
+  // 0.19.0: Stripe or Shopify from the person's own Fivetran or Airbyte tables, when not connected natively.
+  const pipe = (config.pipeline?.sources ?? {}) as Partial<Record<PipelineSource, PipelineSettings>>
   const chosen = chooseSources(only, {
-    shopify: Boolean(config.shopify && shopifySecret),
+    shopify: Boolean((config.shopify && shopifySecret) || pipe.shopify),
     klaviyo: Boolean(key),
     ga4: Boolean(config.ga4 && ga4Secret && ga4Refresh),
-    stripe: Boolean(config.stripe && stripeKey),
+    stripe: Boolean((config.stripe && stripeKey) || pipe.stripe),
     meta: Boolean(config.meta && metaToken),
     hubspot: Boolean(config.hubspot && hubspotToken),
     'google-ads': Boolean(config['google-ads'] && gadsSecret && gadsRefresh),
@@ -424,6 +459,10 @@ program.command('sync').description('Pull fresh totals from connected sources, t
     const results: SourceResult[] = []
     // Each source is its own run row, so one failing never hides another's result.
     for (const source of chosen) {
+      if ((source === 'stripe' || source === 'shopify') && pipe[source] && !config[source]) {
+        results.push(await syncFromPipeline(db, source, pipe[source]!))
+        continue
+      }
       if (source === 'shopify') {
         const { store, clientId } = config.shopify!
         let token: string | undefined
