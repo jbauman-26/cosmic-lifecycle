@@ -1,0 +1,39 @@
+{
+  "source": "https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-data-export-api",
+  "note": "Illustrative rows following the documented insight group shape (metricName plus information). The URL carrying an email is the case being tested.",
+  "resources": {
+    "insights": {
+      "response": [
+        {
+          "metricName": "Traffic",
+          "information": [
+            {
+              "totalSessionCount": "18422",
+              "totalBotSessionCount": "902",
+              "distinctUserCount": "15110",
+              "pagesPerSessionPercentage": 2.1
+            }
+          ]
+        },
+        {
+          "metricName": "Popular Pages",
+          "information": [
+            {
+              "url": "https://northfield.example/cart?email=priya@natarajan.example",
+              "visitsCount": "412"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "personal": [
+    "priya@natarajan.example"
+  ],
+  "kept": [
+    "Traffic",
+    "Popular Pages",
+    "18422",
+    "https://northfield.example/cart"
+  ]
+}

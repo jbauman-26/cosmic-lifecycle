@@ -1,0 +1,79 @@
+{
+  "source": "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/contacts/listcontacts",
+  "note": "Illustrative rows built from documented field names, not vendor sample records. City and region are kept inside a person on purpose (docs/PERSONAL-DATA.md rule 7), so they are asserted as kept, not stripped.",
+  "resources": {
+    "contacts": {
+      "response": {
+        "type": "list",
+        "data": [
+          {
+            "type": "contact",
+            "id": "63f1a2b4c5d6e7f8a9b0c1d2",
+            "workspace_id": "w1",
+            "external_id": "ext-11",
+            "role": "user",
+            "email": "priya@natarajan.example",
+            "phone": "+14155550142",
+            "name": "Priya Natarajan",
+            "avatar": "https://static.intercomassets.com/avatars/p.jpg",
+            "location": {
+              "type": "location",
+              "city": "Austin",
+              "region": "Texas",
+              "country": "United States"
+            },
+            "created_at": 1793000000,
+            "updated_at": 1793100000,
+            "signed_up_at": 1793000000,
+            "last_seen_at": 1793100000
+          },
+          {
+            "type": "contact",
+            "id": "74e2b3c5d6e7f8a9b0c1d2e3",
+            "workspace_id": "w1",
+            "external_id": "ext-12",
+            "role": "user",
+            "email": "sam.okafor@northfield.example",
+            "phone": "+14155550188",
+            "name": "Sam Okafor",
+            "avatar": "https://static.intercomassets.com/avatars/s.jpg",
+            "location": {
+              "type": "location",
+              "city": "Denver",
+              "region": "Colorado",
+              "country": "United States"
+            },
+            "created_at": 1793010000,
+            "updated_at": 1793110000,
+            "signed_up_at": 1793010000,
+            "last_seen_at": 1793110000
+          }
+        ],
+        "total_count": 2,
+        "pages": {
+          "type": "pages",
+          "next": null,
+          "page": 1,
+          "per_page": 150,
+          "total_pages": 1
+        }
+      }
+    }
+  },
+  "personal": [
+    "priya@natarajan.example",
+    "Priya Natarajan",
+    "+14155550142",
+    "sam.okafor@northfield.example",
+    "Sam Okafor",
+    "+14155550188"
+  ],
+  "kept": [
+    "\"id\": \"63f1a2b4c5d6e7f8a9b0c1d2\"",
+    "user",
+    "1793000000",
+    "\"role\": \"user\"",
+    "Austin",
+    "Texas"
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "slug": "kit",
+  "name": "Kit (formerly ConvertKit)",
+  "docs": "https://developers.kit.com/api-reference/subscribers/list-subscribers",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "V4 API key",
+      "help": "Kit, Settings, then Developer, then API keys, and create a V4 key. Copy it when it is shown, because Kit does not show it again. The key carries the account's own access, so use an account whose role only needs to read subscribers. This connector only sends GET requests."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://api.kit.com/v4/",
+      "headers": {
+        "Accept": "application/json"
+      },
+      "auth": {
+        "type": "api_key",
+        "name": "X-Kit-Api-Key",
+        "api_key": "{secret:api_key}",
+        "location": "header"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "subscribers",
+        "endpoint": {
+          "path": "subscribers",
+          "params": {
+            "per_page": 500
+          },
+          "data_selector": "subscribers",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "pagination.end_cursor",
+            "cursor_param": "after"
+          }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developers.kit.com/api-reference/subscribers/list-subscribers",
+    "https://help.kit.com/en/articles/9902901-kit-api-overview"
+  ],
+  "notes": "V4 API. Auth is the X-Kit-Api-Key header, confirmed in the endpoint reference. Paging is cursor based: the request takes after (next page) or before (previous page), and the body returns pagination with start_cursor, end_cursor and per_page, so the end_cursor is sent back as after. The documented example shows per_page 500. One resource is built: subscriber status, created and updated dates. Subscriber-level custom fields were left out because their shape was not read. The docs state created_after and created_before plus updated_after and updated_before exist, so an incremental cursor is possible later; it is not set here because the exact interaction between those filters and the cursor was not confirmed. Fixture values are illustrative, built from documented field names."
+}

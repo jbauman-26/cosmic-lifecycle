@@ -107,6 +107,44 @@ EXTRA = [
         "docs": "https://developer.mixpanel.com/reference/overview",
         "notes": "Planned. Mixpanel's raw export streams one event per line, not a JSON list, and carries person properties. Its segmentation query fits better and needs a runner change. CSV import of daily signups meanwhile.",
     },
+    # 0.22.0: added on 2026-11-26 at Jake's request, for marketers whose stack is not only Shopify.
+    {
+        "slug": "activecampaign", "name": "ActiveCampaign", "category": "email-sms",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://developers.activecampaign.com/reference/list-all-contacts",
+    },
+    {
+        "slug": "kit", "name": "Kit (formerly ConvertKit)", "category": "email-sms",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://developers.kit.com/api-reference/subscribers/list-subscribers",
+    },
+    {
+        "slug": "beehiiv", "name": "beehiiv", "category": "email-sms",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://developers.beehiiv.com/api-reference/subscriptions/index",
+    },
+    {
+        "slug": "typeform", "name": "Typeform", "category": "surveys",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://www.typeform.com/developers/responses/reference/retrieve-responses/",
+        "notes": "Planned. One responses call returns at most 1000 rows, the docs say to narrow with since/until or before/after above that, and the page token comes from the last row, which the runner's pagers cannot express. A full refresh would silently truncate. CSV import meanwhile.",
+    },
+    {
+        "slug": "amplitude", "name": "Amplitude", "category": "product-analytics",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://amplitude.com/docs/apis/analytics/export",
+        "notes": "Planned. Event data leaves through the Export API: a date range is requested and the response is one file with a 6 GB cap, and the data lands up to two hours after upload. That needs a file export runner, not a REST list spec. CSV import of daily counts meanwhile.",
+    },
+    {
+        "slug": "intercom", "name": "Intercom", "category": "support",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/contacts/listcontacts",
+    },
+    {
+        "slug": "calendly", "name": "Calendly", "category": "scheduling",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://developer.calendly.com/api-docs/calendly-api/scheduled-events/list-scheduled-events",
+    },
 ]
 
 entries = []

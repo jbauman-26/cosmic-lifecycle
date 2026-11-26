@@ -1,0 +1,64 @@
+{
+  "source": "https://developers.beehiiv.com/api-reference/subscriptions/index",
+  "note": "Illustrative rows built from documented field names, not vendor sample records.",
+  "resources": {
+    "subscriptions": {
+      "response": {
+        "data": [
+          {
+            "id": "sub_1",
+            "email": "priya@natarajan.example",
+            "status": "active",
+            "created": 1793000000,
+            "subscription_tier": "premium",
+            "utm_source": "newsletter"
+          },
+          {
+            "id": "sub_2",
+            "email": "sam.okafor@northfield.example",
+            "status": "active",
+            "created": 1793100000,
+            "subscription_tier": "free",
+            "utm_source": "referral"
+          }
+        ],
+        "has_more": false,
+        "next_cursor": null
+      }
+    },
+    "posts": {
+      "response": {
+        "data": [
+          {
+            "id": "post_1",
+            "title": "The retention reset",
+            "status": "confirmed",
+            "publish_date": 1793050000,
+            "displayed_date": 1793050000,
+            "audience": "free"
+          },
+          {
+            "id": "post_2",
+            "title": "Margins before media",
+            "status": "confirmed",
+            "publish_date": 1793150000,
+            "displayed_date": 1793150000,
+            "audience": "premium"
+          }
+        ],
+        "has_more": false,
+        "next_cursor": null
+      }
+    }
+  },
+  "personal": [
+    "priya@natarajan.example",
+    "sam.okafor@northfield.example"
+  ],
+  "kept": [
+    "\"id\": \"sub_1\"",
+    "premium",
+    "The retention reset",
+    "1793000000"
+  ]
+}

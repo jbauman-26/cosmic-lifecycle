@@ -1,0 +1,49 @@
+{
+  "slug": "microsoft-clarity",
+  "name": "Microsoft Clarity",
+  "docs": "https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-data-export-api",
+  "credentials": [
+    {
+      "name": "api_token",
+      "label": "Data Export API token",
+      "help": "In Clarity open your project, then Settings, then Data Export, then Generate new API token, and copy it when shown. The token reads aggregate insights for that project only. This connector only sends GET requests."
+    }
+  ],
+  "params": [
+    {
+      "name": "num_days",
+      "label": "Days of data to ask for (1, 2 or 3)",
+      "example": "3"
+    }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://www.clarity.ms/export-data/api/v1/",
+      "headers": {
+        "Accept": "application/json"
+      },
+      "auth": {
+        "type": "bearer",
+        "token": "{secret:api_token}"
+      }
+    },
+    "resource_defaults": {
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "insights",
+        "endpoint": {
+          "path": "project-live-insights",
+          "params": {
+            "numOfDays": "{param:num_days}"
+          }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-data-export-api"
+  ],
+  "notes": "Single documented endpoint: GET https://www.clarity.ms/export-data/api/v1/project-live-insights, with numOfDays limited to 1, 2 or 3 for the last 24, 48 or 72 hours. Auth is Authorization Bearer with a token generated under Settings then Data Export. Auth is read only: the page exposes generated aggregate insights such as traffic, popular pages and page titles, not raw sessions. Only one resource exists, so this connector returns the insight groups as rows rather than several tables, and there is no cursor or primary key; it is a full refresh. Because insights are aggregates, the main personal-data risk is a page URL that contains an email or phone number, which the shared rules replace with [removed] inside kept text; the fixture tests exactly that."
+}

@@ -1,0 +1,96 @@
+{
+  "slug": "activecampaign",
+  "name": "ActiveCampaign",
+  "docs": "https://developers.activecampaign.com/reference/list-all-contacts",
+  "credentials": [
+    {
+      "name": "api_key",
+      "label": "API key",
+      "help": "In ActiveCampaign open Settings, then the Developer tab, and copy the API key shown for your user. Each user has their own key and the key carries that user's permissions, so use a user whose role only needs to view contacts and automations. This connector only sends GET requests."
+    }
+  ],
+  "params": [
+    {
+      "name": "account",
+      "label": "ActiveCampaign account name (the part before .api-us1.com in the API URL)",
+      "example": "acme"
+    }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://{param:account}.api-us1.com/api/3/",
+      "headers": {
+        "Accept": "application/json"
+      },
+      "auth": {
+        "type": "api_key",
+        "name": "Api-Token",
+        "api_key": "{secret:api_key}",
+        "location": "header"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "contacts",
+        "endpoint": {
+          "path": "contacts",
+          "params": {
+            "limit": 100
+          },
+          "data_selector": "contacts",
+          "paginator": {
+            "type": "offset",
+            "limit": 100,
+            "offset": 0,
+            "total_path": "meta.total"
+          }
+        }
+      },
+      {
+        "name": "automations",
+        "endpoint": {
+          "path": "automations",
+          "params": {
+            "limit": 100
+          },
+          "data_selector": "automations",
+          "paginator": {
+            "type": "offset",
+            "limit": 100,
+            "offset": 0,
+            "total_path": "meta.total"
+          }
+        }
+      },
+      {
+        "name": "accounts",
+        "endpoint": {
+          "path": "accounts",
+          "params": {
+            "limit": 100
+          },
+          "data_selector": "accounts",
+          "paginator": {
+            "type": "offset",
+            "limit": 100,
+            "offset": 0,
+            "total_path": "meta.total"
+          }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developers.activecampaign.com/reference/list-all-contacts",
+    "https://developers.activecampaign.com/reference/list-all-automations",
+    "https://developers.activecampaign.com/reference/list-all-accounts",
+    "https://developers.activecampaign.com/reference/url",
+    "https://developers.activecampaign.com/reference/authentication",
+    "https://developers.activecampaign.com/reference/pagination"
+  ],
+  "notes": "Base URL is per account, https://<account>.api-us1.com/api/3/, confirmed on the Base URL page. Auth is the Api-Token header and the page says the key is found under Settings then the Developer tab. Collections page with limit (default 20, max 100) and zero-based offset, and the response carries the total in meta.total, so the offset pager stops on total. Every resource is a full refresh merged on id: the contacts page documents filters[created_after] and id_greater for narrowing, but the exact updated-since parameter and its timestamp field were not confirmed on the page, so no incremental cursor was set. Response shape for contacts (contacts plus meta with total, limit and offset) was read from the list-all-contacts reference. Automations and accounts are the documented collection endpoints from the docs index; their individual response shapes were not re-read, and their data_selector uses the collection name the same way contacts does. Rate limits are documented on a separate page that was not read during this pass, so no number is asserted here. Sample values in the fixture are illustrative, built from documented field names, not copied vendor records."
+}
