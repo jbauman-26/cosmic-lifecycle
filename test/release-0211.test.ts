@@ -20,7 +20,8 @@ const lastMonth = () => {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString().slice(0, 7)
 }
 
-describe('first run, from the UX-99 audit', () => {
+// Every case starts real CLI processes, which are slow when the full suite runs in parallel.
+describe('first run, from the UX-99 audit', { timeout: 60_000 }, () => {
   it('init with no type says it set up a store, how to change that, and points at Shopify, not Klaviyo', () => {
     const r = cosmic(fresh(), 'init')
     expect(r.out).toContain('Ready. This workspace is set up as a Shopify store, the default.')
@@ -135,5 +136,5 @@ describe('first run, from the UX-99 audit', () => {
     const home = fresh()
     cosmic(home, 'init', '--type', 'saas')
     expect(cosmic(home, 'demo').out.trimEnd().endsWith('Next, on your own numbers: cosmic verdict')).toBe(true)
-  }, 60_000) // four demo runs; slow under a full parallel suite
+  })
 })
