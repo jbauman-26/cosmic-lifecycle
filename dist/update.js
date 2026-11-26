@@ -55,4 +55,4 @@ export async function checkForUpdate(opts = {}) {
     }
 }
 // There is no public download link. The steps live in the built-in docs.
-export const UPDATE_HINT = 'update the Cosmic AI app, or see lifecycle docs quickstart';
+export const UPDATE_HINT = 'update the Cosmic AI app, or see cosmic docs quickstart';

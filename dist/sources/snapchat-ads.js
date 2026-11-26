@@ -49,7 +49,7 @@ export function midnight(date, timezone) {
 // Splits since..until (both included) into windows of at most 31 days, each [start, end) at local midnights.
 export function windows(since, until, timezone) {
     if (!DATE.test(since) || !DATE.test(until))
-        throw new CliError('Dates must be YYYY-MM-DD.', 'lifecycle sync', 'bad_value');
+        throw new CliError('Dates must be YYYY-MM-DD.', 'cosmic sync', 'bad_value');
     const out = [];
     for (let from = since; from <= until; from = addDays(from, MAX_DAYS)) {
         const last = addDays(from, MAX_DAYS - 1) < until ? addDays(from, MAX_DAYS - 1) : until;
@@ -86,7 +86,7 @@ export function toSnapDaily(campaigns, names, timezone, since, until) {
     return out;
 }
 export async function snapAccessToken(clientId, clientSecret, refreshToken, fetcher = fetchJson) {
-    const rejected = () => new CliError('Snapchat rejected the saved Snapchat Ads sign-in.', 'Sign in with Snapchat again for a new refresh token, then lifecycle connect snapchat-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME', 'key_rejected');
+    const rejected = () => new CliError('Snapchat rejected the saved Snapchat Ads sign-in.', 'Sign in with Snapchat again for a new refresh token, then cosmic connect snapchat-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME', 'key_rejected');
     const body = await fetcher(TOKEN_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -115,16 +115,16 @@ function explain(e) {
         const { code, message } = snapError(e.body);
         const detail = message ? `: ${message}` : '.';
         if (e.status === 401)
-            throw new CliError(`Snapchat Ads refused the sign-in${detail}`, 'Sign in with Snapchat again, then lifecycle connect snapchat-ads', 'key_rejected');
+            throw new CliError(`Snapchat Ads refused the sign-in${detail}`, 'Sign in with Snapchat again, then cosmic connect snapchat-ads', 'key_rejected');
         if (e.status === 403 || code === 'E3002')
             throw new CliError(`The signed-in Snapchat account cannot read that ad account${detail}`, 'Ask an organization admin for a role on the ad account that can see reports, or sign in as a member who has one.', 'snapchat_ads_permission');
         if (e.status === 404 || code === 'E3003')
-            throw new CliError(`Snapchat Ads has no ad account with that id${detail}`, 'Check the id in Snapchat Ads Manager, then lifecycle connect snapchat-ads --account ID', 'snapchat_ads_account');
+            throw new CliError(`Snapchat Ads has no ad account with that id${detail}`, 'Check the id in Snapchat Ads Manager, then cosmic connect snapchat-ads --account ID', 'snapchat_ads_account');
         if (e.status === 429)
-            throw new CliError('Snapchat Ads is rate limiting this app.', 'Wait a minute, then run lifecycle sync --only snapchat-ads again.', 'rate_limited');
+            throw new CliError('Snapchat Ads is rate limiting this app.', 'Wait a minute, then run cosmic sync --only snapchat-ads again.', 'rate_limited');
         if (code === 'E9001')
-            throw new CliError('Snapchat said the report was too large to send in one answer.', 'Lower metrics.default_days, then run lifecycle sync --only snapchat-ads again. If it repeats, report it: lifecycle feedback', 'snapchat_ads_error');
-        throw new CliError(`Snapchat Ads answered with status ${e.status}${detail}`, 'Run the command again, then lifecycle doctor.', 'snapchat_ads_error');
+            throw new CliError('Snapchat said the report was too large to send in one answer.', 'Lower metrics.default_days, then run cosmic sync --only snapchat-ads again. If it repeats, report it: cosmic feedback', 'snapchat_ads_error');
+        throw new CliError(`Snapchat Ads answered with status ${e.status}${detail}`, 'Run the command again, then cosmic doctor.', 'snapchat_ads_error');
     }
     throw e;
 }
@@ -160,17 +160,17 @@ export class SnapchatAds {
             if (!next || typeof next !== 'string' || seen.has(next))
                 return out;
             if (!next.startsWith(HOST))
-                throw new CliError('Snapchat Ads sent a next page on another host.', 'Run lifecycle sync --only snapchat-ads again. If it repeats, report it: lifecycle feedback', 'snapchat_ads_error');
+                throw new CliError('Snapchat Ads sent a next page on another host.', 'Run cosmic sync --only snapchat-ads again. If it repeats, report it: cosmic feedback', 'snapchat_ads_error');
             url = next;
         }
-        throw new CliError('Snapchat Ads kept sending pages past 1,000.', 'Run lifecycle sync --only snapchat-ads again. If it repeats, report it: lifecycle feedback', 'snapchat_ads_error');
+        throw new CliError('Snapchat Ads kept sending pages past 1,000.', 'Run cosmic sync --only snapchat-ads again. If it repeats, report it: cosmic feedback', 'snapchat_ads_error');
     }
     // Proves the sign-in can read this account before anything is saved.
     async check() {
         const body = await this.get(`${API}/adaccounts/${this.account}`, 'Snapchat Ads account check');
         const a = body?.adaccounts?.[0]?.adaccount;
         if (!a)
-            throw new CliError('Snapchat Ads has no ad account with that id.', 'Check the id in Snapchat Ads Manager, then lifecycle connect snapchat-ads --account ID', 'snapchat_ads_account');
+            throw new CliError('Snapchat Ads has no ad account with that id.', 'Check the id in Snapchat Ads Manager, then cosmic connect snapchat-ads --account ID', 'snapchat_ads_account');
         return { account: this.account, name: String(a.name ?? ''), currency: String(a.currency ?? '').toUpperCase(), timezone: String(a.timezone ?? ''), organizationId: String(a.organization_id ?? '') };
     }
     async campaignNames() {

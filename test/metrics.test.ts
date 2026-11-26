@@ -115,12 +115,12 @@ describe('source catalog and setup prompts', () => {
     expect(r[0]).toMatchObject({ slug: 'klaviyo', connected: true, lastStatus: 'ok', next: null })
     expect(r[1]).toMatchObject({ slug: 'shopify', connected: false })
     expect(r[1]!.next).toMatch(/connect shopify/)
-    expect((await sourceStatus(null, () => false, null))[0]!.next).toBe('lifecycle init')
+    expect((await sourceStatus(null, () => false, null))[0]!.next).toBe('cosmic init')
   })
 
   it('builds a paste-ready prompt that never asks for a key in chat', () => {
     const p = kitPrompt({ name: 'flow-audit', title: 'Flow audit', needs: ['klaviyo'] })
-    expect(p).toContain('lifecycle kits add flow-audit')
+    expect(p).toContain('cosmic kits add flow-audit')
     expect(p).toContain(QUICKSTART_COMMAND)
     // The repo is private: no link that a reader cannot open.
     expect(p).not.toMatch(/https?:\/\//)

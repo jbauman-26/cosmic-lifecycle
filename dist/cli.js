@@ -5,7 +5,7 @@ import { init } from './commands/init.js';
 import { connectGa4, connectGoogleAds, connectHubspot, connectKlaviyo, connectLinkedinAds, connectMerchantCenter, connectMeta, connectMicrosoftAds, connectPinterestAds, connectRedditAds, connectShopify, connectSnapchatAds, connectStripe, connectTiktokAds } from './commands/connect.js';
 import { doctor } from './commands/doctor.js';
 import { openDb, migrate } from './db.js';
-import { readConfig, settingValue, writeConfig } from './config.js';
+import { readConfig, settingValue, writeConfig, removePipelineSchema } from './config.js';
 import { getSecret, getSourceSecret, keepRotated } from './secrets.js';
 import { CliError } from './errors.js';
 import { changedSinceQuery, fetchOrderCount, fetchOrders, shopifyToken } from './sources/shopify.js';
@@ -13,6 +13,7 @@ import { keyer, newCustomerKey, plan as shopifyPlan, readSyncState } from './sho
 import { fetchGa4Daily, ga4AccessToken } from './sources/ga4.js';
 import { reconcile } from './reconcile.js';
 import { verdictFor, verdictExit, formatVerdict, parsePeriod } from './verdict.js';
+import { checkSchemaSettings, discoverTables, pipelineConn, pipelineSchemaInfo, queryNamedPipeline, tableFreshness, freshnessTrust } from './pipeline-tables.js';
 import { syncStripeReport } from './stripe-report.js';
 import { Klaviyo } from './sources/klaviyo.js';
 import { Stripe } from './sources/stripe.js';
@@ -28,7 +29,7 @@ import { PinterestAds, pinterestAccessToken } from './sources/pinterest-ads.js';
 import { HubSpot } from './sources/hubspot.js';
 import { exportProgress, syncGa4, syncGoogleAds, syncHubspot, syncKlaviyo, syncLinkedinAds, syncMerchantCenter, syncMeta, syncMicrosoftAds, syncPinterestAds, syncRedditAds, syncShopify, syncShopifyBulk, syncShopifyChanges, syncSnapchatAds, syncStripe, syncTiktokAds } from './sync.js';
 import { shopifyGql } from './sources/shopify-bulk.js';
-import { runQuery } from './query.js';
+import { runQuery, rowCap } from './query.js';
 import { PUBLIC_TABLES } from './schema.js';
 import { VERSION } from './version.js';
 import { DOCS } from './docs.js';
@@ -36,7 +37,7 @@ import { addKit, ensureRegistry, listKits, searchKits, showKit, validateRegistry
 import { accountSkillFiles, assertSlug, readSkillDir, skillsStatus, syncSkills, uninstallSkills } from './skills.js';
 import { feedbackUrl, openUrl } from './feedback.js';
 import { assertPack, deleteMetric, describeMetric, formatValue, listAllMetrics, runMetric, saveMetric, UNITS } from './metrics.js';
-import { ALL_NATIVE, CATALOG, CUSTOM_SOURCE_NOTE, kitPrompt, sourceStatus } from './sources-catalog.js';
+import { ALL_NATIVE, CATALOG, CUSTOM_SOURCE_NOTE, EASY_SETUP, kitPrompt, sourceStatus } from './sources-catalog.js';
 import { startMcp } from './mcp.js';
 import { DEMO_TYPES, demoFor, runDemo, runTypeDemo } from './demo.js';
 import { deploy, deployLogs, deployPlan, deployRun, deployRunById, deployStatus, followRun, warehouseSecrets, writeProject } from './deploy.js';
@@ -79,7 +80,8 @@ import { pickType } from './commands/init.js';
 import { configPath, workspaceName, workspacesDir } from './paths.js';
 import { existsSync, readdirSync } from 'node:fs';
 // 0.18.0: `cosmic` is the short name; `lifecycle` and `cosmic-lifecycle` keep working. Help shows the name you typed.
-const program = new Command(/(^|[\\/])cosmic(\.js)?$/.test(process.argv[1] ?? '') ? 'cosmic' : 'lifecycle')
+// 0.21.0: help says cosmic, unless the person typed lifecycle.
+const program = new Command(/(^|[\\/])lifecycle$/.test(process.argv[1] ?? '') ? 'lifecycle' : 'cosmic')
     .description('Cosmic CLI: your marketing data, ready for your AI agent. Connects your ads, analytics, payments, email and CRM tools to a database you own, checks the numbers against your source of truth, and puts a trust line on every one. Works with Claude Code, Cursor and Codex over MCP. For founders, marketers, creators, agencies and stores. Free, no account. Read-only. Nothing sends.')
     .version(VERSION)
     .option('--format <format>', 'text or json', 'text')
@@ -95,6 +97,17 @@ const program = new Command(/(^|[\\/])cosmic(\.js)?$/.test(process.argv[1] ?? ''
     catch (e) {
         emitError(cmd.opts().format === 'json' ? 'json' : 'text', e);
         process.exit(1);
+    }
+});
+// 0.21.0: only sources that can be connected today. A warehouse source still marked planned (PostHog, say) is not suggested.
+const connectable = (slugs) => slugs.filter((slug) => {
+    if (ALL_NATIVE.some((s) => s.slug === slug))
+        return true;
+    try {
+        return findSource(slug).readiness !== 'planned';
+    }
+    catch {
+        return false;
     }
 });
 const format = () => (program.opts().format === 'json' ? 'json' : 'text');
@@ -133,7 +146,7 @@ const migrateIfFree = async (db, name) => {
         lock();
     }
 };
-const CLOUD_FLAG = 'ask Cosmic Cloud instead of this machine. Needs lifecycle login';
+const CLOUD_FLAG = 'ask Cosmic Cloud instead of this machine. Needs cosmic login';
 const clock = (iso) => (iso ? iso.slice(0, 16).replace('T', ' ') : 'never');
 // Cosmic Cloud: sign in with a store token, then --cloud on a read command asks Cloud.
 program.command('login').description('Sign this machine in to Cosmic Cloud with a workspace token (Cloud calls it a store token). The token is read from an environment variable and is never printed')
@@ -141,10 +154,10 @@ program.command('login').description('Sign this machine in to Cosmic Cloud with 
     .option('--token-env <VAR>', 'environment variable holding the token from Cosmic Cloud, Settings, Mac app access')
     .action(run(async (opts) => {
     if (!opts.tokenEnv)
-        throw new CliError('Which variable holds the Cosmic Cloud token?', 'export COSMIC_CLOUD_TOKEN=..., then lifecycle login --token-env COSMIC_CLOUD_TOKEN', 'missing_secret');
+        throw new CliError('Which variable holds the Cosmic Cloud token?', 'export COSMIC_CLOUD_TOKEN=..., then cosmic login --token-env COSMIC_CLOUD_TOKEN', 'missing_secret');
     const token = process.env[opts.tokenEnv];
     if (!token)
-        throw new CliError(`${opts.tokenEnv} is empty.`, `export ${opts.tokenEnv}=..., then run lifecycle login again. Never paste the token into a chat.`, 'missing_secret');
+        throw new CliError(`${opts.tokenEnv} is empty.`, `export ${opts.tokenEnv}=..., then run cosmic login again. Never paste the token into a chat.`, 'missing_secret');
     const v = await verifyLogin(opts.url ?? cloudUrl().url, token);
     let tokenStorage = 'keychain';
     try {
@@ -157,7 +170,7 @@ program.command('login').description('Sign this machine in to Cosmic Cloud with 
     }
     setSetting('cloud.url', v.url);
     const note = tokenStorage === 'environment' ? `There is no keychain here, so the token was not saved: keep it in ${CLOUD_TOKEN_ENV}.` : null;
-    emit(format(), { loggedIn: true, url: v.url, store: v.store, connections: v.connections, tokenStorage, tokenEnv: tokenStorage === 'environment' ? CLOUD_TOKEN_ENV : null, note }, () => [`Logged in to Cosmic Cloud. Store: ${v.store.name}`, `Address: ${v.url}`, note ?? 'The token is in the keychain.', 'Next: lifecycle cloud status'].join('\n'));
+    emit(format(), { loggedIn: true, url: v.url, store: v.store, connections: v.connections, tokenStorage, tokenEnv: tokenStorage === 'environment' ? CLOUD_TOKEN_ENV : null, note }, () => [`Logged in to Cosmic Cloud. Store: ${v.store.name}`, `Address: ${v.url}`, note ?? 'The token is in the keychain.', 'Next: cosmic cloud status'].join('\n'));
 }));
 program.command('logout').description('Forget the Cosmic Cloud token and address on this machine').action(run(async () => {
     const removed = deleteSecret('cloud-token').removed;
@@ -177,8 +190,8 @@ cloud.command('status').description('Whether this machine is logged in to Cosmic
     const tokenSource = cloudTokenSource();
     // A token with no address the owner chose is not logged in: it would not be sent anywhere.
     if (tokenSource === 'missing' || urlSource === 'default') {
-        const note = tokenSource === 'missing' ? null : `A token is set, but no Cloud address is saved, so it is not used. Run lifecycle login again, or set ${CLOUD_URL_ENV}.`;
-        emit(format(), { loggedIn: false, url, urlSource, tokenSource, note }, () => [`Not logged in to Cosmic Cloud.`, note, `Next: lifecycle login --token-env YOUR_VAR`].filter(Boolean).join('\n'));
+        const note = tokenSource === 'missing' ? null : `A token is set, but no Cloud address is saved, so it is not used. Run cosmic login again, or set ${CLOUD_URL_ENV}.`;
+        emit(format(), { loggedIn: false, url, urlSource, tokenSource, note }, () => [`Not logged in to Cosmic Cloud.`, note, `Next: cosmic login --token-env YOUR_VAR`].filter(Boolean).join('\n'));
         return;
     }
     try {
@@ -210,15 +223,15 @@ program.command('init').description('Set up the database and say what kind of bu
     const t = TYPES[r.type];
     const first = t.sources[0];
     emit(format(), r, () => r.type === 'shopify' && r.reference === 'shopify'
-        ? `Ready. Database: ${r.database}\nNext: lifecycle connect klaviyo --key-env NAME`
-        : [`Ready. Database: ${r.database}. Workspace: ${t.title}.`, `Source of truth: ${REFERENCE_NAME[r.reference]}. ${t.referenceWhy}`, `Sources most ${t.title.toLowerCase()} workspaces connect: ${t.sources.join(', ')}.`, `Next: ${ALL_NATIVE.find((s) => s.slug === first)?.connect ?? `lifecycle warehouse show ${first}`}`].join('\n'));
+        ? `Ready. Database: ${r.database}\nNext: cosmic connect klaviyo --key-env NAME\n${EASY_SETUP}`
+        : [`Ready. Database: ${r.database}. Workspace: ${t.title}.`, `Source of truth: ${REFERENCE_NAME[r.reference]}. ${t.referenceWhy}`, `Sources most ${t.title.toLowerCase()} workspaces connect: ${connectable(t.sources).join(', ')}.`, `Next: ${ALL_NATIVE.find((s) => s.slug === first)?.connect ?? `cosmic warehouse show ${first}`}`, EASY_SETUP].join('\n'));
 }));
 const workspaceCmd = program.command('workspace').description('What kind of business this workspace is, its source of truth, and named workspaces');
 workspaceCmd.command('show').description('Type, source of truth, metric pack and the sources this type usually connects').action(run(async () => {
     const w = readWorkspace();
     const t = TYPES[w.type];
-    const out = { name: workspaceName() ?? 'default', type: w.type, title: t.title, reference: w.reference, referenceSet: w.referenceSet, referenceWhy: t.referenceWhy, sources: t.sources, pack: w.type };
-    emit(format(), out, () => [`Workspace: ${out.name} (${t.title})`, `Source of truth: ${REFERENCE_NAME[w.reference]}${w.referenceSet ? ' (set by hand)' : ''}. ${t.referenceWhy}`, `Usual sources: ${t.sources.join(', ')}`, `Metrics: lifecycle metrics list --pack ${w.type}`].join('\n'));
+    const out = { name: workspaceName() ?? 'default', type: w.type, title: t.title, reference: w.reference, referenceSet: w.referenceSet, referenceWhy: t.referenceWhy, sources: connectable(t.sources), pack: w.type };
+    emit(format(), out, () => [`Workspace: ${out.name} (${t.title})`, `Source of truth: ${REFERENCE_NAME[w.reference]}${w.referenceSet ? ' (set by hand)' : ''}. ${t.referenceWhy}`, `Usual sources: ${t.sources.join(', ')}`, `Metrics: cosmic metrics list --pack ${w.type}`].join('\n'));
 }));
 workspaceCmd.command('list').description('Named workspaces on this machine, such as one per agency client').action(run(async () => {
     const dir = workspacesDir();
@@ -237,7 +250,7 @@ workspaceCmd.command('list').description('Named workspaces on this machine, such
                 process.env.LIFECYCLE_WORKSPACE = prev;
         }
     });
-    emit(format(), { current: workspaceName() ?? 'default', workspaces: list }, () => (list.length ? list.map((w) => `${w.name}  ${w.type}, checked against ${REFERENCE_NAME[w.reference]}`).join('\n') : 'No named workspaces. Make one with: lifecycle --workspace NAME init --type agency'));
+    emit(format(), { current: workspaceName() ?? 'default', workspaces: list }, () => (list.length ? list.map((w) => `${w.name}  ${w.type}, checked against ${REFERENCE_NAME[w.reference]}`).join('\n') : 'No named workspaces. Make one with: cosmic --workspace NAME init --type agency'));
 }));
 const connect = program.command('connect').description('Connect a data source');
 connect.command('klaviyo').option('--key-env <name>', 'environment variable holding a read-only private key').action(write('connect klaviyo', async (opts) => {
@@ -257,12 +270,43 @@ connect.command('stripe').description('Read-only: charges, refunds, subscription
     emit(format(), r, () => [`Connected to Stripe (${r.mode} mode)${r.subscriptions ? '' : '. This key cannot read subscriptions, so MRR is off.'}`, r.note, r.keyNote].filter(Boolean).join('\n'));
 }));
 // 0.19.0: bring your own pipeline. Stripe or Shopify tables a Fivetran or Airbyte load keeps in the person's own Postgres.
-connect.command('pipeline').description('Read Stripe or Shopify from tables your own Fivetran or Airbyte loads into your Postgres. Totals only; checks, metrics and MCP work the same')
+// 0.21.0: without --source, any schema the loader writes, read in place and checked for freshness only.
+connect.command('pipeline').description('Read tables your own Fivetran or Airbyte loads into your Postgres. With --source stripe or shopify: totals with full checks. Without it: any connector, read in place, freshness checked')
     .requiredOption('--tool <tool>', 'fivetran or airbyte')
-    .requiredOption('--source <source>', 'stripe or shopify')
-    .requiredOption('--schema <name>', 'the schema the loader writes to, such as stripe or shopify')
+    .option('--source <source>', 'stripe or shopify, for full checks and metrics. Leave it out for any other connector')
+    .requiredOption('--schema <name>', 'the schema the loader writes to, such as hubspot, stripe or shopify')
     .requiredOption('--url-env <name>', 'environment variable holding the Postgres URL the loader writes to. Read only; never saved')
     .action(write('connect pipeline', async (opts) => {
+    if (!opts.source) {
+        checkSchemaSettings(opts.tool, opts.schema, opts.urlEnv);
+        const tool = opts.tool;
+        const config = readConfig();
+        if (Object.values(config.pipeline?.sources ?? {}).some((x) => x.schema === opts.schema))
+            throw new CliError(`The ${opts.schema} schema is already connected with full checks.`, `cosmic disconnect ${Object.entries(config.pipeline.sources).find(([, x]) => x.schema === opts.schema)[0]} first, to read it in place instead`, 'already_connected');
+        const conn = pipelineConn(opts.urlEnv);
+        let tables, fresh;
+        try {
+            tables = await discoverTables(conn.query, tool, opts.schema);
+            // Inside the same 30-second read-only limit as queries.
+            fresh = await tableFreshness((q, p) => conn.readOnly(q, p), tool, opts.schema, tables.map((t) => t.table), settingValue('reconcile.freshness_days'));
+        }
+        finally {
+            await conn.close().catch(() => undefined);
+        }
+        const settings = { tool, urlEnv: opts.urlEnv, connectedAt: new Date().toISOString(), tables: tables.map((t) => t.table) };
+        writeConfig({ ...config, pipeline: { sources: config.pipeline?.sources ?? {}, schemas: { ...(config.pipeline?.schemas ?? {}), [opts.schema]: settings } } });
+        const leftOut = tables.reduce((n, t) => n + t.columns.filter((c) => c.personal).length, 0);
+        const trust = freshnessTrust(opts.schema, fresh, settingValue('reconcile.freshness_days'));
+        const r = { schema: opts.schema, ...settings, personalColumnsLeftOut: leftOut, freshness: trust };
+        emit(format(), r, () => [
+            `Connected ${tables.length} ${tool === 'fivetran' ? 'Fivetran' : 'Airbyte'} table${tables.length === 1 ? '' : 's'} in ${opts.schema}, read in place: ${tables.map((t) => t.table).join(', ')}.`,
+            leftOut ? `${leftOut} personal column${leftOut === 1 ? ' is' : 's are'} left out and refused in queries.` : '',
+            trust.line,
+            `The database URL stays in ${opts.urlEnv}; set it wherever cosmic runs.`,
+            `Next: cosmic schema ${opts.schema}, then cosmic query "SELECT ... FROM ${opts.schema}.${tables[0].table}"`,
+        ].filter(Boolean).join('\n'));
+        return;
+    }
     checkSettings(opts.tool, opts.source, opts.schema, opts.urlEnv);
     const source = opts.source, tool = opts.tool;
     const config = readConfig();
@@ -284,7 +328,7 @@ connect.command('pipeline').description('Read Stripe or Shopify from tables your
         await conn.close().catch(() => undefined);
     }
     const settings = { tool, schema: opts.schema, urlEnv: opts.urlEnv, connectedAt: new Date().toISOString() };
-    writeConfig({ ...config, pipeline: { sources: { ...(config.pipeline?.sources ?? {}), [source]: settings } } });
+    writeConfig({ ...config, pipeline: { sources: { ...(config.pipeline?.sources ?? {}), [source]: settings }, schemas: config.pipeline?.schemas ?? {} } });
     const r = { source, ...settings, rows, lastLoaded: loaded, refundsSubtracted: source === 'shopify' ? refunds : undefined };
     emit(format(), r, () => [
         `Connected ${source === 'stripe' ? 'Stripe' : 'Shopify'} through ${tool === 'fivetran' ? 'Fivetran' : 'Airbyte'} tables in ${opts.schema}: ${rows} ${source === 'stripe' ? 'charges' : 'orders'} found${loaded ? `, last loaded ${loaded.slice(0, 16).replace('T', ' ')} UTC` : ''}.`,
@@ -295,11 +339,11 @@ connect.command('pipeline').description('Read Stripe or Shopify from tables your
 }));
 connect.command('meta').description('Read-only: daily spend and results by campaign. No audiences, people or creative.').option('--account <id>', 'ad account id from Ads Manager').option('--token-env <name>', 'environment variable holding a system user token with ads_read').action(write('connect meta', async (opts) => {
     const r = await connectMeta(opts);
-    emit(format(), r, () => `Connected to Meta ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: lifecycle sync`);
+    emit(format(), r, () => `Connected to Meta ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: cosmic sync`);
 }));
 connect.command('hubspot').description('Read-only: daily deals, pipeline and new contacts as counts. No contact, company or deal record').option('--token-env <name>', 'environment variable holding a private app token with crm.objects.deals.read and crm.objects.contacts.read').action(write('connect hubspot', async (opts) => {
     const r = await connectHubspot(opts);
-    emit(format(), r, () => `Connected to HubSpot${r.portal ? ` portal ${r.portal}` : ''} (deals without a currency count as ${r.currency}).${keyNote(r)}\nNext: lifecycle sync`);
+    emit(format(), r, () => `Connected to HubSpot${r.portal ? ` portal ${r.portal}` : ''} (deals without a currency count as ${r.currency}).${keyNote(r)}\nNext: cosmic sync`);
 }));
 connect.command('google-ads').description('Read-only: daily cost and results by campaign and ad group. No audiences, keywords, people or creative.')
     .option('--customer <id>', 'Google Ads customer id, such as 123-456-7890')
@@ -309,7 +353,7 @@ connect.command('google-ads').description('Read-only: daily cost and results by 
     .option('--refresh-token-env <name>', 'environment variable holding a refresh token with the adwords scope')
     .action(write('connect google-ads', async (opts) => {
     const r = await connectGoogleAds(opts);
-    emit(format(), r, () => `Connected to Google Ads account ${r.name || r.customer} (${r.currency}, ${r.timezone})${r.testAccount ? ', a test account' : ''}.${keyNote(r)}\nNext: lifecycle sync`);
+    emit(format(), r, () => `Connected to Google Ads account ${r.name || r.customer} (${r.currency}, ${r.timezone})${r.testAccount ? ', a test account' : ''}.${keyNote(r)}\nNext: cosmic sync`);
 }));
 connect.command('google-merchant-center').description('Read-only: daily clicks and impressions for free listings and Shopping ads, and product counts by status. No product ids, titles or prices.')
     .option('--account <id>', 'Merchant Center account id, the number at the top of Merchant Center')
@@ -318,7 +362,7 @@ connect.command('google-merchant-center').description('Read-only: daily clicks a
     .option('--refresh-token-env <name>', 'environment variable holding a refresh token with the content scope')
     .action(write('connect google-merchant-center', async (opts) => {
     const r = await connectMerchantCenter(opts);
-    emit(format(), r, () => `Connected to Merchant Center account ${r.name || r.account}.${keyNote(r)}\nNext: lifecycle sync`);
+    emit(format(), r, () => `Connected to Merchant Center account ${r.name || r.account}.${keyNote(r)}\nNext: cosmic sync`);
 }));
 connect.command('microsoft-ads').description('Read-only: daily spend and results by campaign from Microsoft Advertising. No audiences, keywords, people or creative.')
     .option('--account <id>', 'account id, the aid= number in the Microsoft Advertising address bar (not the account number)')
@@ -329,7 +373,7 @@ connect.command('microsoft-ads').description('Read-only: daily spend and results
     .option('--developer-token-env <name>', 'environment variable holding the Microsoft Advertising developer token')
     .action(write('connect microsoft-ads', async (opts) => {
     const r = await connectMicrosoftAds(opts);
-    emit(format(), r, () => `Connected to Microsoft Advertising account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: lifecycle sync`);
+    emit(format(), r, () => `Connected to Microsoft Advertising account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: cosmic sync`);
 }));
 connect.command('linkedin-ads').description('Read-only: daily spend and results by campaign from LinkedIn Campaign Manager. No audiences, creatives or member data.')
     .option('--account <id>', 'ad account id, the number after accounts/ in the Campaign Manager address bar')
@@ -338,7 +382,7 @@ connect.command('linkedin-ads').description('Read-only: daily spend and results 
     .option('--refresh-token-env <name>', 'environment variable holding a refresh token with r_ads and r_ads_reporting')
     .action(write('connect linkedin-ads', async (opts) => {
     const r = await connectLinkedinAds(opts);
-    emit(format(), r, () => `Connected to LinkedIn ad account ${r.name || r.account} (${r.currency}, days in UTC)${r.test ? ', a test account that LinkedIn reports no numbers for' : ''}.${keyNote(r)}\nNext: lifecycle sync`);
+    emit(format(), r, () => `Connected to LinkedIn ad account ${r.name || r.account} (${r.currency}, days in UTC)${r.test ? ', a test account that LinkedIn reports no numbers for' : ''}.${keyNote(r)}\nNext: cosmic sync`);
 }));
 connect.command('reddit-ads').description('Read-only: daily spend and results by campaign. No audiences, communities, keywords, people or creative.')
     .option('--account <id>', 'Reddit ad account id, such as a2_abc123, from Accounts in Ads Manager')
@@ -347,7 +391,7 @@ connect.command('reddit-ads').description('Read-only: daily spend and results by
     .option('--refresh-token-env <name>', 'environment variable holding a refresh token with the adsread scope')
     .action(write('connect reddit-ads', async (opts) => {
     const r = await connectRedditAds(opts);
-    emit(format(), r, () => `Connected to Reddit ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: lifecycle sync`);
+    emit(format(), r, () => `Connected to Reddit ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: cosmic sync`);
 }));
 connect.command('snapchat-ads').description('Read-only: daily spend and results by campaign. No audiences, creatives, people or pixel events.')
     .option('--account <id>', 'Snapchat ad account id from Ads Manager')
@@ -356,7 +400,7 @@ connect.command('snapchat-ads').description('Read-only: daily spend and results 
     .option('--refresh-token-env <name>', 'environment variable holding a refresh token with the snapchat-marketing-api scope')
     .action(write('connect snapchat-ads', async (opts) => {
     const r = await connectSnapchatAds(opts);
-    emit(format(), r, () => `Connected to Snapchat ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: lifecycle sync`);
+    emit(format(), r, () => `Connected to Snapchat ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: cosmic sync`);
 }));
 connect.command('tiktok-ads').description('Read-only: daily spend and results by campaign. No audiences, creatives or people.')
     .option('--account <id>', 'TikTok advertiser id, the number under the account name in TikTok Ads Manager')
@@ -364,7 +408,7 @@ connect.command('tiktok-ads').description('Read-only: daily spend and results by
     .option('--token-env <name>', 'environment variable holding the long-term advertiser access token')
     .action(write('connect tiktok-ads', async (opts) => {
     const r = await connectTiktokAds(opts);
-    emit(format(), r, () => `Connected to TikTok ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: lifecycle sync`);
+    emit(format(), r, () => `Connected to TikTok ad account ${r.name || r.account} (${r.currency}, ${r.timezone}).${keyNote(r)}\nNext: cosmic sync`);
 }));
 connect.command('pinterest-ads').description('Read-only: daily spend and results by campaign. No audiences, pins, creatives or people.')
     .option('--account <id>', 'Pinterest ad account id, the number in the Ads Manager address')
@@ -373,7 +417,7 @@ connect.command('pinterest-ads').description('Read-only: daily spend and results
     .option('--refresh-token-env <name>', 'environment variable holding a refresh token with the ads:read scope')
     .action(write('connect pinterest-ads', async (opts) => {
     const r = await connectPinterestAds(opts);
-    emit(format(), r, () => `Connected to Pinterest ad account ${r.name || r.account} (${r.currency}${r.timezone ? `, ${r.timezone}` : ''}).${keyNote(r)}\nNext: lifecycle sync`);
+    emit(format(), r, () => `Connected to Pinterest ad account ${r.name || r.account} (${r.currency}${r.timezone ? `, ${r.timezone}` : ''}).${keyNote(r)}\nNext: cosmic sync`);
 }));
 const collectList = (v, prev = []) => [...prev, v];
 // The store's key for scrambled customer ids: LIFECYCLE_SHOPIFY_CUSTOMER_KEY (the app and Cloud pass it), or this
@@ -390,12 +434,12 @@ export function storeKeyer() {
 program.command('sync').description('Pull fresh totals from connected sources, then reconcile')
     .option('--since <date>', 'start of the Klaviyo report window')
     .option('--only <source>', `sync only this built-in source: ${NATIVE.join(', ')} (repeatable, or a comma list)`, collectList)
-    .option('--cloud', 'start the sync on Cosmic Cloud instead of on this machine. It returns at once. Needs lifecycle login')
+    .option('--cloud', 'start the sync on Cosmic Cloud instead of on this machine. It returns at once. Needs cosmic login')
     .option('--export-wait <seconds>', 'for a large Shopify store, seconds to wait for its bulk export before leaving it for the next sync')
     .option('--full', 'for Shopify, read the whole order history now instead of only the orders changed since the last sync')
     .action(run(async (opts) => {
     if (opts.exportWait !== undefined && !(Number.isInteger(Number(opts.exportWait)) && Number(opts.exportWait) >= 0 && Number(opts.exportWait) <= 3600)) {
-        throw new CliError('Use a whole number of seconds from 0 to 3600.', 'lifecycle sync --only shopify --export-wait 120', 'bad_value');
+        throw new CliError('Use a whole number of seconds from 0 to 3600.', 'cosmic sync --only shopify --export-wait 120', 'bad_value');
     }
     if (opts.cloud) {
         const client = new CloudClient();
@@ -404,7 +448,7 @@ program.command('sync').description('Pull fresh totals from connected sources, t
         if (only) {
             const wanted = (await client.store()).connections.filter((c) => only.includes(c.source_id));
             if (!wanted.length)
-                throw new CliError(`Not connected on Cosmic Cloud: ${only.join(', ')}.`, 'lifecycle sources list --cloud', 'not_connected');
+                throw new CliError(`Not connected on Cosmic Cloud: ${only.join(', ')}.`, 'cosmic sources list --cloud', 'not_connected');
             r = { started: [], already_running: [] };
             for (const c of wanted) {
                 const one = await client.sync(c.id);
@@ -415,7 +459,7 @@ program.command('sync').description('Pull fresh totals from connected sources, t
         else {
             r = await client.sync();
         }
-        emit(format(), { cloud: true, started: r.started, alreadyRunning: r.already_running }, () => [`Cosmic Cloud started ${r.started.length} sync${r.started.length === 1 ? '' : 's'}${r.already_running.length ? `. ${r.already_running.length} already running` : ''}.`, 'It runs on Cloud and finishes on its own. Check it with: lifecycle logs --cloud'].join('\n'));
+        emit(format(), { cloud: true, started: r.started, alreadyRunning: r.already_running }, () => [`Cosmic Cloud started ${r.started.length} sync${r.started.length === 1 ? '' : 's'}${r.already_running.length ? `. ${r.already_running.length} already running` : ''}.`, 'It runs on Cloud and finishes on its own. Check it with: cosmic logs --cloud'].join('\n'));
         return;
     }
     await withWriteLock('sync', async () => {
@@ -462,8 +506,8 @@ program.command('sync').description('Pull fresh totals from connected sources, t
             'tiktok-ads': Boolean(config['tiktok-ads'] && tiktokToken),
             'pinterest-ads': Boolean(config['pinterest-ads'] && pinsSecret && pinsRefresh),
         });
-        if (!chosen.length)
-            throw new CliError('No sources connected.', readWorkspace().type === 'shopify' ? 'lifecycle connect klaviyo --key-env NAME' : `lifecycle connect ${TYPES[readWorkspace().type].sources[0]}`, 'not_connected');
+        if (!chosen.length && (only || !pipelineSchemas(config).length))
+            throw new CliError('No sources connected.', readWorkspace().type === 'shopify' ? 'cosmic connect klaviyo --key-env NAME' : `cosmic connect ${TYPES[readWorkspace().type].sources[0]}`, 'not_connected');
         const db = await openDb();
         try {
             await migrate(db);
@@ -510,7 +554,7 @@ program.command('sync').description('Pull fresh totals from connected sources, t
                     else {
                         results.push(await syncShopify(db, async () => fetchOrders(store, await tok()), async () => fetchOrderCount(store, await tok()), { keyer: k }));
                     }
-                    // Unit costs, once the owner has run lifecycle costs sync. Its own result line, so a cost failure never hides the orders.
+                    // Unit costs, once the owner has run cosmic costs sync. Its own result line, so a cost failure never hides the orders.
                     if (config.costs?.shopify) {
                         const at = new Date().toISOString();
                         try {
@@ -606,12 +650,35 @@ program.command('sync').description('Pull fresh totals from connected sources, t
             }
             const check = await reconcile(db);
             const failed = check.checks.filter((c) => c.status === 'fail');
+            // 0.21.0: pipeline schemas are read in place, so a sync only checks when their loader last wrote.
+            const pipeline = [];
+            if (!only) {
+                for (const p of pipelineSchemas(config)) {
+                    let conn;
+                    try {
+                        conn = pipelineConn(p.urlEnv);
+                        // The tables the loader has now, not the list saved at connect time, so a table added later is checked too.
+                        const tables = (await discoverTables(conn.query, p.tool, p.schema)).map((x) => x.table);
+                        const t = freshnessTrust(p.schema, await tableFreshness((q, ps) => conn.readOnly(q, ps), p.tool, p.schema, tables, settingValue('reconcile.freshness_days')), settingValue('reconcile.freshness_days'));
+                        pipeline.push({ schema: p.schema, status: t.status, line: t.line });
+                    }
+                    catch (e) {
+                        pipeline.push({ schema: p.schema, status: 'failed', line: e instanceof Error ? e.message : String(e) });
+                    }
+                    finally {
+                        await conn?.close().catch(() => undefined);
+                    }
+                }
+            }
             // One JSON document per command, so an agent can parse stdout whole.
-            emit(format(), { results, reconcile: check }, () => [
+            emit(format(), { results, reconcile: check, ...(pipeline.length ? { pipeline } : {}) }, () => [
                 ...results.map((r) => `${r.source}: ${r.status}, ${r.rows} rows${r.detail ? `. ${r.detail}` : ''}${r.code ? ` (${r.code})` : ''}`),
-                failed.length ? `Reconcile: ${failed.length} failed. Run lifecycle reconcile for details.` : 'Reconcile: passed.',
+                ...pipeline.map((p) => `${p.schema} (pipeline tables): ${p.line}`),
+                // Pipeline tables read in place are never reconciled, so a sync of only those says nothing about reconcile.
+                ...(results.length ? [failed.length ? `Reconcile: ${failed.length} failed. Run cosmic reconcile for details.` : 'Reconcile: passed.'] : []),
             ].join('\n'));
-            if (results.some((r) => r.status === 'failed'))
+            // A pipeline schema whose database could not be read fails the sync too, so a scheduled job sees it.
+            if (results.some((r) => r.status === 'failed') || pipeline.some((p) => p.status === 'failed'))
                 process.exitCode = 1;
         }
         finally {
@@ -619,13 +686,21 @@ program.command('sync').description('Pull fresh totals from connected sources, t
         }
     });
 }));
-program.command('disconnect').argument('<source>', `${NATIVE.join(', ')}, or a warehouse source`)
+program.command('disconnect').argument('<source>', `${NATIVE.join(', ')}, a warehouse source, or pipeline:SCHEMA`)
     .description('Forget a source: its settings and saved keys. Loaded data is kept unless --delete-data')
     .option('--delete-data', 'also delete the data this source loaded')
     .action(write('disconnect', async (source, opts) => {
+    // 0.21.0: a pipeline schema read in place. Nothing was copied, so there is no data to delete.
+    const schema = source.startsWith('pipeline:') ? source.slice('pipeline:'.length) : null;
+    if (schema !== null) {
+        if (!removePipelineSchema(schema))
+            throw new CliError(`No pipeline schema ${schema} is connected.`, 'cosmic schema lists the connected pipeline schemas', 'not_connected');
+        emit(format(), { source, removed: true }, () => `Disconnected the ${schema} pipeline schema. Nothing was copied from it, so nothing else to delete.`);
+        return;
+    }
     if (!isNative(source)) {
         if (opts.deleteData)
-            throw new CliError('--delete-data works for built-in sources only.', `lifecycle warehouse disconnect ${source}, then drop its schema yourself`, 'bad_value');
+            throw new CliError('--delete-data works for built-in sources only.', `cosmic warehouse disconnect ${source}, then drop its schema yourself`, 'bad_value');
         const r = disconnectSource(source);
         emit(format(), { source, ...r }, () => `Disconnected ${source}. ${r.keysRemoved} key(s) removed. ${r.note}`);
         return;
@@ -676,13 +751,30 @@ program.command('verdict').description('Which KPIs can go in a report for one mo
         await db.close();
     }
 }));
+// 0.21.0: pipeline schemas read in place. Groups them by database, since one query runs on one database.
+const pipelineSchemas = (config = readConfig()) => Object.entries(config.pipeline?.schemas ?? {}).map(([schema, x]) => ({ schema, ...x }));
 program.command('schema').argument('[table]').description('List tables and columns').option('--cloud', CLOUD_FLAG).action(run(async (table, opts) => {
     if (opts.cloud) {
         const all = await new CloudClient().schema();
         const schemas = table ? all.schemas.map((s) => ({ ...s, tables: s.tables.filter((t) => t.name === table || `${s.name}.${t.name}` === table) })).filter((s) => s.tables.length) : all.schemas;
         if (table && !schemas.length)
-            throw new CliError(`Cosmic Cloud has no table ${table}.`, 'lifecycle schema --cloud', 'unknown_table');
-        emit(format(), { cloud: true, schemas }, () => schemas.flatMap((s) => s.tables.map((t) => `${s.name}.${t.name}${typeof t.rows === 'number' ? ` (${t.rows} rows)` : ''}\n${t.columns.map((c) => `  ${c.name} ${c.type}${c.personal ? ' (personal)' : ''}`).join('\n')}`)).join('\n\n') || 'Cosmic Cloud holds no tables yet. Start a sync: lifecycle sync --cloud');
+            throw new CliError(`Cosmic Cloud has no table ${table}.`, 'cosmic schema --cloud', 'unknown_table');
+        emit(format(), { cloud: true, schemas }, () => schemas.flatMap((s) => s.tables.map((t) => `${s.name}.${t.name}${typeof t.rows === 'number' ? ` (${t.rows} rows)` : ''}\n${t.columns.map((c) => `  ${c.name} ${c.type}${c.personal ? ' (personal)' : ''}`).join('\n')}`)).join('\n\n') || 'Cosmic Cloud holds no tables yet. Start a sync: cosmic sync --cloud');
+        return;
+    }
+    const piped = pipelineSchemas();
+    const pipeOne = table ? piped.find((p) => table === p.schema || table.startsWith(`${p.schema}.`)) : undefined;
+    if (pipeOne) {
+        const conn = pipelineConn(pipeOne.urlEnv);
+        try {
+            const info = (await pipelineSchemaInfo(conn, pipeOne.tool, pipeOne.schema)).filter((t) => table === pipeOne.schema || t.table === table);
+            if (!info.length)
+                throw new CliError(`Unknown table ${table}.`, `cosmic schema ${pipeOne.schema}`, 'unknown_table');
+            emit(format(), { pipeline: { schema: pipeOne.schema, tool: pipeOne.tool, checks: 'freshness only' }, tables: info }, () => info.map((t) => `${t.table} (${pipeOne.tool === 'fivetran' ? 'Fivetran' : 'Airbyte'}, freshness checked only)\n${t.columns.map((c) => `  ${c}`).join('\n')}${t.leftOut ? `\n  (${t.leftOut} personal column${t.leftOut === 1 ? '' : 's'} left out)` : ''}`).join('\n\n'));
+        }
+        finally {
+            await conn.close().catch(() => undefined);
+        }
         return;
     }
     const db = await openDb();
@@ -690,7 +782,7 @@ program.command('schema').argument('[table]').description('List tables and colum
         const known = [...PUBLIC_TABLES, ...(await customTables(db))];
         const names = table ? [table] : known;
         if (table && !known.includes(table))
-            throw new CliError(`Unknown table ${table}.`, 'lifecycle schema');
+            throw new CliError(`Unknown table ${table}.`, piped.length ? `cosmic schema, or cosmic schema ${piped[0].schema}` : 'cosmic schema');
         const out = {};
         for (const n of names) {
             const rows = await db.query(`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`, [n]);
@@ -699,7 +791,12 @@ program.command('schema').argument('[table]').description('List tables and colum
                 return { column: String(r.column_name), type: String(r.data_type), personal: kind === 'personal', freeText: kind === 'free_text' };
             });
         }
-        emit(format(), out, () => Object.entries(out).map(([t, cols]) => `${t}\n${cols.map((c) => `  ${c.column} ${c.type}${c.personal ? ' (personal)' : ''}`).join('\n')}`).join('\n\n'));
+        // Pipeline schemas are listed by name only here; their tables are read live with cosmic schema NAME.
+        const pipeline = table ? [] : piped.map((p) => ({ schema: p.schema, tool: p.tool, tables: p.tables.map((t) => `${p.schema}.${t}`), checks: 'freshness only' }));
+        emit(format(), pipeline.length ? { ...out, pipeline } : out, () => [
+            Object.entries(out).map(([t, cols]) => `${t}\n${cols.map((c) => `  ${c.column} ${c.type}${c.personal ? ' (personal)' : ''}`).join('\n')}`).join('\n\n'),
+            ...pipeline.map((p) => `${p.schema} (${p.tool === 'fivetran' ? 'Fivetran' : 'Airbyte'} tables read in place, freshness checked only): ${p.tables.join(', ')}. Columns: cosmic schema ${p.schema}`),
+        ].join('\n\n'));
     }
     finally {
         await db.close();
@@ -710,6 +807,11 @@ program.command('query').argument('<sql>').description('Run one read-only SQL qu
         // The same check as on this machine, so a write is refused before anything is sent.
         const r = await new CloudClient().query(assertReadOnlySql(sql));
         emit(format(), { cloud: true, ...r }, () => `${JSON.stringify(r.rows, null, 2)}\n${r.rowCount} rows${r.truncated ? ' (capped)' : ''}`);
+        return;
+    }
+    const piped = await queryNamedPipeline(sql, pipelineSchemas(), rowCap(), settingValue('reconcile.freshness_days'));
+    if (piped) {
+        emit(format(), piped, () => `${piped.trust.line}\n${JSON.stringify(piped.rows, null, 2)}\n${piped.rowCount} rows${piped.truncated ? ' (capped)' : ''}`);
         return;
     }
     const db = await openDb();
@@ -767,7 +869,7 @@ metrics.command('save').argument('<name>').description('Save a SELECT as a named
     try {
         await migrate(db);
         const r = await saveMetric(db, name, opts);
-        emit(format(), r, () => [`${r.replaced ? 'Replaced' : 'Saved'} ${r.name} (${r.unit}). It shows in lifecycle metrics list as saved by the owner.`, ...r.notes.slice(1), `Run it: lifecycle metrics run ${r.name}`].join('\n'));
+        emit(format(), r, () => [`${r.replaced ? 'Replaced' : 'Saved'} ${r.name} (${r.unit}). It shows in cosmic metrics list as saved by the owner.`, ...r.notes.slice(1), `Run it: cosmic metrics run ${r.name}`].join('\n'));
     }
     finally {
         await db.close();
@@ -813,7 +915,7 @@ metrics.command('run').argument('<names...>').option('--days <n>', 'window in da
         const client = new CloudClient();
         const days = opts.days === undefined ? undefined : Number(opts.days);
         if (days !== undefined && (!Number.isInteger(days) || days < 1 || days > 730))
-            throw new CliError('Use a whole number of days from 1 to 730.', `lifecycle metrics run ${names[0]} --days 30 --cloud`, 'bad_value');
+            throw new CliError('Use a whole number of days from 1 to 730.', `cosmic metrics run ${names[0]} --days 30 --cloud`, 'bad_value');
         const results = [];
         for (const n of names)
             results.push(await client.metric(n, days));
@@ -850,7 +952,7 @@ metrics.command('candidates').description('Custom queries run more than once: ca
     try {
         await migrateIfFree(db, 'metrics candidates');
         const c = await metricCandidates(db, Number(opts.minRuns));
-        emit(format(), c, () => (c.length ? [...c.map((x) => `${x.runs} runs  ${x.sql}`), '', 'To ask for one as a verified metric: lifecycle feedback "metric request: ..."'].join('\n') : 'No repeated custom queries yet.'));
+        emit(format(), c, () => (c.length ? [...c.map((x) => `${x.runs} runs  ${x.sql}`), '', 'To ask for one as a verified metric: cosmic feedback "metric request: ..."'].join('\n') : 'No repeated custom queries yet.'));
     }
     finally {
         await db.close();
@@ -865,7 +967,7 @@ costs.command('show').description('The cost inputs in costs.json, and how much o
         await migrateIfFree(db, 'costs show');
         const cov = (await db.query(`SELECT count(*)::int AS days, coalesce(sum(lines), 0)::int AS lines, coalesce(sum(lines_with_cost), 0)::int AS costed, max(source_synced_at) AS at FROM fact_cogs_daily`))[0] ?? {};
         const out = { file: costsPath(), costs: c, shopifyCosts: { days: Number(cov.days ?? 0), lines: Number(cov.lines ?? 0), linesWithCost: Number(cov.costed ?? 0), syncedAt: cov.at ? new Date(String(cov.at)).toISOString() : null } };
-        emit(format(), out, () => [c ? JSON.stringify(c, null, 2) : 'No costs set. Start with: lifecycle costs set currency USD', out.shopifyCosts.days ? `Shopify product costs: ${out.shopifyCosts.linesWithCost} of ${out.shopifyCosts.lines} line items, synced ${clock(out.shopifyCosts.syncedAt)}` : 'Shopify product costs: not synced. lifecycle costs sync'].join('\n'));
+        emit(format(), out, () => [c ? JSON.stringify(c, null, 2) : 'No costs set. Start with: cosmic costs set currency USD', out.shopifyCosts.days ? `Shopify product costs: ${out.shopifyCosts.linesWithCost} of ${out.shopifyCosts.lines} line items, synced ${clock(out.shopifyCosts.syncedAt)}` : 'Shopify product costs: not synced. cosmic costs sync'].join('\n'));
     }
     finally {
         await db.close();
@@ -873,17 +975,17 @@ costs.command('show').description('The cost inputs in costs.json, and how much o
 }));
 costs.command('set').argument('<key>', COST_KEYS.join(', ')).argument('<value>', 'such as USD, shopify, percent:35, per_order:6.50, none, 2.9, meta').description('Set one cost input in costs.json, the same file the Cosmic AI app writes').action(run(async (key, value) => {
     const c = setCost(key, value);
-    emit(format(), c, () => `Saved ${key}. lifecycle costs show prints them all.`);
+    emit(format(), c, () => `Saved ${key}. cosmic costs show prints them all.`);
 }));
 costs.command('products').argument('<csv>', 'a CSV of sku,unit_cost').option('--fallback <percent>', 'cost of goods for SKUs not in the file, as a percent of their revenue').description('Use your own cost per product instead of Shopify\'s').action(run(async (file, opts) => {
     const c = setProductCosts(readFileSync(file, 'utf8'), opts.fallback);
-    emit(format(), c, () => `Saved ${c.cogs.mode === 'per_product' ? c.cogs.items.length : 0} product costs. Run lifecycle costs sync so sales by SKU are read.`);
+    emit(format(), c, () => `Saved ${c.cogs.mode === 'per_product' ? c.cogs.items.length : 0} product costs. Run cosmic costs sync so sales by SKU are read.`);
 }));
-costs.command('sync').description('Read each line item\'s unit cost from Shopify. Needs read_inventory and read_products on the app. After the first one, lifecycle sync does it too').action(write('costs sync', async () => {
+costs.command('sync').description('Read each line item\'s unit cost from Shopify. Needs read_inventory and read_products on the app. After the first one, cosmic sync does it too').action(write('costs sync', async () => {
     const config = readConfig();
     const secret = getSecret('shopify-client-secret');
     if (!config.shopify || !secret)
-        throw new CliError('Shopify is not connected.', 'lifecycle connect shopify', 'not_connected');
+        throw new CliError('Shopify is not connected.', 'cosmic connect shopify', 'not_connected');
     const db = await openDb();
     try {
         await migrate(db);
@@ -891,7 +993,7 @@ costs.command('sync').description('Read each line item\'s unit cost from Shopify
         const { orders, currency } = await fetchCostOrders(config.shopify.store, token);
         const r = await writeCosts(db, orders, currency ?? 'USD');
         writeConfig({ ...readConfig(), costs: { shopify: true } });
-        emit(format(), { ...r, currency }, () => [`Read unit costs for ${r.linesWithCost} of ${r.lines} line items over ${r.days} days (${currency ?? 'currency unknown'}).`, r.truncatedOrders ? `${r.truncatedOrders} orders have more than 100 line items; lines past the first 100 are not counted.` : '', r.coveragePct !== null && r.coveragePct < 100 ? 'Lines with no unit cost use cogs_percent: lifecycle costs set cogs_percent 35' : '', 'Next: lifecycle metrics run contribution_margin'].filter(Boolean).join('\n'));
+        emit(format(), { ...r, currency }, () => [`Read unit costs for ${r.linesWithCost} of ${r.lines} line items over ${r.days} days (${currency ?? 'currency unknown'}).`, r.truncatedOrders ? `${r.truncatedOrders} orders have more than 100 line items; lines past the first 100 are not counted.` : '', r.coveragePct !== null && r.coveragePct < 100 ? 'Lines with no unit cost use cogs_percent: cosmic costs set cogs_percent 35' : '', 'Next: cosmic metrics run contribution_margin'].filter(Boolean).join('\n'));
     }
     finally {
         await db.close();
@@ -923,7 +1025,7 @@ sources
             ...whText,
             '',
             READINESS_LEGEND,
-            `Details for one: lifecycle warehouse show SLUG. ${CUSTOM_SOURCE_NOTE}`,
+            `Details for one: cosmic warehouse show SLUG. ${CUSTOM_SOURCE_NOTE}`,
         ].join('\n');
     });
 }));
@@ -943,7 +1045,7 @@ sources.command('list').description('Which sources are connected, and when each 
     const db = config ? await openDb().catch(() => null) : null;
     try {
         const r = await sourceStatus(config, (slug) => Boolean(getSecret(SECRET_FOR[slug])), db);
-        emit(format(), r, () => r.map((s) => `${s.connected ? 'connected    ' : 'not connected'} ${s.name}${s.lastSync ? `, last sync ${s.lastSync} (${s.lastStatus})` : ''}${s.next ? `\n    Next: ${s.next}` : ''}`).join('\n'));
+        emit(format(), r, () => [...r.map((s) => `${s.connected ? 'connected    ' : 'not connected'} ${s.name}${s.lastSync ? `, last sync ${s.lastSync} (${s.lastStatus})` : ''}${s.next ? `\n    Next: ${s.next}` : ''}`), ...(r.some((s) => !s.connected) ? ['', EASY_SETUP] : [])].join('\n'));
     }
     finally {
         await db?.close();
@@ -985,10 +1087,10 @@ program.command('audit').description('Find what to fix').command('flows').option
 const segments = program.command('segments').description('Propose and create Klaviyo segments. Never sends.');
 segments.command('propose').argument('<kind>', 'winback').option('--out <file>', 'plan file', 'winback-plan.json').option('--days <n>', 'override lapsed days').action(run(async (kind, opts) => {
     if (kind !== 'winback')
-        throw new CliError(`No segment type ${kind}.`, 'lifecycle segments propose winback');
+        throw new CliError(`No segment type ${kind}.`, 'cosmic segments propose winback');
     const key = getSecret('klaviyo-read-key');
     if (!key)
-        throw new CliError('Klaviyo is not connected.', 'lifecycle connect klaviyo --key-env NAME');
+        throw new CliError('Klaviyo is not connected.', 'cosmic connect klaviyo --key-env NAME');
     const metricId = await new Klaviyo(key).placedOrderMetricId();
     if (!metricId)
         throw new CliError('Klaviyo has no Placed Order metric.', 'Connect Shopify to Klaviyo first.');
@@ -999,7 +1101,7 @@ segments.command('propose').argument('<kind>', 'winback').option('--out <file>',
         const plan = buildPlan({ lapsedAfterDays: s.days, basis: s.basis, metricId });
         writePlan(opts.out, plan);
         saveArtifact(basename(opts.out), JSON.stringify(plan, null, 2));
-        emit(format(), { plan, file: opts.out }, () => `Plan written to ${opts.out}. Nothing was created.\nSegment: ${plan.name}\nWhy: ${plan.reason}\nReview it, then run: lifecycle segments apply ${opts.out} --confirm`);
+        emit(format(), { plan, file: opts.out }, () => `Plan written to ${opts.out}. Nothing was created.\nSegment: ${plan.name}\nWhy: ${plan.reason}\nReview it, then run: cosmic segments apply ${opts.out} --confirm`);
     }
     finally {
         await db.close();
@@ -1009,7 +1111,7 @@ segments.command('apply').argument('<plan>').option('--confirm', 'create the seg
     const plan = readPlan(file);
     const key = (opts.keyEnv ? process.env[opts.keyEnv] : undefined) ?? getSecret('klaviyo-write-key');
     if (opts.confirm && !key)
-        throw new CliError('A separate Klaviyo key with Segments write access is needed.', 'lifecycle segments apply PLAN --confirm --key-env NAME', 'missing_secret');
+        throw new CliError('A separate Klaviyo key with Segments write access is needed.', 'cosmic segments apply PLAN --confirm --key-env NAME', 'missing_secret');
     const r = await applyPlan(plan, key ?? '', opts);
     emit(format(), r, () => `Created segment ${r.name} (${r.segmentId}). Nothing was sent.`);
 }));
@@ -1026,17 +1128,17 @@ withRegistry(kits.command('list').description('List kits in the registry').optio
     const reg = registry(opts);
     const k = listKits(reg, opts.type ? assertType(opts.type) : undefined);
     const store = readWorkspace().type === 'shopify' && !opts.type;
-    emit(format(), { source: reg.source, kits: k }, () => k.map((x) => `${x.name} ${x.version}: ${x.summary}${store ? '' : ` (for ${x.types.join(', ')})`}`).join('\n') || `No kits for ${opts.type} yet. lifecycle kits list shows them all.`);
+    emit(format(), { source: reg.source, kits: k }, () => k.map((x) => `${x.name} ${x.version}: ${x.summary}${store ? '' : ` (for ${x.types.join(', ')})`}`).join('\n') || `No kits for ${opts.type} yet. cosmic kits list shows them all.`);
 }));
 withRegistry(kits.command('search').argument('<query>').description('Find kits by name, keyword or summary')).action(run(async (query, opts) => {
     const k = searchKits(registry(opts), query);
-    emit(format(), k, () => (k.length ? k.map((x) => `${x.name} ${x.version}: ${x.summary}`).join('\n') : `No kits match "${query}". Try lifecycle kits list`));
+    emit(format(), k, () => (k.length ? k.map((x) => `${x.name} ${x.version}: ${x.summary}`).join('\n') : `No kits match "${query}". Try cosmic kits list`));
 }));
 withRegistry(kits.command('show').argument('<name>').description("Show a kit's README, needs and secrets before adding it")).action(run(async (name, opts) => {
     const r = showKit(registry(opts), name);
     const m = r.manifest;
     const prompt = kitPrompt(m);
-    emit(format(), { ...r, prompt }, () => [r.readme.trim(), '', `Version: ${m.version}`, `Needs: ${m.needs.join(', ')}`, `Writes: ${m.writes}`, `Secrets: ${m.secrets.map((s) => `${s.name}${s.required ? '' : ' (optional)'}`).join(', ') || 'none'}`, `Files (${r.files.length}):`, ...r.files.map((f) => `  ${f}`), '', `Add it: lifecycle kits add ${m.name}`, '', 'Or paste this into your agent:', prompt].join('\n'));
+    emit(format(), { ...r, prompt }, () => [r.readme.trim(), '', `Version: ${m.version}`, `Needs: ${m.needs.join(', ')}`, `Writes: ${m.writes}`, `Secrets: ${m.secrets.map((s) => `${s.name}${s.required ? '' : ' (optional)'}`).join(', ') || 'none'}`, `Files (${r.files.length}):`, ...r.files.map((f) => `  ${f}`), '', `Add it: cosmic kits add ${m.name}`, '', 'Or paste this into your agent:', prompt].join('\n'));
 }));
 withRegistry(kits.command('prompt').argument('<name>').description('Print a setup prompt to paste into Claude Code, Cursor or Codex')).action(run(async (name, opts) => {
     const prompt = kitPrompt(showKit(registry(opts), name).manifest);
@@ -1095,16 +1197,16 @@ skills.command('push').argument('<directory>', 'a folder with a SKILL.md at the 
     .action(run(async (dir, opts) => {
     const s = readSkillDir(dir, opts.slug);
     await new CloudClient().putSkill(s.slug, s.files);
-    emit(format(), { slug: s.slug, pushed: true, files: s.files.map((f) => f.path), bytes: s.bytes }, () => `Pushed ${s.slug} to Cosmic Cloud: ${s.files.length} file${s.files.length === 1 ? '' : 's'}, ${Math.ceil(s.bytes / 1024)} KB.\nInstall it on a machine with: lifecycle skills sync`);
+    emit(format(), { slug: s.slug, pushed: true, files: s.files.map((f) => f.path), bytes: s.bytes }, () => `Pushed ${s.slug} to Cosmic Cloud: ${s.files.length} file${s.files.length === 1 ? '' : 's'}, ${Math.ceil(s.bytes / 1024)} KB.\nInstall it on a machine with: cosmic skills sync`);
 }));
 skills.command('delete').argument('<slug>').description('Delete one of the workspace\'s own skills from Cosmic Cloud').action(run(async (slug) => {
     assertSlug(slug);
     const client = new CloudClient();
     // Listing first tells "no such skill" apart from "Cloud does not have skills yet".
     if (!(await client.skills()).some((x) => x.slug === slug))
-        throw new CliError(`This workspace has no skill named ${slug} on Cosmic Cloud.`, 'lifecycle skills status', 'unknown_skill');
+        throw new CliError(`This workspace has no skill named ${slug} on Cosmic Cloud.`, 'cosmic skills status', 'unknown_skill');
     await client.deleteSkill(slug);
-    emit(format(), { slug, deleted: true }, () => `Deleted ${slug} from Cosmic Cloud.\nCopies installed on a machine are removed by its next lifecycle skills sync.`);
+    emit(format(), { slug, deleted: true }, () => `Deleted ${slug} from Cosmic Cloud.\nCopies installed on a machine are removed by its next cosmic skills sync.`);
 }));
 withRegistry(skills.command('status').description('Show installed skills and kits not installed yet. When logged in to Cosmic Cloud, also the workspace\'s own skills there')).action(run(async (opts) => {
     // What the store keeps on Cosmic Cloud, beside what is installed here. Status never fails because Cloud did.
@@ -1118,7 +1220,7 @@ withRegistry(skills.command('status').description('Show installed skills and kit
         }
     }
     const r = skillsStatus(registry(opts)).map((t) => ({ ...t, account: onCloud }));
-    emit(format(), r, () => (onCloud.status === 'ok' ? `On Cosmic Cloud: ${onCloud.skills.join(', ') || 'no workspace skills'}\n` : '') + r.map((t) => `${t.target}: ${t.installed ? `installed (${t.installedVersion}), kits: ${t.kits.join(', ') || 'none'}${t.storeSkills.length ? `, store skills: ${t.storeSkills.join(', ')}` : ''}` : 'not installed'}${t.installed && t.newKits.length ? `\n  new: ${t.newKits.join(', ')}. Run lifecycle skills sync` : ''}`).join('\n'));
+    emit(format(), r, () => (onCloud.status === 'ok' ? `On Cosmic Cloud: ${onCloud.skills.join(', ') || 'no workspace skills'}\n` : '') + r.map((t) => `${t.target}: ${t.installed ? `installed (${t.installedVersion}), kits: ${t.kits.join(', ') || 'none'}${t.storeSkills.length ? `, store skills: ${t.storeSkills.join(', ')}` : ''}` : 'not installed'}${t.installed && t.newKits.length ? `\n  new: ${t.newKits.join(', ')}. Run cosmic skills sync` : ''}`).join('\n'));
 }));
 skills.command('uninstall').description('Remove the skills this CLI installed. Files you edited are kept').option('--target <target>', 'claude, cursor or all', 'all').action(run(async (opts) => {
     const r = uninstallSkills(targets(opts.target));
@@ -1137,7 +1239,7 @@ notes.command('add').argument('<text...>').option('--metric <name>', 'tie the no
 }));
 notes.command('list').description('List the notes').action(run(async () => {
     const all = readNotes();
-    emit(format(), { rule: NOTES_RULE, notes: all }, () => (all.length ? all.map((n) => `[${n.id}] ${n.metric ?? 'all metrics'}: ${n.text}`).join('\n') : 'No notes yet. Add one: lifecycle notes add "Exclude wholesale orders from revenue"'));
+    emit(format(), { rule: NOTES_RULE, notes: all }, () => (all.length ? all.map((n) => `[${n.id}] ${n.metric ?? 'all metrics'}: ${n.text}`).join('\n') : 'No notes yet. Add one: cosmic notes add "Exclude wholesale orders from revenue"'));
 }));
 notes.command('remove').argument('<id>').description('Remove a note by its id').action(run(async (id) => {
     const n = removeNote(id);
@@ -1157,7 +1259,7 @@ program.command('deploy').description('Run the daily sync from your own GitHub a
     }
     const repo = opts.repo ?? config.deploy?.repo;
     if (!repo)
-        throw new CliError('Which repo should run the sync?', 'lifecycle deploy --repo OWNER/NAME', 'no_repo');
+        throw new CliError('Which repo should run the sync?', 'cosmic deploy --repo OWNER/NAME', 'no_repo');
     opts.repo = repo;
     const plan = deployPlan(config, opts.repo);
     if (!opts.yes) {
@@ -1174,7 +1276,7 @@ program.command('deploy').description('Run the daily sync from your own GitHub a
         const w = wh.get(s);
         const v = w ? getSourceSecret(w.slug, w.field) : getSecret(names[s]);
         if (!v)
-            throw new CliError(`Missing ${s}.`, s === 'LIFECYCLE_DATABASE_URL' ? 'Create a Postgres database, then lifecycle init --database-url-env NAME' : 'lifecycle doctor', 'missing_secret');
+            throw new CliError(`Missing ${s}.`, s === 'LIFECYCLE_DATABASE_URL' ? 'Create a Postgres database, then cosmic init --database-url-env NAME' : 'cosmic doctor', 'missing_secret');
         secrets[s] = v;
     }
     const r = deploy(config, opts.repo, secrets);
@@ -1189,7 +1291,7 @@ jobs.command('list').description('Recent runs of the daily sync, and the current
 }));
 jobs.command('run').description('Start the daily sync now').option('--repo <owner/name>').action(run(async (opts) => {
     const r = deployRun(opts.repo ?? readConfig().deploy?.repo);
-    emit(format(), r, () => `Started a sync in ${r.repo}. Check it with lifecycle jobs list`);
+    emit(format(), r, () => `Started a sync in ${r.repo}. Check it with cosmic jobs list`);
 }));
 program.command('logs').description('Recent sync runs on this machine. --cloud shows the runs on Cosmic Cloud, --actions the last GitHub Actions log, --follow waits for a running one')
     .option('--cloud', 'recent sync runs on Cosmic Cloud. When not logged in, the same as --actions, as before 0.13.0')
@@ -1210,9 +1312,9 @@ program.command('logs').description('Recent sync runs on this machine. --cloud s
     if (opts.cloud && !opts.follow && !opts.actions && !opts.repo && loggedIn()) {
         const limit = Number(opts.limit);
         if (!Number.isInteger(limit) || limit < 1 || limit > 200)
-            throw new CliError('Use a limit from 1 to 200.', 'lifecycle logs --cloud --limit 20', 'bad_value');
+            throw new CliError('Use a limit from 1 to 200.', 'cosmic logs --cloud --limit 20', 'bad_value');
         const runs = (await new CloudClient().runs(limit)).map((r) => ({ source: String(r.source_id ?? r.source ?? ''), status: String(r.status ?? ''), rows: Number(r.rows ?? 0), startedAt: r.started_at ?? null, finishedAt: r.finished_at ?? null, detail: null, code: r.code ?? null }));
-        emit(format(), runs, () => (runs.length ? runs.map((r) => `${clock(r.startedAt)}  ${r.source.padEnd(8)} ${r.status.padEnd(8)} ${r.rows} rows${r.code ? ` (${r.code})` : ''}`).join('\n') : 'Nothing has synced on Cosmic Cloud yet. Start one: lifecycle sync --cloud'));
+        emit(format(), runs, () => (runs.length ? runs.map((r) => `${clock(r.startedAt)}  ${r.source.padEnd(8)} ${r.status.padEnd(8)} ${r.rows} rows${r.code ? ` (${r.code})` : ''}`).join('\n') : 'Nothing has synced on Cosmic Cloud yet. Start one: cosmic sync --cloud'));
         return;
     }
     if (opts.cloud && !opts.actions && !opts.follow && !opts.repo && format() === 'text')
@@ -1227,13 +1329,13 @@ program.command('logs').description('Recent sync runs on this machine. --cloud s
         await migrateIfFree(db, 'logs');
         const rows = await db.query(`SELECT source, status, rows_written, started_at, finished_at, detail, code FROM meta_sync_run ORDER BY started_at DESC LIMIT $1`, [Number(opts.limit)]);
         const runs = rows.map((r) => ({ source: String(r.source), status: String(r.status), rows: Number(r.rows_written), startedAt: new Date(String(r.started_at)).toISOString(), detail: r.detail ? String(r.detail) : null, code: r.code ? String(r.code) : null }));
-        emit(format(), runs, () => (runs.length ? runs.map((r) => `${r.startedAt.slice(0, 16).replace('T', ' ')}  ${r.source.padEnd(8)} ${r.status.padEnd(8)} ${r.rows} rows${r.detail ? `  ${r.detail}` : ''}${r.code ? ` (${r.code})` : ''}`).join('\n') : 'Nothing synced yet. Run lifecycle sync'));
+        emit(format(), runs, () => (runs.length ? runs.map((r) => `${r.startedAt.slice(0, 16).replace('T', ' ')}  ${r.source.padEnd(8)} ${r.status.padEnd(8)} ${r.rows} rows${r.detail ? `  ${r.detail}` : ''}${r.code ? ` (${r.code})` : ''}`).join('\n') : 'Nothing synced yet. Run cosmic sync'));
     }
     finally {
         await db.close();
     }
 }));
-const configCmd = program.command('config').description('Settings, such as reconcile tolerances, the query row cap and the default window. lifecycle config list shows them all');
+const configCmd = program.command('config').description('Settings, such as reconcile tolerances, the query row cap and the default window. cosmic config list shows them all');
 configCmd.command('list').action(run(async () => {
     const s = listSettings();
     emit(format(), s, () => s.map((x) => `${x.key} = ${x.value ?? (x.default !== null ? `${x.default} (default)` : '(not set)')}    ${x.description}`).join('\n'));
@@ -1307,12 +1409,12 @@ const tools = program.command('tools').description('Read-only Klaviyo and Shopif
 tools.command('catalog').option('--query <text>', 'only tools whose id or description contains this').description('List the built-in tools and their inputs').action(run(async (opts) => {
     const q = String(opts.query ?? '').toLowerCase();
     const c = toolCatalog().filter((t) => !q || `${t.id} ${t.description}`.toLowerCase().includes(q));
-    const note = 'Not limited to this list: any kie:, fal:, apify: or scrapecreators: ref also runs. See lifecycle tools providers';
+    const note = 'Not limited to this list: any kie:, fal:, apify: or scrapecreators: ref also runs. See cosmic tools providers';
     emit(format(), c, () => [...(c.length ? c.map((t) => `${t.id}${t.input.length ? ` (${t.input.join(', ')})` : ''}\n  ${t.description}`) : [`No built-in tool matches "${opts.query}".`]), note].join('\n'));
 }));
 tools.command('providers').description('The four open providers: ref shape, where ids are listed, which key each needs').action(run(async () => {
     const p = openProviders();
-    emit(format(), p, () => p.map((x) => `${x.ref}  ${x.connected ? 'key set' : `no key. lifecycle secrets set ${x.secret} --from-env YOUR_VAR`}\n  Example: ${x.example}\n  Ids: ${x.catalog}\n  ${x.billing}`).join('\n'));
+    emit(format(), p, () => p.map((x) => `${x.ref}  ${x.connected ? 'key set' : `no key. cosmic secrets set ${x.secret} --from-env YOUR_VAR`}\n  Example: ${x.example}\n  Ids: ${x.catalog}\n  ${x.billing}`).join('\n'));
 }));
 tools.command('run').argument('<tool>', 'a built-in tool id, or kie:<model>, fal:<endpoint_id>, apify:<owner~actor>, scrapecreators:<path>')
     .option('--input <json>', 'tool input as JSON', '{}')
@@ -1327,7 +1429,7 @@ tools.command('run').argument('<tool>', 'a built-in tool id, or kie:<model>, fal
         input = JSON.parse(opts.body ?? opts.input);
     }
     catch {
-        throw new CliError('--input is not valid JSON.', `lifecycle tools run ${id} --input '{"start":"2026-10-01","end":"2026-10-31"}'`, 'bad_input');
+        throw new CliError('--input is not valid JSON.', `cosmic tools run ${id} --input '{"start":"2026-10-01","end":"2026-10-31"}'`, 'bad_input');
     }
     let r;
     if (parseRef(id)) {
@@ -1346,9 +1448,9 @@ tools.command('run').argument('<tool>', 'a built-in tool id, or kie:<model>, fal
             return `Run ${r.id} failed: ${r.error}`;
         if (r.status === 'running')
             return opts.wait
-                ? `Run ${r.id} is still going after ${opts.timeout} seconds. It was not stopped and it is still billing.\nDo not run it again. Check it with: lifecycle tools get ${r.id}`
-                : `Started run ${r.id} on ${r.provider}. Check it with: lifecycle tools get ${r.id}`;
-        return [opts.out ? `Wrote the output to ${opts.out}` : JSON.stringify(r.output, null, 2), costLine(r), `Run ${r.id} saved. lifecycle tools get ${r.id}`].filter(Boolean).join('\n');
+                ? `Run ${r.id} is still going after ${opts.timeout} seconds. It was not stopped and it is still billing.\nDo not run it again. Check it with: cosmic tools get ${r.id}`
+                : `Started run ${r.id} on ${r.provider}. Check it with: cosmic tools get ${r.id}`;
+        return [opts.out ? `Wrote the output to ${opts.out}` : JSON.stringify(r.output, null, 2), costLine(r), `Run ${r.id} saved. cosmic tools get ${r.id}`].filter(Boolean).join('\n');
     });
     if (r.status === 'failed')
         process.exitCode = 1;
@@ -1367,7 +1469,7 @@ tools.command('get').argument('<run>').option('--out <file>', 'write the output 
 tools.command('abort').argument('<run>').description('Ask the provider to stop a run that is still going. Works for Apify and fal. Work already done may still be billed').action(run(async (id) => {
     const a = await abortRun(getRun(id), defaultOpenContext());
     const sent = await postRunToCloud(a.run);
-    emit(format(), { ...withCloud(a.run, sent), aborted: a.aborted }, () => (a.aborted ? `Stopped run ${a.run.id} on ${a.run.provider}. ${a.run.error}` : `Run ${a.run.id} had already ${a.run.status === 'succeeded' ? 'finished' : a.run.status}. Nothing was stopped. lifecycle tools get ${a.run.id}`));
+    emit(format(), { ...withCloud(a.run, sent), aborted: a.aborted }, () => (a.aborted ? `Stopped run ${a.run.id} on ${a.run.provider}. ${a.run.error}` : `Run ${a.run.id} had already ${a.run.status === 'succeeded' ? 'finished' : a.run.status}. Nothing was stopped. cosmic tools get ${a.run.id}`));
 }));
 tools.command('runs').option('--limit <n>', 'runs to show', '20').description('Recent tool runs').action(run(async (opts) => {
     const r = listRuns(Number(opts.limit));
@@ -1399,7 +1501,7 @@ program.command('exec').argument('<command...>').description('Run a command with
         // Not set up: pass only what exists.
     }
     if (format() === 'text')
-        console.error(`lifecycle exec: passing ${provided.length ? provided.join(', ') : 'no keys'}`);
+        console.error(`cosmic exec: passing ${provided.length ? provided.join(', ') : 'no keys'}`);
     const r = spawnSync(command[0], command.slice(1), { stdio: 'inherit', env });
     if (r.error)
         throw new CliError(`Could not run ${command[0]}: ${r.error.message}`, 'Check the command name.', 'exec_failed');
@@ -1448,7 +1550,7 @@ sources.command('import').argument('<name>').requiredOption('--csv <file>', 'CSV
     try {
         await migrate(db);
         const r = await importCsv(db, name, opts.csv, opts.dateColumn);
-        emit(format(), r, () => `Imported ${r.days} day${r.days === 1 ? '' : 's'} (${r.from} to ${r.to}) into ${r.table}: ${r.columns.join(', ')}\nQuery it with lifecycle query "SELECT * FROM ${r.table} ORDER BY date DESC"`);
+        emit(format(), r, () => `Imported ${r.days} day${r.days === 1 ? '' : 's'} (${r.from} to ${r.to}) into ${r.table}: ${r.columns.join(', ')}\nQuery it with cosmic query "SELECT * FROM ${r.table} ORDER BY date DESC"`);
     }
     finally {
         await db.close();
@@ -1462,13 +1564,13 @@ warehouse.command('show').argument('<slug>').description('What a source needs, w
     const s = findSource(slug);
     const { config, ...rest } = s;
     const resources = (config?.resources ?? []).map((r) => r.name);
-    const connectCmd = `lifecycle warehouse connect ${s.slug} ${[...s.credentials.map((c) => `--secret ${c.name}=${c.name.toUpperCase()}_VAR`), ...s.params.map((p) => `--set ${p.name}=${p.example}`)].join(' ')}`.trim();
+    const connectCmd = `cosmic warehouse connect ${s.slug} ${[...s.credentials.map((c) => `--secret ${c.name}=${c.name.toUpperCase()}_VAR`), ...s.params.map((p) => `--set ${p.name}=${p.example}`)].join(' ')}`.trim();
     const out = { ...rest, resources, schema: datasetFor(s.slug), connect: config ? connectCmd : null };
     emit(format(), out, () => [
         `${s.name} (${s.slug}), ${s.category}, ${s.readiness}`,
         `Why: ${s.why}`,
         s.docs ? `API docs: ${s.docs}` : '',
-        resources.length ? `Loads: ${resources.join(', ')} into schema ${datasetFor(s.slug)}` : 'No connector yet. Bring daily totals in with: lifecycle sources import NAME --csv FILE',
+        resources.length ? `Loads: ${resources.join(', ')} into schema ${datasetFor(s.slug)}` : 'No connector yet. Bring daily totals in with: cosmic sources import NAME --csv FILE',
         ...s.credentials.map((c) => `Needs ${c.name}: ${c.label}. ${c.help}`),
         ...s.params.map((p) => `Needs setting ${p.name}: ${p.label} (for example ${p.example})`),
         s.tested ? `Tested: ${s.tested}` : '',
@@ -1492,7 +1594,7 @@ warehouse.command('disconnect').argument('<slug>').description('Forget a source 
 }));
 warehouse.command('list').description('Connected warehouse sources').action(run(async () => {
     const list = connectedSources(readConfig()).map((c) => ({ ...c, schema: datasetFor(c.slug), name: findSource(c.slug).name }));
-    emit(format(), list, () => list.length ? list.map((c) => `${c.name} (${c.slug}) -> ${c.schema}, personal data ${c.personalData === 'keep' ? 'kept' : 'removed'}, connected ${c.connectedAt.slice(0, 10)}`).join('\n') : 'No warehouse sources connected. See lifecycle sources catalog');
+    emit(format(), list, () => list.length ? list.map((c) => `${c.name} (${c.slug}) -> ${c.schema}, personal data ${c.personalData === 'keep' ? 'kept' : 'removed'}, connected ${c.connectedAt.slice(0, 10)}`).join('\n') : 'No warehouse sources connected. See cosmic sources catalog');
 }));
 warehouse.command('sync').argument('[slugs...]').description('Load fresh data from connected warehouse sources').option('--verbose', 'show the loader log').action(write('warehouse sync', async (slugs, opts) => {
     const config = readConfig();
@@ -1527,11 +1629,11 @@ warehouse.command('schema').argument('[slug]').description('Tables and columns t
             await db.close();
         }
     }
-    // JSON: one object per column, the same shape as lifecycle schema. Text: one line per column.
+    // JSON: one object per column, the same shape as cosmic schema. Text: one line per column.
     const grouped = {};
     for (const c of cols)
         (grouped[`${c.schema}.${c.table}`] ??= []).push({ column: c.column, type: c.type, personal: c.personal, freeText: c.freeText });
-    emit(format(), grouped, () => Object.keys(grouped).length ? Object.entries(grouped).map(([t, c]) => `${t}\n  ${c.map((x) => `${x.column} ${x.type}${x.personal ? ' (personal)' : ''}`).join('\n  ')}`).join('\n\n') : 'Nothing loaded yet. Run lifecycle warehouse sync');
+    emit(format(), grouped, () => Object.keys(grouped).length ? Object.entries(grouped).map(([t, c]) => `${t}\n  ${c.map((x) => `${x.column} ${x.type}${x.personal ? ' (personal)' : ''}`).join('\n  ')}`).join('\n\n') : 'Nothing loaded yet. Run cosmic warehouse sync');
 }));
 warehouse.command('scrub').description('Empty personal columns that an older version stored. Shows counts first; --confirm applies').option('--confirm', 'empty the columns. Without it nothing is changed').action(write('warehouse scrub', async (opts) => {
     const config = readConfig();
@@ -1573,7 +1675,7 @@ warehouse.command('query').argument('<sql>').description('Run one read-only SQL 
         await db.close();
     }
 }));
-warehouse.command('add-api').argument('<slug>').requiredOption('--spec <file>', 'JSON spec: name, credentials, params and a dlt rest_api config').description('Add any REST API as a source. See lifecycle docs warehouse').action(run(async (slug, opts) => {
+warehouse.command('add-api').argument('<slug>').requiredOption('--spec <file>', 'JSON spec: name, credentials, params and a dlt rest_api config').description('Add any REST API as a source. See cosmic docs warehouse').action(run(async (slug, opts) => {
     const r = addCustomSource(slug, opts.spec);
     emit(format(), r, () => `Added ${slug}.\nNext: ${r.next}`);
 }));
@@ -1584,7 +1686,7 @@ program.command('provision').description('Create a managed database in your own 
     .option('--yes', 'create it. Without this, only prints the plan')
     .action(write('provision', async (provider, opts) => {
     if (provider !== 'neon')
-        throw new CliError(`Unsupported provider ${provider}.`, 'lifecycle provision neon --key-env NEON_API_KEY', 'bad_provider');
+        throw new CliError(`Unsupported provider ${provider}.`, 'cosmic provision neon --key-env NEON_API_KEY', 'bad_provider');
     if (!opts.yes) {
         const plan = neonPlan(opts.name, opts.region);
         emit(format(), plan, () => ['This would create:', ...plan.creates.map((c) => `  ${c}`), `Cost: ${plan.cost}`, 'Nothing was created. Add --yes to go ahead.'].join('\n'));
@@ -1601,13 +1703,13 @@ program.command('provision').description('Create a managed database in your own 
     }
     catch (e) {
         if (e instanceof CliError && e.code === 'no_keychain')
-            throw new CliError('Created the Neon project, but there is no keychain here to store its connection string.', 'Copy the connection string from the Neon console into LIFECYCLE_DATABASE_URL, then lifecycle init --database-url-env LIFECYCLE_DATABASE_URL', 'no_keychain');
+            throw new CliError('Created the Neon project, but there is no keychain here to store its connection string.', 'Copy the connection string from the Neon console into LIFECYCLE_DATABASE_URL, then cosmic init --database-url-env LIFECYCLE_DATABASE_URL', 'no_keychain');
         throw e;
     }
     finally {
         delete process.env.LIFECYCLE_PROVISIONED_URL;
     }
-    emit(format(), { provider, projectId: p.projectId, region: p.region, database: 'postgres' }, () => `Created Neon project ${p.projectId} in ${p.region} and set it as this CLI's database.\nNext: lifecycle sync, then lifecycle deploy --repo OWNER/NAME`);
+    emit(format(), { provider, projectId: p.projectId, region: p.region, database: 'postgres' }, () => `Created Neon project ${p.projectId} in ${p.region} and set it as this CLI's database.\nNext: cosmic sync, then cosmic deploy --repo OWNER/NAME`);
 }));
 program.command('status').description('One-screen summary: setup, sources, trust, the daily sync and updates').action(run(async () => {
     let config = null;
@@ -1627,11 +1729,11 @@ program.command('status').description('One-screen summary: setup, sources, trust
         const out = { version: VERSION, setUp: Boolean(config), database: config?.database.kind ?? null, sources, trust, deployRepo: config?.deploy?.repo ?? null, update, checklist, shopifyExport };
         emit(format(), out, () => [
             `lifecycle ${VERSION}${update.newer ? `  (update available: ${update.latest}. To get it, ${UPDATE_HINT})` : ''}`,
-            config ? `Database: ${config.database.kind}` : 'Not set up. Run lifecycle init, or follow lifecycle docs quickstart',
+            config ? `Database: ${config.database.kind}` : 'Not set up. Run cosmic init, or follow cosmic docs quickstart',
             ...sources.map((s) => `${s.connected ? 'connected    ' : 'not connected'} ${s.name}${s.lastSync ? `, last sync ${s.lastSync.slice(0, 16).replace('T', ' ')}` : ''}`),
             trust ? `Trust: ${trust.line}` : '',
             shopifyExport?.state === 'running' ? `Shopify order export: ${shopifyExport.ordersExported}${shopifyExport.ordersExpected ? ` of about ${shopifyExport.ordersExpected}` : ''} orders so far. The next sync picks it up.` : '',
-            `Daily sync: ${config?.deploy?.repo ?? 'not deployed. lifecycle deploy --repo OWNER/NAME'}`,
+            `Daily sync: ${config?.deploy?.repo ?? 'not deployed. cosmic deploy --repo OWNER/NAME'}`,
             ...(checklist.done < checklist.total ? checklistLines(checklist) : []),
         ].filter(Boolean).join('\n'));
     }
@@ -1655,7 +1757,7 @@ program.command('demo').description('See it work on invented sample data. No key
                 `3. ${kind === 'saas' ? 'SaaS' : 'B2B'} metrics, last 90 days. ${d.trust.line}`,
                 ...d.metrics.map((m) => `   ${m.title}: ${formatValue(m.unit, m.value)}`), '',
                 ...(d.bySource.length ? ['4. Pipeline created by original source:', ...d.bySource.map((r) => `   ${r.source}: ${r.deals} deals, ${formatValue('usd', r.pipeline)}`), ''] : []),
-                'Next: lifecycle docs workspaces',
+                'Next: cosmic docs workspaces',
             ].join('\n');
         });
         return;
@@ -1673,7 +1775,7 @@ program.command('demo').description('See it work on invented sample data. No key
             ...d.revenue.flows.map((f) => `   ${f.name}: $${f.revenuePerRecipient.toFixed(2)} per recipient`), '',
             `4. Flow audit found ${d.audit.findings.length} things to fix. The top three:`,
             ...d.audit.findings.slice(0, 3).map((f) => `   [${f.severity}] ${f.title}`), '',
-            'Next: lifecycle docs setup',
+            'Next: cosmic docs setup',
         ].join('\n');
     });
 }));
@@ -1686,7 +1788,7 @@ program.command('doctor').description('Check keys, connections and sync age').ac
 program.command('docs').argument('[topic]', `one of: ${Object.keys(DOCS).join(', ')}`, 'agents').description('Read the built-in docs').action(run(async (topic) => {
     const doc = DOCS[topic];
     if (!doc)
-        throw new CliError(`No doc named ${topic}.`, 'lifecycle docs commands');
+        throw new CliError(`No doc named ${topic}.`, 'cosmic docs commands');
     emit(format(), { topic, doc }, () => doc);
 }));
 await program.parseAsync();

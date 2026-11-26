@@ -1,6 +1,6 @@
 {
   "name": "cosmic-lifecycle",
-  "version": "0.20.1",
+  "version": "0.21.0",
   "description": "Your marketing data, ready for your AI agent. Connect ads, analytics, payments, email and CRM tools into a database you own, with a check on every number. Works with Claude Code, Cursor and Codex over MCP. Free, no account. Command: cosmic (or lifecycle).",
   "type": "module",
   "bin": {

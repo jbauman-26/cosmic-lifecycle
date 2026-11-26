@@ -14,18 +14,18 @@ export function setupChecklist(i) {
     const ws = i.workspace;
     const shop = !ws || (ws.type === 'shopify' && ws.reference === 'shopify');
     const connectStep = shop
-        ? { step: 'Connect Shopify and Klaviyo', done: has('shopify') && has('klaviyo'), next: 'lifecycle connect' }
+        ? { step: 'Connect Shopify and Klaviyo', done: has('shopify') && has('klaviyo'), next: 'cosmic connect' }
         : ws.reference === 'none'
-            ? { step: 'Pick the source of truth for this workspace', done: false, next: 'lifecycle config set workspace.reference stripe (or hubspot, shopify, ga4)' }
-            : { step: `Connect ${REFERENCE_NAME[ws.reference]}, this workspace's source of truth`, done: has(ws.reference), next: `lifecycle connect ${ws.reference}` };
+            ? { step: 'Pick the source of truth for this workspace', done: false, next: 'cosmic config set workspace.reference stripe (or hubspot, shopify, ga4)' }
+            : { step: `Connect ${REFERENCE_NAME[ws.reference]}, this workspace's source of truth`, done: has(ws.reference), next: `cosmic connect ${ws.reference}` };
     const steps = [
-        { step: 'Set up the database', done: i.setUp, next: 'lifecycle init' },
+        { step: 'Set up the database', done: i.setUp, next: 'cosmic init' },
         connectStep,
         // A failed or still-running attempt leaves a timestamp too, so only a finished sync that loaded data counts.
-        { step: 'Run the first sync', done: i.sources.some((s) => s.lastStatus === 'ok' || s.lastStatus === 'warning'), next: 'lifecycle sync' },
-        { step: 'Prove the numbers agree', done: i.trust === 'passed', next: i.trust === 'failed' ? 'lifecycle reconcile, then fix the failed checks it names' : 'lifecycle reconcile' },
-        { step: 'Install the skills for your agent', done: i.skills, next: 'lifecycle skills sync' },
-        { step: 'Deploy the daily sync', done: i.deployed, next: 'lifecycle deploy --repo OWNER/NAME' },
+        { step: 'Run the first sync', done: i.sources.some((s) => s.lastStatus === 'ok' || s.lastStatus === 'warning'), next: 'cosmic sync' },
+        { step: 'Prove the numbers agree', done: i.trust === 'passed', next: i.trust === 'failed' ? 'cosmic reconcile, then fix the failed checks it names' : 'cosmic reconcile' },
+        { step: 'Install the skills for your agent', done: i.skills, next: 'cosmic skills sync' },
+        { step: 'Deploy the daily sync', done: i.deployed, next: 'cosmic deploy --repo OWNER/NAME' },
     ].map((s) => ({ ...s, next: s.done ? null : s.next }));
     return { steps, done: steps.filter((s) => s.done).length, total: steps.length };
 }

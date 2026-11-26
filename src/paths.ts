@@ -12,7 +12,7 @@ const baseHome = () => process.env.LIFECYCLE_HOME ?? join(homedir(), '.lifecycle
 export function workspaceName(env: NodeJS.ProcessEnv = process.env): string | null {
   const v = env.LIFECYCLE_WORKSPACE?.trim()
   if (!v) return null
-  if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(v)) throw new CliError('A workspace name is 1 to 40 lowercase letters, numbers and dashes.', 'lifecycle --workspace acme-co status', 'bad_value')
+  if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(v)) throw new CliError('A workspace name is 1 to 40 lowercase letters, numbers and dashes.', 'cosmic --workspace acme-co status', 'bad_value')
   return v
 }
 export const appHome = () => {

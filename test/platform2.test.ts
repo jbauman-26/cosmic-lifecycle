@@ -168,7 +168,7 @@ describe('setup checklist', () => {
     const c = setupChecklist({ setUp: false, sources: [], trust: null, deployed: false, skills: false })
     expect(c.done).toBe(0)
     expect(c.total).toBe(6)
-    expect(c.steps[0]).toEqual({ step: 'Set up the database', done: false, next: 'lifecycle init' })
+    expect(c.steps[0]).toEqual({ step: 'Set up the database', done: false, next: 'cosmic init' })
     expect(checklistLines(c)[0]).toBe('Setup: 0 of 6 steps done')
   })
 
@@ -187,7 +187,7 @@ describe('setup checklist', () => {
       const c = setupChecklist({ setUp: true, sources: [src('shopify', true, status), src('klaviyo', true, null)], trust: null, deployed: false, skills: false })
       const step = c.steps.find((s) => s.step === 'Run the first sync')!
       expect(step.done).toBe(false)
-      expect(step.next).toBe('lifecycle sync')
+      expect(step.next).toBe('cosmic sync')
     }
   })
 
@@ -202,7 +202,7 @@ describe('setup checklist', () => {
     expect(c.steps[0]!.done).toBe(false)
     const html = dashboardHtml(await buildDashboard(db))
     expect(html).toContain('steps done')
-    expect(html).toContain('lifecycle init')
+    expect(html).toContain('cosmic init')
   })
 })
 

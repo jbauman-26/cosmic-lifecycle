@@ -4,7 +4,7 @@ import { sourceOfSchema } from './warehouse-names.js'
 import { getSetting } from './config.js'
 import { envName, getSecret } from './secrets.js'
 
-// Cosmic Cloud: the hosted copy of a store's warehouse. `lifecycle login` saves the Cloud
+// Cosmic Cloud: the hosted copy of a store's warehouse. `cosmic login` saves the Cloud
 // address in config.json and the store token in the keychain. From then on `--cloud` on a
 // read command asks Cloud instead of this machine's database.
 //
@@ -18,11 +18,11 @@ import { envName, getSecret } from './secrets.js'
 //    saved. With neither (after `logout`, say), a token left in the environment is not sent to
 //    the public address: the command stops with `not_logged_in` before anything leaves.
 
-export const DEFAULT_CLOUD_URL = 'https://cosmic-cloud.vercel.app'
+export const DEFAULT_CLOUD_URL = 'https://cloud.cosmicai.tech'
 export const CLOUD_URL_ENV = 'LIFECYCLE_CLOUD_URL'
 export const CLOUD_TOKEN_ENV = envName('cloud-token')
 const TIMEOUT_MS = 30_000
-const LOGIN_NEXT = 'lifecycle login --token-env YOUR_VAR'
+const LOGIN_NEXT = 'cosmic login --token-env YOUR_VAR'
 
 const isLoopback = (host: string) => host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
 
@@ -32,11 +32,11 @@ export function normalizeCloudUrl(raw: string): string {
   try {
     u = new URL(raw.trim())
   } catch {
-    throw new CliError('That is not a web address.', `lifecycle login --url ${DEFAULT_CLOUD_URL} --token-env YOUR_VAR`, 'bad_url')
+    throw new CliError('That is not a web address.', `cosmic login --url ${DEFAULT_CLOUD_URL} --token-env YOUR_VAR`, 'bad_url')
   }
-  if (u.username || u.password || u.search || u.hash) throw new CliError('The Cloud address must be a plain address, with no sign-in, query or fragment in it.', `lifecycle login --url ${DEFAULT_CLOUD_URL} --token-env YOUR_VAR`, 'bad_url')
+  if (u.username || u.password || u.search || u.hash) throw new CliError('The Cloud address must be a plain address, with no sign-in, query or fragment in it.', `cosmic login --url ${DEFAULT_CLOUD_URL} --token-env YOUR_VAR`, 'bad_url')
   if (u.protocol !== 'https:' && !(u.protocol === 'http:' && isLoopback(u.hostname))) {
-    throw new CliError('The Cloud address must start with https, so the store token is never sent in the clear.', `lifecycle login --url ${DEFAULT_CLOUD_URL} --token-env YOUR_VAR`, 'bad_url')
+    throw new CliError('The Cloud address must start with https, so the store token is never sent in the clear.', `cosmic login --url ${DEFAULT_CLOUD_URL} --token-env YOUR_VAR`, 'bad_url')
   }
   const path = u.pathname.replace(/\/+$/, '').replace(/\/api\/v1$/, '')
   return `${u.origin}${path}`
@@ -113,7 +113,7 @@ export class CloudClient {
       this.url = cloudUrl().url
     }
     // A token is plain printable text. Anything else cannot go in a header, and is not a token.
-    if (!/^[\x21-\x7e]+$/.test(token)) throw new CliError('That token has spaces, line breaks or other characters a token never has.', 'Copy the token again from Cosmic Cloud under Settings, export it, then run lifecycle login again.', 'bad_token')
+    if (!/^[\x21-\x7e]+$/.test(token)) throw new CliError('That token has spaces, line breaks or other characters a token never has.', 'Copy the token again from Cosmic Cloud under Settings, export it, then run cosmic login again.', 'bad_token')
     this.token = token
     this.fetchFn = opts.fetch ?? fetch
     this.timeoutMs = opts.timeoutMs ?? TIMEOUT_MS
@@ -138,7 +138,7 @@ export class CloudClient {
       })
     } catch (e) {
       const why = e instanceof Error && e.name === 'TimeoutError' ? 'it did not answer in time' : 'it could not be reached'
-      throw new CliError(`Cosmic Cloud did not answer: ${why}.`, 'Check the network and the address in lifecycle cloud status, then run this again.', 'cloud_unreachable')
+      throw new CliError(`Cosmic Cloud did not answer: ${why}.`, 'Check the network and the address in cosmic cloud status, then run this again.', 'cloud_unreachable')
     }
     const text = await res.text().catch(() => '')
     let body: any = null
@@ -148,7 +148,7 @@ export class CloudClient {
       body = null
     }
     if (res.ok) return body ?? {}
-    if (res.status >= 300 && res.status < 400) throw new CliError('Cosmic Cloud answered with a redirect, which this CLI does not follow.', 'Check the address: lifecycle cloud status', 'bad_url')
+    if (res.status >= 300 && res.status < 400) throw new CliError('Cosmic Cloud answered with a redirect, which this CLI does not follow.', 'Check the address: cosmic cloud status', 'bad_url')
     const err = body?.error && typeof body.error === 'object' ? body.error : {}
     const code = typeof err.code === 'string' ? err.code : ''
     const message = typeof err.message === 'string' ? this.scrub(err.message) : ''
@@ -161,7 +161,7 @@ export class CloudClient {
     if (res.status === 429) throw new CliError(message || 'Cosmic Cloud is getting too many calls from this store token.', wait, 'rate_limited')
     if (res.status === 503 && (!code || code === 'busy')) throw new CliError(message || 'Another change to this store is running on Cosmic Cloud.', wait, 'busy')
     if (code) throw new CliError(message || `Cosmic Cloud refused the request (${code}).`, res.status >= 500 ? 'Run this again in a moment.' : 'Fix the request, then run this again.', code)
-    throw new CliError(`Cosmic Cloud answered with status ${res.status}.`, 'Run this again in a moment, then lifecycle cloud status.', 'cloud_error')
+    throw new CliError(`Cosmic Cloud answered with status ${res.status}.`, 'Run this again in a moment, then cosmic cloud status.', 'cloud_error')
   }
 
   store(): Promise<CloudStoreReply> {
@@ -259,6 +259,6 @@ export const isNotBuilt = (e: unknown) => e instanceof CliError && e.code === 'n
 export async function verifyLogin(url: string, token: string, fetchFn?: typeof fetch) {
   const client = new CloudClient({ url, token, fetch: fetchFn })
   const r = await client.store()
-  if (!r?.store || typeof r.store.name !== 'string') throw new CliError('That address answered, but not like Cosmic Cloud.', 'Check the address, then run lifecycle login again.', 'bad_url')
+  if (!r?.store || typeof r.store.name !== 'string') throw new CliError('That address answered, but not like Cosmic Cloud.', 'Check the address, then run cosmic login again.', 'bad_url')
   return { url: client.url, store: { id: clean(String(r.store.id ?? ''), 80), name: clean(r.store.name, 120) }, connections: Array.isArray(r.connections) ? r.connections.length : 0 }
 }

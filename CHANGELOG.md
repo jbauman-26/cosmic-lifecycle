@@ -2,6 +2,46 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.21.0 (2026-11-25)
+
+Any table Fivetran or Airbyte loads into your own Postgres, for any connector, read in place with a freshness check.
+
+### Added
+
+- **`cosmic connect pipeline --tool fivetran|airbyte --schema NAME --url-env NAME`, without `--source`.** It lists every table in the schema (leaving out loader bookkeeping such as `fivetran_audit`), marks each column with the personal data rules, checks freshness and saves the schema. Nothing is copied, and the database URL stays in the environment variable.
+- **`cosmic schema NAME` and `cosmic schema NAME.TABLE`** list those tables with their personal columns left out. `cosmic schema` names the connected pipeline schemas.
+- **`cosmic query`** runs a query that names a connected pipeline schema on that database, in a read-only transaction with a 30-second limit and the usual row cap. Personal columns are refused before it runs. Email addresses and phone numbers in returned text are replaced. Schemas in the same database can be joined. The MCP `query` and `explore_schema` tools do the same.
+- **A freshness check per table** from `_fivetran_synced` or `_airbyte_extracted_at`, against `reconcile.freshness_days`, on connect, on every answer and on `cosmic sync`. The trust line for these tables says "Freshness only... They are not reconciled against any other source." It never says passed, and a stale table starts with STALE.
+- `cosmic sources list` shows each pipeline schema. `cosmic disconnect pipeline:NAME` forgets it.
+
+### Changed
+
+- Every "Next:" hint and error step says `cosmic`, not `lifecycle`. Both commands still work. The daily sync workflow `cosmic deploy` writes still runs `npx lifecycle`, so older installs keep working.
+- `init` and `cosmic workspace` suggest only sources that can connect today, so a SaaS workspace is no longer pointed at PostHog, which is planned.
+- `cosmic sources list` puts the workspace type's usual sources first, so a SaaS workspace starts with Stripe, GA4, Meta and HubSpot. A Shopify store keeps its order.
+- `init` and `sources list` point to the easy path: paste one sentence into Claude Code, Cursor or Codex and let the agent run `cosmic docs quickstart`.
+- A `cosmic sync` with only pipeline schemas connected checks their freshness instead of failing with "No sources connected", and prints no reconcile line.
+- `cosmic sync` rediscovers each pipeline schema's tables, so a table the loader added later gets a freshness check. Freshness on connect and sync runs inside the same 30-second read-only limit as queries. A pipeline database that cannot be read fails the sync (exit 1).
+- Cosmic Cloud's default address is now https://cloud.cosmicai.tech. The old address keeps working for existing installs.
+
+### Security (independent review and Codex review)
+
+- **Only connected tables can be read.** Before a pipeline query runs, Postgres plans it (EXPLAIN, which does not run it), and any table it would read that is not a connected loader table is refused: another schema, a staging or audit table, or a table hidden behind a comment.
+- **Personal columns are checked in the plan too,** so a view or an expression that renames a personal column is refused. The query is planned wrapped and limited, as it runs, so a `SELECT *` view over a connected table names every column it returns.
+- **Only built-in names resolve without a schema.** Pipeline queries run with the search path set to `pg_catalog`, so every table, view, function or operator outside it has to be written `schema.name`, which the checks see. Tables are already named that way (`hubspot.deal`).
+- **Functions:** blocked functions (such as `query_to_xml`) are checked both in the SQL and on Postgres's own spelling of the plan, so an escaped name is caught, and so is a call the plan folds away or hides in `LIMIT`. A function from any schema but `pg_catalog`, which could read any table unseen, is refused, and so is `OPERATOR(...)`. Operators outside `pg_catalog` (an extension's `=`, for example) are not on the search path, so ordinary comparisons keep working.
+- **Prefixed strings and names** (`E'..'`, `U&".."`) are refused in every pipeline query.
+- **Types defined in the database** (`::public.mytype`, `CAST(x AS public.mytype)`) are refused, because a cast or a domain check can run a function. Columns of an extension or custom type (citext, an enum) are treated as personal and left out.
+- **Views and materialized views are never read** in pipeline queries, because they can rename personal columns past the rules. Query the loader table instead. A bare view name does not resolve, and a schema-qualified one is refused.
+- **Routing ignores strings and comments.** A schema name inside a string or a comment never routes a local query to the pipeline database.
+- **More columns are treated as personal in loader tables:** phones, social handles, job titles, free-text bodies and raw JSON records. Views are not registered.
+
+### Not covered yet
+
+- BigQuery and Snowflake (Postgres only).
+- Pipeline tables have no count checks and are not part of `cosmic verdict`.
+- Stripe and Shopify through `--source` keep their deep checks, unchanged.
+
 ## 0.20.1 (2026-11-25)
 
 Stripe charge KPIs can be reported in `cosmic verdict`, held against Stripe's own report. MRR is reported as of the last sync, never as a month figure.

@@ -121,7 +121,7 @@ export async function openDb(): Promise<Db> {
     return wrapPglite(client)
   }
   const url = getSecret('database-url')
-  if (!url) throw new CliError('No database URL saved.', 'Set LIFECYCLE_DATABASE_URL, or run lifecycle init for the local database.', 'no_database')
+  if (!url) throw new CliError('No database URL saved.', 'Set LIFECYCLE_DATABASE_URL, or run cosmic init for the local database.', 'no_database')
   const schema = dbSchema()
   // With LIFECYCLE_DB_SCHEMA set, reads and writes both land in that schema.
   return wrapPg(new pg.Pool({ connectionString: url, max: 2 }) as unknown as PgPool, schema)

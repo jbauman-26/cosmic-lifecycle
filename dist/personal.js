@@ -1,9 +1,9 @@
 // The one rule list for personal data. Everything that decides whether a field is personal reads it:
 //
 //   the loader (connectors/run.py)  drops or scrubs fields before anything is written
-//   lifecycle schema                marks each column `personal: true|false`
-//   lifecycle query                 refuses a statement that reads a personal column
-//   lifecycle warehouse scrub       nulls personal columns an older version stored
+//   cosmic schema                marks each column `personal: true|false`
+//   cosmic query                 refuses a statement that reads a personal column
+//   cosmic warehouse scrub       nulls personal columns an older version stored
 //
 // The loader is Python, so `npm run build` writes PERSONAL_RULES to connectors/personal-rules.json and
 // the CLI also sends it with every loader job. The Python side holds the same small algorithm and no
@@ -159,7 +159,7 @@ export const PERSONAL_RULES = {
         },
     },
 };
-// One sentence per rule, for docs and for `lifecycle docs warehouse`.
+// One sentence per rule, for docs and for `cosmic docs warehouse`.
 export const RULE_SUMMARY = [
     'Removed everywhere: email, phone, mobile, fax, street address, postal code, birthday, IP address, coordinates, passwords and tokens.',
     "Removed everywhere: a person's name (first, last, full, given, family, display, nick, user, reviewer, author, requester, assignee, customer, recipient, sender).",

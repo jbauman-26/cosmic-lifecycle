@@ -69,7 +69,7 @@ ${ga4}${stripe}${warehouseEnvs.map((e) => `      ${e}: \${{ secrets.${e} }}\n`).
 ${hasWarehouse ? `      # Warehouse sources load raw tables with dlt, run by uv.
       - uses: astral-sh/setup-uv@v6
       - run: npx lifecycle warehouse sync
-` : ''}      # A dashboard of totals, kept in this private repo for 30 days. lifecycle files pull downloads it.
+` : ''}      # A dashboard of totals, kept in this private repo for 30 days. cosmic files pull downloads it.
       - run: npx lifecycle dashboard --html lifecycle-dashboard.html
         if: always()
       - uses: actions/upload-artifact@v4
@@ -105,7 +105,7 @@ export function writeProject(config: Config, dir: string) {
   // The store name and client id are not secret, and the runner needs them.
   const { registry: _r, deploy: _d, update: _u, ...runner } = config
   writeFileSync(join(dir, '.lifecycle', 'config.json'), JSON.stringify({ ...runner, database: { kind: 'postgres' } }, null, 2) + '\n')
-  writeFileSync(join(dir, 'README.md'), '# Lifecycle sync\n\nRuns `lifecycle sync` every day. Keys live in GitHub Actions secrets.\n')
+  writeFileSync(join(dir, 'README.md'), '# Lifecycle sync\n\nRuns `cosmic sync` every day. Keys live in GitHub Actions secrets.\n')
   return { dir, files: ['.github/workflows/sync.yml', '.lifecycle/config.json', 'README.md'] }
 }
 
@@ -114,30 +114,30 @@ export function deploy(config: Config, repo: string, secrets: Record<string, str
   if (gh(['auth', 'status']).status !== 0) throw new CliError('GitHub CLI is not signed in.', 'gh auth login', 'gh_auth')
   const dir = mkdtempSync(join(tmpdir(), 'lifecycle-deploy-'))
   writeProject(config, dir)
-  for (const args of [['init', '-q', '-b', 'main'], ['add', '-A'], ['commit', '-q', '-m', 'chore: daily lifecycle sync']]) {
+  for (const args of [['init', '-q', '-b', 'main'], ['add', '-A'], ['commit', '-q', '-m', 'chore: daily cosmic sync']]) {
     const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
-    if (r.status !== 0) throw new CliError(`git ${args[0]} failed.`, 'lifecycle doctor')
+    if (r.status !== 0) throw new CliError(`git ${args[0]} failed.`, 'cosmic doctor')
   }
   const created = gh(['repo', 'create', repo, '--private', '--source', '.', '--push'], undefined, dir)
   if (created.status !== 0) throw new CliError(`Could not create ${repo}: ${created.stderr.trim().slice(0, 160)}`, 'Pick another repo name.', 'gh_repo')
   for (const [name, value] of Object.entries(secrets)) {
     const r = gh(['secret', 'set', name, '--repo', repo], value)
-    if (r.status !== 0) throw new CliError(`Could not set ${name}.`, 'lifecycle deploy', 'gh_secret')
+    if (r.status !== 0) throw new CliError(`Could not set ${name}.`, 'cosmic deploy', 'gh_secret')
   }
-  return { repo, url: `https://github.com/${repo}`, firstRun: 'lifecycle deploy run' }
+  return { repo, url: `https://github.com/${repo}`, firstRun: 'cosmic deploy run' }
 }
 
 export type WorkflowRun = { id: number; status: string; conclusion: string | null; event: string; createdAt: string; url: string }
 
 function requireRepo(repo: string | undefined): string {
-  if (!repo) throw new CliError('No sync repo is set.', 'lifecycle deploy --repo OWNER/NAME, or lifecycle config set deploy.repo OWNER/NAME', 'no_repo')
+  if (!repo) throw new CliError('No sync repo is set.', 'cosmic deploy --repo OWNER/NAME, or cosmic config set deploy.repo OWNER/NAME', 'no_repo')
   if (gh(['auth', 'status']).status !== 0) throw new CliError('GitHub CLI is not signed in.', 'gh auth login', 'gh_auth')
   return repo
 }
 
 export function deployStatus(repo: string | undefined, limit = 7) {
   const r = gh(['run', 'list', '--repo', requireRepo(repo), '--workflow', 'sync.yml', '--limit', String(limit), '--json', 'databaseId,status,conclusion,event,createdAt,url'])
-  if (r.status !== 0) throw new CliError(`Could not read runs for ${repo}: ${r.stderr.trim().slice(0, 160)}`, 'Check the repo name with lifecycle config get deploy.repo', 'gh_runs')
+  if (r.status !== 0) throw new CliError(`Could not read runs for ${repo}: ${r.stderr.trim().slice(0, 160)}`, 'Check the repo name with cosmic config get deploy.repo', 'gh_runs')
   const runs: WorkflowRun[] = JSON.parse(r.stdout || '[]').map((x: any) => ({ id: x.databaseId, status: x.status, conclusion: x.conclusion, event: x.event, createdAt: x.createdAt, url: x.url }))
   return { repo, runs, successStreak: successStreak(runs) }
 }
@@ -155,14 +155,14 @@ export function successStreak(runs: Pick<WorkflowRun, 'status' | 'conclusion'>[]
 
 export function deployRun(repo: string | undefined) {
   const r = gh(['workflow', 'run', 'sync.yml', '--repo', requireRepo(repo)])
-  if (r.status !== 0) throw new CliError(`Could not start a run: ${r.stderr.trim().slice(0, 160)}`, 'lifecycle deploy status', 'gh_run')
-  return { repo, started: true, next: 'lifecycle deploy status' }
+  if (r.status !== 0) throw new CliError(`Could not start a run: ${r.stderr.trim().slice(0, 160)}`, 'cosmic deploy status', 'gh_run')
+  return { repo, started: true, next: 'cosmic deploy status' }
 }
 
 // One run by id, so a follow stays on the run it started with even when a newer one is dispatched.
 export function deployRunById(repo: string | undefined, id: number): WorkflowRun {
   const r = gh(['run', 'view', String(id), '--repo', requireRepo(repo), '--json', 'databaseId,status,conclusion,event,createdAt,url'])
-  if (r.status !== 0) throw new CliError(`Could not read run ${id} for ${repo}: ${r.stderr.trim().slice(0, 160)}`, 'lifecycle jobs list', 'gh_runs')
+  if (r.status !== 0) throw new CliError(`Could not read run ${id} for ${repo}: ${r.stderr.trim().slice(0, 160)}`, 'cosmic jobs list', 'gh_runs')
   const x = JSON.parse(r.stdout)
   return { id: x.databaseId, status: x.status, conclusion: x.conclusion, event: x.event, createdAt: x.createdAt, url: x.url }
 }
@@ -170,7 +170,7 @@ export function deployRunById(repo: string | undefined, id: number): WorkflowRun
 // The log of one run. Without `run`, the newest one.
 export function deployLogs(repo: string | undefined, tail = 60, run?: WorkflowRun) {
   const last = run ?? deployStatus(repo, 1).runs[0]
-  if (!last) throw new CliError('No runs yet.', 'lifecycle deploy run', 'no_runs')
+  if (!last) throw new CliError('No runs yet.', 'cosmic deploy run', 'no_runs')
   const r = gh(['run', 'view', String(last.id), '--repo', repo!, '--log'])
   const lines = (r.stdout || r.stderr).trim().split('\n')
   return { repo, run: last, log: lines.slice(-tail).join('\n') }
@@ -183,7 +183,7 @@ export async function followRun(latest: () => WorkflowRun | undefined, byId: (id
   let id: number | undefined
   for (let i = 0; i < maxPolls; i++) {
     const run = id === undefined ? latest() : byId(id)
-    if (!run) throw new CliError('No runs yet.', 'lifecycle jobs run', 'no_runs')
+    if (!run) throw new CliError('No runs yet.', 'cosmic jobs run', 'no_runs')
     id = run.id
     const state = `${run.id}:${run.status}:${run.conclusion}`
     if (state !== seen) onChange(run)
@@ -191,5 +191,5 @@ export async function followRun(latest: () => WorkflowRun | undefined, byId: (id
     if (run.status === 'completed') return run
     await wait()
   }
-  throw new CliError('The run is still going after 17 minutes.', 'lifecycle jobs list', 'follow_timeout')
+  throw new CliError('The run is still going after 17 minutes.', 'cosmic jobs list', 'follow_timeout')
 }

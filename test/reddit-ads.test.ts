@@ -113,7 +113,7 @@ describe('the API client', () => {
       [httpError(403), 'reddit_ads_permission', /reporting access/],
       [httpError(404, { error: { code: 404, message: 'Not found.' } }), 'reddit_ads_account', /Accounts in Reddit Ads Manager/],
       [httpError(429, { error: { code: 429, message: 'Too many requests.' } }), 'rate_limited', /60 requests a minute/],
-      [httpError(500, { error: { code: 500, message: 'Internal Server Error' } }), 'reddit_ads_error', /lifecycle doctor/],
+      [httpError(500, { error: { code: 500, message: 'Internal Server Error' } }), 'reddit_ads_error', /cosmic doctor/],
     ]
     for (const [err, code, next] of cases) {
       await expect(new RedditAds('tok', ACCOUNT, fake([err]).fetcher).report('2026-11-22', '2026-11-23', 'UTC')).rejects.toSatisfy((e: any) => e.code === code && next.test(`${e.message} ${e.next}`))

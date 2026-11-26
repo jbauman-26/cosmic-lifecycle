@@ -228,7 +228,7 @@ describe('the trust gate for each workspace type', () => {
   it('asks a SaaS workspace for Stripe in the setup checklist, and a store for Shopify and Klaviyo as before', () => {
     const base = { setUp: true, sources: [], trust: null, deployed: false, skills: false }
     expect(setupChecklist(base).steps[1]!.step).toBe('Connect Shopify and Klaviyo')
-    expect(setupChecklist({ ...base, workspace: ws('saas') }).steps[1]).toMatchObject({ step: "Connect Stripe, this workspace's source of truth", next: 'lifecycle connect stripe' })
+    expect(setupChecklist({ ...base, workspace: ws('saas') }).steps[1]).toMatchObject({ step: "Connect Stripe, this workspace's source of truth", next: 'cosmic connect stripe' })
     expect(setupChecklist({ ...base, workspace: ws('agency') }).steps[1]!.next).toMatch(/workspace.reference/)
   })
 })
@@ -326,7 +326,7 @@ describe('connectors added in 0.14.0 strip personal data from recorded responses
   const slugs = readdirSync(FIXTURES).map((f) => f.replace(/\.json$/, '')).sort()
   it('has a recorded response for every built connector added in this release', () => {
     expect(slugs).toEqual(['bigcommerce', 'customer-io', 'hubspot-records', 'pipedrive', 'woocommerce'])
-    // LinkedIn Ads became a built-in source (lifecycle connect linkedin-ads), so it left the warehouse catalog.
+    // LinkedIn Ads became a built-in source (cosmic connect linkedin-ads), so it left the warehouse catalog.
     expect(WAREHOUSE_CATALOG.find((x) => x.slug === 'linkedin-ads')).toBeUndefined()
     for (const s of ['salesforce', 'posthog', 'mixpanel']) expect(WAREHOUSE_CATALOG.find((x) => x.slug === s)?.readiness, s).toBe('planned')
   })

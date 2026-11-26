@@ -23,7 +23,7 @@ export function readNotes(): Note[] {
     const data = JSON.parse(readFileSync(p, 'utf8'))
     return Array.isArray(data?.notes) ? (data.notes as Note[]).filter((n) => n && typeof n.text === 'string' && typeof n.id === 'string') : []
   } catch {
-    throw new CliError(`notes.json is not valid JSON: ${p}`, 'Fix or delete the file, then run lifecycle notes list', 'bad_value')
+    throw new CliError(`notes.json is not valid JSON: ${p}`, 'Fix or delete the file, then run cosmic notes list', 'bad_value')
   }
 }
 
@@ -37,14 +37,14 @@ function writeNotes(notes: Note[]) {
 
 export function addNote(text: string, metric?: string | null): Note {
   const t = text.replace(/\s+/g, ' ').trim()
-  if (!t) throw new CliError('A note needs some text.', 'lifecycle notes add "Exclude wholesale orders from revenue"', 'bad_value')
+  if (!t) throw new CliError('A note needs some text.', 'cosmic notes add "Exclude wholesale orders from revenue"', 'bad_value')
   if (t.length > MAX_TEXT) throw new CliError(`A note is at most ${MAX_TEXT} characters. This one is ${t.length}.`, 'Split it into two notes', 'bad_value')
   const m = metric?.trim() || null
-  if (m && !/^[a-z][a-z0-9_]{2,63}$/.test(m)) throw new CliError(`Not a metric name: ${m}`, 'lifecycle metrics list', 'bad_value')
+  if (m && !/^[a-z][a-z0-9_]{2,63}$/.test(m)) throw new CliError(`Not a metric name: ${m}`, 'cosmic metrics list', 'bad_value')
   const notes = readNotes()
   const same = notes.find((n) => n.text.toLowerCase() === t.toLowerCase() && n.metric === m)
-  if (same) throw new CliError(`That note is already saved as ${same.id}.`, 'lifecycle notes list', 'duplicate')
-  if (notes.length >= MAX_NOTES) throw new CliError(`This workspace already has ${MAX_NOTES} notes.`, 'lifecycle notes remove <id>', 'bad_value')
+  if (same) throw new CliError(`That note is already saved as ${same.id}.`, 'cosmic notes list', 'duplicate')
+  if (notes.length >= MAX_NOTES) throw new CliError(`This workspace already has ${MAX_NOTES} notes.`, 'cosmic notes remove <id>', 'bad_value')
   const note: Note = { id: randomBytes(3).toString('hex'), text: t, metric: m, added: new Date().toISOString() }
   writeNotes([...notes, note])
   return note
@@ -53,7 +53,7 @@ export function addNote(text: string, metric?: string | null): Note {
 export function removeNote(id: string): Note {
   const notes = readNotes()
   const hit = notes.find((n) => n.id === id)
-  if (!hit) throw new CliError(`No note with id ${id}.`, 'lifecycle notes list', 'not_found')
+  if (!hit) throw new CliError(`No note with id ${id}.`, 'cosmic notes list', 'not_found')
   writeNotes(notes.filter((n) => n.id !== id))
   return hit
 }

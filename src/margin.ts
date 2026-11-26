@@ -25,7 +25,7 @@ export async function computeMargin(db: Tx, since: string, days: number) {
   const costs = readCosts()
   const trust = await trustLine(db)
   if (!costs) {
-    return { metric: 'contribution_margin' as const, days, status: 'no_costs' as const, detail: 'No costs are set for this store. Set them in the app under Settings, Costs, or with lifecycle costs set.', trust, costs: null }
+    return { metric: 'contribution_margin' as const, days, status: 'no_costs' as const, detail: 'No costs are set for this store. Set them in the app under Settings, Costs, or with cosmic costs set.', trust, costs: null }
   }
   const rows = await db.query(MARGIN_SQL, [since])
   const skuRows = costs.cogs.mode === 'per_product' ? await db.query(MARGIN_SKU_SQL, [since]) : []
@@ -48,11 +48,11 @@ export async function computeMargin(db: Tx, since: string, days: number) {
 
   if (costs.cogs.mode === 'shopify') {
     if (costSynced) included.push('Cost of goods from Shopify product costs')
-    else missing.push('Cost of goods: Shopify product costs not synced yet (lifecycle costs sync)')
+    else missing.push('Cost of goods: Shopify product costs not synced yet (cosmic costs sync)')
   } else if (costs.cogs.mode === 'percent') included.push(`Cost of goods at ${costs.cogs.percent}% of revenue`)
   else {
     if (skuRows.length) included.push(`Cost of goods from your cost per product (${costs.cogs.items.length} SKUs)`)
-    else missing.push('Cost of goods: sales by SKU not synced yet (lifecycle costs sync)')
+    else missing.push('Cost of goods: sales by SKU not synced yet (cosmic costs sync)')
     if (unlistedSkus && costs.cogs.fallback_percent === null) missing.push('Cost of goods for SKUs not on your list')
     else if (unlistedSkus) included.push(`SKUs not on your list at ${costs.cogs.fallback_percent}% of their revenue`)
   }

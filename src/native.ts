@@ -56,7 +56,7 @@ export function parseOnly(values: string[] | undefined): NativeSource[] | null {
   if (!list.length) return null
   const unknown = list.filter((s) => !isNative(s))
   if (unknown.length) {
-    throw new CliError(`Not a built-in source: ${unknown.join(', ')}.`, `Use one or more of ${NATIVE.join(', ')}. Warehouse sources sync with lifecycle warehouse sync SLUG.`, 'unknown_source')
+    throw new CliError(`Not a built-in source: ${unknown.join(', ')}.`, `Use one or more of ${NATIVE.join(', ')}. Warehouse sources sync with cosmic warehouse sync SLUG.`, 'unknown_source')
   }
   return list as NativeSource[]
 }
@@ -68,7 +68,7 @@ export function chooseSources(only: NativeSource[] | null, connected: Record<Nat
   if (!only) return NATIVE.filter((s) => connected[s])
   const missing = only.filter((s) => !connected[s])
   if (missing.length) {
-    throw new CliError(`Not connected: ${missing.join(', ')}.`, `lifecycle connect ${missing[0]} (see lifecycle sources list)`, 'not_connected')
+    throw new CliError(`Not connected: ${missing.join(', ')}.`, `cosmic connect ${missing[0]} (see cosmic sources list)`, 'not_connected')
   }
   return NATIVE.filter((s) => only.includes(s))
 }
@@ -87,7 +87,7 @@ export type DisconnectResult = {
 // kept unless deleteData is set, so a person can reconnect without losing history.
 export async function disconnectNative(source: string, opts: { deleteData?: boolean; db?: Db | null; remove?: (name: SecretName) => boolean } = {}): Promise<DisconnectResult> {
   if (!isNative(source)) {
-    throw new CliError(`Not a built-in source: ${source}.`, `Use one of ${NATIVE.join(', ')}. For a warehouse source: lifecycle warehouse disconnect SLUG`, 'unknown_source')
+    throw new CliError(`Not a built-in source: ${source}.`, `Use one of ${NATIVE.join(', ')}. For a warehouse source: cosmic warehouse disconnect SLUG`, 'unknown_source')
   }
   const remove = opts.remove ?? ((name: SecretName) => deleteSecret(name).removed)
   const hadConfig = source in readRawConfig()
@@ -95,7 +95,7 @@ export async function disconnectNative(source: string, opts: { deleteData?: bool
   const stillInEnvironment = NATIVE_SECRETS[source].map(envName).filter((env) => Boolean(process.env[env]))
   const hadPipeline = removePipelineSource(source)
   if (!hadConfig && !hadPipeline && !keysRemoved.length && !stillInEnvironment.length) {
-    throw new CliError(`${source} is not connected.`, 'lifecycle sources list', 'not_connected')
+    throw new CliError(`${source} is not connected.`, 'cosmic sources list', 'not_connected')
   }
   const configRemoved = removeConfigSection(source)
 
@@ -120,7 +120,7 @@ export async function disconnectNative(source: string, opts: { deleteData?: bool
       [randomUUID(), source, at, opts.deleteData ? 'Disconnected. Its data was deleted.' : 'Disconnected. Its data was kept.'],
     )
   } else if (opts.deleteData) {
-    throw new CliError('The database could not be opened, so no data was deleted.', 'lifecycle doctor, then lifecycle disconnect SOURCE --delete-data again', 'no_database')
+    throw new CliError('The database could not be opened, so no data was deleted.', 'cosmic doctor, then cosmic disconnect SOURCE --delete-data again', 'no_database')
   }
 
   const notes = [

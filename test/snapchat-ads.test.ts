@@ -126,7 +126,7 @@ describe('the API client', () => {
       [new HttpError('x', 404, JSON.stringify({ request_status: 'ERROR', error_code: 'E3003', display_message: 'Resource can not be found' })), 'snapchat_ads_account', /Snapchat Ads Manager/],
       [new HttpError('x', 429, ''), 'rate_limited', /Wait a minute/],
       [httpError(400, 'error-too-large'), 'snapchat_ads_error', /metrics\.default_days/],
-      [new HttpError('x', 500, '{}'), 'snapchat_ads_error', /lifecycle doctor/],
+      [new HttpError('x', 500, '{}'), 'snapchat_ads_error', /cosmic doctor/],
     ]
     for (const [err, code, next] of cases) {
       await expect(new SnapchatAds('tok', ACCOUNT, fake([err]).fetcher).stats('2026-11-22', '2026-11-23', LA)).rejects.toSatisfy((e: any) => e.code === code && next.test(`${e.message} ${e.next}`))
