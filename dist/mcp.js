@@ -1,7 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { openDb, migrate } from './db.js';
+import { openDb, migrate, wrapPglite } from './db.js';
+import { CliError } from './errors.js';
 import { recordCustomQuery, runQuery } from './query.js';
 import { reconcile } from './reconcile.js';
 import { auditFlows, revenuePerFlow } from './reports.js';
@@ -29,8 +30,23 @@ export async function schemaInfo(db) {
     return out;
 }
 // Read-only by construction: there is no sync, connect or segment tool here.
+export const NOT_SET_UP = 'This workspace is not set up yet, so there are no numbers. Tell the user to run lifecycle init, or follow lifecycle docs quickstart. Until then every tool that needs the workspace answers with "Not set up yet".';
 export async function startMcp() {
-    const db = await openDb();
+    // 0.17.0: a fresh install starts the server too, so `claude mcp add` works before setup.
+    // It runs on an empty in-memory database and says plainly that nothing is set up.
+    let db;
+    try {
+        db = await openDb();
+    }
+    catch (e) {
+        if (!(e instanceof CliError) || e.code !== 'not_initialized')
+            throw e;
+        const { PGlite } = await import('@electric-sql/pglite');
+        db = wrapPglite(await PGlite.create());
+        await migrate(db);
+        await buildMcpServer(db, NOT_SET_UP).connect(new StdioServerTransport());
+        return;
+    }
     // Bring an older store up to date, unless a sync is writing right now: then it is already current.
     const startLock = tryWriteLock('mcp start');
     if (startLock) {
@@ -43,8 +59,8 @@ export async function startMcp() {
     }
     await buildMcpServer(db).connect(new StdioServerTransport());
 }
-export function buildMcpServer(db) {
-    const server = new McpServer({ name: 'cosmic-lifecycle', version: VERSION }, { instructions: DOCS.agents });
+export function buildMcpServer(db, notice) {
+    const server = new McpServer({ name: 'cosmic-lifecycle', version: VERSION }, { instructions: notice ? `${notice}\n\n${DOCS.agents}` : DOCS.agents });
     const readOnly = { readOnlyHint: true, openWorldHint: false };
     server.registerTool('list_metrics', {
         description: 'List the verified metrics for this workspace type, plus any numbers the owner saved (saved: true). Prefer these to writing SQL: the same metric always runs the same SQL.',

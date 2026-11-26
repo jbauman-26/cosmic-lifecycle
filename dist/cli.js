@@ -830,7 +830,7 @@ costs.command('sync').description('Read each line item\'s unit cost from Shopify
 const sources = program.command('sources').description('What can be connected, and what is connected');
 sources
     .command('catalog')
-    .description('Every source: the built-in four, warehouse connectors, and what is planned')
+    .description('Every source: the native ones, warehouse connectors, and what is planned')
     .option('--query <text>', 'search by name, slug or category')
     .option('--category <name>', 'only one category, such as reviews or helpdesk')
     .option('--readiness <level>', 'native, tested, built or planned')

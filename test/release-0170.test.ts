@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
@@ -90,4 +91,25 @@ describe('0.17.0', () => {
     for (const m of METRICS) expect(defs).toContain(`\`${m.name}\``)
     for (const f of ['README.md', 'llms.txt', 'docs/METRICS.md']) expect(readFileSync(f, 'utf8')).not.toMatch(/[–—]|store\.jakebauman\.io/)
   })
+})
+
+describe('0.17.0 MCP on a fresh install', () => {
+  it('starts before lifecycle init, lists its tools and says nothing is set up', async () => {
+    const fresh = mkdtempSync(join(tmpdir(), 'lc-0170-fresh-'))
+    const child = spawn(process.execPath, ['--import', 'tsx', 'src/cli.ts', 'mcp'], { env: { ...process.env, LIFECYCLE_HOME: fresh, LIFECYCLE_NO_KEYCHAIN: '1', LIFECYCLE_NO_UPDATE_CHECK: '1' } })
+    let out = ''
+    child.stdout.on('data', (d) => (out += d))
+    const send = (m: object) => child.stdin.write(JSON.stringify(m) + '\n')
+    send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } } })
+    send({ jsonrpc: '2.0', method: 'notifications/initialized' })
+    send({ jsonrpc: '2.0', id: 2, method: 'tools/list' })
+    for (let i = 0; i < 100 && !out.includes('"id":2'); i++) await new Promise((r) => setTimeout(r, 100))
+    child.kill()
+    rmSync(fresh, { recursive: true, force: true })
+    const lines = out.trim().split('\n').map((l) => JSON.parse(l))
+    expect(lines[0].result.instructions).toMatch(/not set up yet/)
+    const names = lines.find((l) => l.id === 2).result.tools.map((t: { name: string }) => t.name)
+    expect(names).toEqual(expect.arrayContaining(['metric', 'reconcile', 'owner_notes', 'query']))
+    expect(existsSync(join(fresh, 'config.json'))).toBe(false)
+  }, 20000)
 })

@@ -10,6 +10,7 @@ The first public release. The repo is public, and the install is one command fro
 
 - **Owner notes.** `lifecycle notes add "Exclude wholesale orders from revenue"`, `notes add --metric NAME`, `notes list`, `notes remove ID`. Notes live in `notes.json` in the workspace folder, never in the database and never in a source. `lifecycle metrics run` prints the matching notes, and the MCP `metric` and `query` results carry them as `owner_notes`, with a rule telling the agent to apply them and say which one it applied. New MCP tool `owner_notes`. Each workspace keeps its own. At most 200 notes of 500 characters.
 - **Metric definitions file.** `docs/METRICS.md` is written from the code at build time: every built-in metric, what it measures, its unit, the sources it needs, its packs and its stated assumptions.
+- **`lifecycle mcp` starts on a fresh install**, before `lifecycle init`, so `claude mcp add lifecycle -- lifecycle mcp` works right after installing. It runs on an empty in-memory database, creates no files, and its instructions say the workspace is not set up yet.
 - The agent guide says to read the owner's notes first, and to label any before-and-after comparison "before and after, not a holdout".
 
 ### From 0.16.0, now on main
