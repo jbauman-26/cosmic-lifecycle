@@ -1,0 +1,55 @@
+{
+  "source": "https://www.sealsubscriptions.com/articles/merchant-api-documentation",
+  "note": "Illustrative rows following the documented payload and next_cursor envelope, not vendor sample records.",
+  "resources": {
+    "subscriptions": {
+      "response": {
+        "payload": [
+          {
+            "id": 501,
+            "status": "active",
+            "customer_id": 8811,
+            "customer_email": "priya@natarajan.example",
+            "customer_first_name": "Priya",
+            "customer_last_name": "Natarajan",
+            "product_id": 771,
+            "variant_id": 3301,
+            "quantity": 2,
+            "price": "24.00",
+            "next_billing_date": "2026-12-02T12:00:00Z",
+            "created_at": "2026-09-02T09:00:00Z"
+          },
+          {
+            "id": 502,
+            "status": "paused",
+            "customer_id": 8812,
+            "customer_email": "sam.okafor@northfield.example",
+            "customer_first_name": "Sam",
+            "customer_last_name": "Okafor",
+            "product_id": 772,
+            "variant_id": 3302,
+            "quantity": 1,
+            "price": "18.00",
+            "next_billing_date": "2026-12-09T12:00:00Z",
+            "created_at": "2026-09-09T09:00:00Z"
+          }
+        ],
+        "next_cursor": null
+      }
+    }
+  },
+  "personal": [
+    "priya@natarajan.example",
+    "Priya",
+    "Natarajan",
+    "sam.okafor@northfield.example",
+    "Sam",
+    "Okafor"
+  ],
+  "kept": [
+    "\"id\": 501",
+    "active",
+    "24.00",
+    "2026-12-02T12:00:00Z"
+  ]
+}

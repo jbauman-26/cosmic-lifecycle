@@ -1832,12 +1832,50 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "slug": "seal-subscriptions",
     "name": "Seal Subscriptions",
     "category": "subscriptions",
-    "readiness": "planned",
+    "readiness": "built",
     "why": "#40 of 100 tools Shopify stores use. StoreLeads: Shopify app installed on 33,941 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/shopify/app/seal-subscriptions",
     "docs": "https://www.sealsubscriptions.com/articles/merchant-api-documentation",
-    "credentials": [],
+    "credentials": [
+      {
+        "name": "api_token",
+        "label": "Merchant API token",
+        "help": "In the Seal Subscriptions app open Settings, then General Settings, then API, and copy the shop's API token. The token is unique to the shop, so treat it like a password. This connector only sends GET requests."
+      }
+    ],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "config": {
+      "client": {
+        "base_url": "https://app.sealsubscriptions.com/shopify/merchant/api/",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "auth": {
+          "type": "api_key",
+          "name": "X-Seal-Token",
+          "api_key": "{secret:api_token}",
+          "location": "header"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "subscriptions",
+          "endpoint": {
+            "path": "subscriptions",
+            "data_selector": "payload",
+            "paginator": {
+              "type": "cursor",
+              "cursor_path": "next_cursor",
+              "cursor_param": "cursor"
+            }
+          }
+        }
+      ]
+    },
+    "notes": "The docs describe a public REST merchant API with a per-shop token from Settings, General Settings, API, sent as the X-Seal-Token header, and the curl examples use https://app.sealsubscriptions.com/shopify/merchant/api/ as the base. One resource is built, GET /subscriptions, which pages by cursor: the response carries payload and next_cursor, and next_cursor is sent back as the cursor parameter. The docs also document GET /subscriptions-by-billing-date with from_datetime and to_date, and GET /subscriptions-by-order-id: the first needs a date window rather than a cursor so it was left out, and the second needs an order id so it cannot be a top-level list. A query parameter searches by a customer email, first or last name; it is not set here because it would be a filter, not a sync. Subscription rows carry customer email, first name and last name, which the shared rules remove. Fixture values are illustrative, built from documented field names."
   },
   {
     "slug": "skio",
