@@ -490,7 +490,7 @@ Log in:
 
 Without a keychain, such as on Linux or in CI:
     LIFECYCLE_CLOUD_URL     the Cloud address. It wins over the saved one.
-    LIFECYCLE_CLOUD_TOKEN   the store token. It wins over the keychain.
+    LIFECYCLE_CLOUD_TOKEN   the workspace token. It wins over the keychain.
   login still checks the token and saves the address, then says to keep the
   token in LIFECYCLE_CLOUD_TOKEN.
   The token is only ever sent over https, or to this machine for tests.
@@ -843,8 +843,8 @@ Error codes (the "code" field with --format json, and in cosmic logs):
   reserved_name    metrics save or delete named a built-in metric. Pick another name.
   bad_metric       A saved metric must be one SELECT that returns one row with one number.
   bad_schema       LIFECYCLE_DB_SCHEMA is not a plain schema name.
-  not_logged_in    A Cosmic Cloud command ran with no store token, or with no saved address. cosmic login --token-env VAR.
-  unauthorized     Cosmic Cloud refused the store token. Create a new one in Cloud, then log in again.
+  not_logged_in    A Cosmic Cloud command ran with no workspace token, or with no saved address. cosmic login --token-env VAR.
+  unauthorized     Cosmic Cloud refused the workspace token. Create a new one in Cloud, then log in again.
   not_built        Cosmic Cloud does not have that route yet, or a source has no connector yet. Run it without --cloud.
   cloud_unreachable  Cosmic Cloud did not answer. Check the network and cosmic cloud status.
   cloud_error      Cosmic Cloud answered with something this CLI does not understand. Try again in a moment.

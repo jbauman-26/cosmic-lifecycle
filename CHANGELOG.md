@@ -2,6 +2,20 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.21.1 (2026-11-25)
+
+The first run, cleaned up from the UX-99 audit.
+
+### Changed
+
+- **`init` points at the workspace's own source of truth.** A store goes to Shopify (not Klaviyo), a SaaS workspace to Stripe, a B2B one to HubSpot. A new workspace set up with no `--type` and no terminal to ask says it is set up as a Shopify store, and how to change that (`cosmic init --type saas`, and the others). `init`'s JSON is unchanged.
+- **`reconcile` on a new workspace prints one line and the next step** instead of a SKIP line for every check. A check skipped only because its source is not connected or synced yet is counted on one line. `--format json` still lists every check.
+- **`verdict` without `--period` uses the last finished month** and says so. An empty workspace says there is nothing to report yet and names the source to connect. The unnamed workspace is no longer labelled "default".
+- **`cosmic sources` with no subcommand lists the sources** (the same as `cosmic sources list`).
+- **"Store token" is now "workspace token"** in `--help`, errors and docs.
+- `cosmic workspace show` lists only sources that can be connected today, in its text line too.
+- The store's source-of-truth line no longer repeats "Shopify orders".
+
 ## 0.21.0 (2026-11-25)
 
 Any table Fivetran or Airbyte loads into your own Postgres, for any connector, read in place with a freshness check.

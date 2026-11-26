@@ -34,7 +34,7 @@ export function normalizeCloudUrl(raw) {
     if (u.username || u.password || u.search || u.hash)
         throw new CliError('The Cloud address must be a plain address, with no sign-in, query or fragment in it.', `cosmic login --url ${DEFAULT_CLOUD_URL} --token-env YOUR_VAR`, 'bad_url');
     if (u.protocol !== 'https:' && !(u.protocol === 'http:' && isLoopback(u.hostname))) {
-        throw new CliError('The Cloud address must start with https, so the store token is never sent in the clear.', `cosmic login --url ${DEFAULT_CLOUD_URL} --token-env YOUR_VAR`, 'bad_url');
+        throw new CliError('The Cloud address must start with https, so the workspace token is never sent in the clear.', `cosmic login --url ${DEFAULT_CLOUD_URL} --token-env YOUR_VAR`, 'bad_url');
     }
     const path = u.pathname.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
     return `${u.origin}${path}`;
@@ -136,14 +136,14 @@ export class CloudClient {
         const retry = Number(res.headers.get('retry-after') ?? err.retry_after_seconds);
         const wait = Number.isFinite(retry) && retry > 0 ? `Wait ${Math.ceil(retry)} seconds, then run this again.` : 'Wait a minute, then run this again.';
         if (res.status === 401)
-            throw new CliError('Cosmic Cloud refused the store token. It may have been revoked.', `Create a new token in Cosmic Cloud under Settings, then ${LOGIN_NEXT}`, 'unauthorized');
+            throw new CliError('Cosmic Cloud refused the workspace token. It may have been revoked.', `Create a new token in Cosmic Cloud under Settings, then ${LOGIN_NEXT}`, 'unauthorized');
         // Cloud answers 404 not_found for a route it does not have. Named 404s, such as unknown_metric, pass through.
         if (res.status === 404 && (!code || code === 'not_found'))
             throw new CliError(`Cosmic Cloud does not have this yet (${route}).`, 'It is being built. Until then, run the command without --cloud to use the data on this machine.', 'not_built');
         if (res.status === 405)
             throw new CliError(`Cosmic Cloud does not take ${route} yet.`, 'It is being built. Until then, run the command without --cloud to use the data on this machine.', 'not_built');
         if (res.status === 429)
-            throw new CliError(message || 'Cosmic Cloud is getting too many calls from this store token.', wait, 'rate_limited');
+            throw new CliError(message || 'Cosmic Cloud is getting too many calls from this workspace token.', wait, 'rate_limited');
         if (res.status === 503 && (!code || code === 'busy'))
             throw new CliError(message || 'Another change to this store is running on Cosmic Cloud.', wait, 'busy');
         if (code)

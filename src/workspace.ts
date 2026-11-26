@@ -34,7 +34,7 @@ export type TypeInfo = {
 export const TYPES: Record<WorkspaceType, TypeInfo> = {
   shopify: {
     type: 'shopify', title: 'Shopify store', forWhom: 'A brand selling through a Shopify store.',
-    reference: 'shopify', referenceWhy: 'Shopify orders are the record of what sold. Klaviyo, GA4 and Meta are checked against them.',
+    reference: 'shopify', referenceWhy: 'They are the record of what sold. Klaviyo, GA4 and Meta are checked against them.',
     sources: ['shopify', 'klaviyo', 'ga4', 'meta', 'stripe'],
   },
   ecommerce: {

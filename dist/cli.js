@@ -110,6 +110,11 @@ const connectable = (slugs) => slugs.filter((slug) => {
         return false;
     }
 });
+// The connect command for a workspace type's first source that can be connected today, its source of truth first.
+const firstConnect = (type) => {
+    const slug = connectable(TYPES[type].sources)[0];
+    return (slug && ALL_NATIVE.find((s) => s.slug === slug)?.connect) ?? (slug ? `cosmic warehouse show ${slug}` : 'cosmic sources catalog');
+};
 const format = () => (program.opts().format === 'json' ? 'json' : 'text');
 const run = (fn) => async (...a) => {
     try {
@@ -148,8 +153,8 @@ const migrateIfFree = async (db, name) => {
 };
 const CLOUD_FLAG = 'ask Cosmic Cloud instead of this machine. Needs cosmic login';
 const clock = (iso) => (iso ? iso.slice(0, 16).replace('T', ' ') : 'never');
-// Cosmic Cloud: sign in with a store token, then --cloud on a read command asks Cloud.
-program.command('login').description('Sign this machine in to Cosmic Cloud with a workspace token (Cloud calls it a store token). The token is read from an environment variable and is never printed')
+// Cosmic Cloud: sign in with a workspace token, then --cloud on a read command asks Cloud.
+program.command('login').description('Sign this machine in to Cosmic Cloud with a workspace token. The token is read from an environment variable and is never printed')
     .option('--url <cloud url>', `Cosmic Cloud address. Default: ${CLOUD_URL_ENV}, then the saved address, then the public one`)
     .option('--token-env <VAR>', 'environment variable holding the token from Cosmic Cloud, Settings, Mac app access')
     .action(run(async (opts) => {
@@ -216,22 +221,31 @@ program.command('init').description('Set up the database and say what kind of bu
     .option('--reference <source>', 'source of truth the trust gate checks against: shopify, stripe, hubspot, ga4 or none. Default: the one for the type')
     .action(write('init', async (opts) => {
     let type = opts.type ? assertType(opts.type) : undefined;
+    const isNew = !existsSync(configPath());
     // Only a brand new workspace in a terminal is asked. An existing install stays as it is.
-    if (!type && format() === 'text' && process.stdin.isTTY && process.stdout.isTTY && !existsSync(configPath()))
+    if (!type && format() === 'text' && process.stdin.isTTY && process.stdout.isTTY && isNew)
         type = await pickType();
     const r = await init({ ...opts, type, reference: opts.reference ? assertReference(opts.reference) : undefined });
     const t = TYPES[r.type];
-    const first = t.sources[0];
-    emit(format(), r, () => r.type === 'shopify' && r.reference === 'shopify'
-        ? `Ready. Database: ${r.database}\nNext: cosmic connect klaviyo --key-env NAME\n${EASY_SETUP}`
-        : [`Ready. Database: ${r.database}. Workspace: ${t.title}.`, `Source of truth: ${REFERENCE_NAME[r.reference]}. ${t.referenceWhy}`, `Sources most ${t.title.toLowerCase()} workspaces connect: ${connectable(t.sources).join(', ')}.`, `Next: ${ALL_NATIVE.find((s) => s.slug === first)?.connect ?? `cosmic warehouse show ${first}`}`, EASY_SETUP].join('\n'));
+    // 0.21.1: the next step is the workspace's own source of truth, whatever the type.
+    const next = firstConnect(r.type);
+    const others = WORKSPACE_TYPES.filter((x) => x !== 'shopify');
+    emit(format(), r, () => [
+        // A new workspace set up with no type and no terminal to ask is a store. Say so, and how to change it.
+        ...(isNew && !type
+            ? [`Ready. Set up as a Shopify store, because no --type was given. Database: ${r.database}.`, `Not a store? Run cosmic init --type ${others.slice(0, -1).join(', ')} or ${others.at(-1)}.`]
+            : [`Ready. Workspace: ${t.title}. Database: ${r.database}.`]),
+        `Source of truth: ${REFERENCE_NAME[r.reference]}. ${t.referenceWhy}`,
+        `Next: ${next}`,
+        EASY_SETUP,
+    ].join('\n'));
 }));
 const workspaceCmd = program.command('workspace').description('What kind of business this workspace is, its source of truth, and named workspaces');
 workspaceCmd.command('show').description('Type, source of truth, metric pack and the sources this type usually connects').action(run(async () => {
     const w = readWorkspace();
     const t = TYPES[w.type];
     const out = { name: workspaceName() ?? 'default', type: w.type, title: t.title, reference: w.reference, referenceSet: w.referenceSet, referenceWhy: t.referenceWhy, sources: connectable(t.sources), pack: w.type };
-    emit(format(), out, () => [`Workspace: ${out.name} (${t.title})`, `Source of truth: ${REFERENCE_NAME[w.reference]}${w.referenceSet ? ' (set by hand)' : ''}. ${t.referenceWhy}`, `Usual sources: ${t.sources.join(', ')}`, `Metrics: cosmic metrics list --pack ${w.type}`].join('\n'));
+    emit(format(), out, () => [`Workspace: ${out.name} (${t.title})`, `Source of truth: ${REFERENCE_NAME[w.reference]}${w.referenceSet ? ' (set by hand)' : ''}. ${t.referenceWhy}`, `Usual sources: ${connectable(t.sources).join(', ')}`, `Metrics: cosmic metrics list --pack ${w.type}`].join('\n'));
 }));
 workspaceCmd.command('list').description('Named workspaces on this machine, such as one per agency client').action(run(async () => {
     const dir = workspacesDir();
@@ -721,13 +735,23 @@ program.command('disconnect').argument('<source>', `${NATIVE.join(', ')}, a ware
         await db?.close();
     }
 }));
+// 0.21.1: a check skipped only because its source is not connected or synced yet is counted, not listed, so a new
+// workspace sees one line and the next step instead of a column of SKIPs. --format json still lists every check.
+const WAITING = /not connected|has not been synced|has not finished a sync|has not synced|Nothing has synced|No Shopify orders stored|Needs .* synced/i;
+function reconcileText(checks, mark) {
+    const waiting = checks.filter((c) => c.status === 'skipped' && WAITING.test(c.detail));
+    const shown = checks.filter((c) => !waiting.includes(c));
+    if (!shown.length)
+        return ['Nothing to check yet: no source has synced.', 'Next: connect a source, then sync:', `  ${firstConnect(readWorkspace().type)}`, '  cosmic sync'].join('\n');
+    return [...shown.map((c) => `${mark[c.status]} ${c.name}: ${c.detail}`), ...(waiting.length ? [`${waiting.length} more check${waiting.length === 1 ? '' : 's'} will run once their sources are connected and synced: ${waiting.map((c) => c.name).join(', ')}.`] : [])].join('\n');
+}
 program.command('reconcile').description('Prove the numbers agree across sources').action(write('reconcile', async () => {
     const db = await openDb();
     try {
         await migrate(db);
         const r = await reconcile(db);
         const mark = { pass: 'PASS', warn: 'WARN', fail: 'FAIL', skipped: 'SKIP' };
-        emit(format(), r, () => r.checks.map((c) => `${mark[c.status]} ${c.name}: ${c.detail}`).join('\n'));
+        emit(format(), r, () => reconcileText(r.checks, mark));
         if (!r.passed)
             process.exitCode = 1;
     }
@@ -736,15 +760,18 @@ program.command('reconcile').description('Prove the numbers agree across sources
     }
 }));
 program.command('verdict').description('Which KPIs can go in a report for one month, and which are held back and why')
-    .requiredOption('--period <YYYY-MM>', 'The calendar month, such as 2026-10')
+    .option('--period <YYYY-MM>', 'The calendar month, such as 2026-10. Default: the last finished month')
     .addHelpText('after', '\nExit codes: 0 every KPI can be reported, 3 any KPI is held back (or there is none to report), 1 bad input or an error.\nUse the global --workspace NAME for a client workspace.')
     .action(write('verdict', async (opts) => {
-    parsePeriod(opts.period); // bad input fails before the database is opened
+    // 0.21.1: no --period means the last finished month, in UTC.
+    const d = new Date();
+    const period = opts.period ?? new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+    parsePeriod(period); // bad input fails before the database is opened
     const db = await openDb();
     try {
         await migrate(db);
-        const v = await verdictFor(db, opts.period);
-        emit(format(), v, () => formatVerdict(v));
+        const v = await verdictFor(db, period);
+        emit(format(), v, () => formatVerdict(v, { defaulted: !opts.period, connect: firstConnect(readWorkspace().type) }));
         process.exitCode = verdictExit(v);
     }
     finally {
@@ -1029,7 +1056,7 @@ sources
         ].join('\n');
     });
 }));
-sources.command('list').description('Which sources are connected, and when each last synced').option('--cloud', CLOUD_FLAG).action(run(async (opts) => {
+sources.command('list', { isDefault: true }).description('Which sources are connected, and when each last synced. The default for cosmic sources').option('--cloud', CLOUD_FLAG).action(run(async (opts) => {
     if (opts.cloud) {
         const r = (await new CloudClient().store()).connections.map((c) => ({ slug: c.source_id, name: c.source_name ?? c.source_id, connected: true, lastSync: c.last_success_at ?? null, lastStatus: c.status ?? null, statusCode: c.status_code ?? null, freshness: c.freshness ?? null, nextSync: c.next_sync_at ?? null, next: null }));
         emit(format(), r, () => r.map((s) => `connected     ${s.name}, last good sync ${clock(s.lastSync)} (${s.lastStatus ?? 'unknown'}${s.statusCode ? `, ${s.statusCode}` : ''})`).join('\n') || 'No sources are connected on Cosmic Cloud yet.');
