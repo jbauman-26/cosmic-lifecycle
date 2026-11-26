@@ -392,7 +392,7 @@ describe('the demo for each type', () => {
     expect(b2b.broken.checks.find((c) => c.name === 'deals_complete')?.status).toBe('fail')
     expect(b2b.fixed.passed).toBe(true)
     expect(b2b.bySource.length).toBe(5)
-  })
+  }, 20_000) // 0.17.1: two full demos on PGlite; about 1 s locally, over 5 s on a loaded CI runner
 })
 
 // The whole CLI, in its own process, for a SaaS workspace with no Shopify anywhere: init, demo,
