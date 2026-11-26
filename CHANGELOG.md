@@ -6,7 +6,7 @@ Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described
 
 ### Changed
 
-- **`cosmic demo` ends with the step into setup** instead of a docs page. On a fresh install that step is `cosmic init --type` with the demo's own type (saas, b2b or shopify), then the paste-into-your-agent line. In a workspace that is already set up, it is `cosmic verdict`.
+- **`cosmic demo` ends with the step into setup** instead of a docs page. On a fresh install that step is `cosmic init --type` with the type you asked for (or the store default), then the paste-into-your-agent line. In a workspace that is already set up, it is `cosmic verdict`.
 
 ## 0.21.1 (2026-11-25)
 

@@ -77,7 +77,7 @@ import { readCosts, setCost, setProductCosts, writeCosts, costsPath, COST_KEYS }
 import { readFileSync } from 'node:fs'
 import { fetchCostOrders } from './sources/shopify-costs.js'
 import { rollupMetric } from './rollup.js'
-import { assertReference, assertType, readWorkspace, REFERENCE_NAME, TYPES, WORKSPACE_TYPES, noun, type WorkspaceType } from './workspace.js'
+import { assertReference, assertType, isWorkspaceType, readWorkspace, REFERENCE_NAME, TYPES, WORKSPACE_TYPES, noun, type WorkspaceType } from './workspace.js'
 import { pickType } from './commands/init.js'
 import { configPath, workspaceName, workspacesDir } from './paths.js'
 import { existsSync, readdirSync } from 'node:fs'
@@ -119,7 +119,7 @@ const firstConnect = (type: WorkspaceType) => {
 // install, or see your own month in one that is already set up.
 const demoNext = (kind: string) => existsSync(configPath())
   ? ['Next, on your own numbers: cosmic verdict']
-  : ['Set it up on your own numbers:', `  cosmic init --type ${kind}`, EASY_SETUP]
+  : ['Now run it on your own numbers:', `  cosmic init --type ${kind}`, EASY_SETUP]
 const format = () => (program.opts().format === 'json' ? 'json' : 'text') as Format
 const run = (fn: (...a: any[]) => Promise<void>) => async (...a: any[]) => {
   try {
@@ -1722,7 +1722,8 @@ program.command('demo').description('See it work on invented sample data. No key
         `3. ${kind === 'saas' ? 'SaaS' : 'B2B'} metrics, last 90 days. ${d.trust.line}`,
         ...d.metrics.map((m) => `   ${m.title}: ${formatValue(m.unit, m.value)}`), '',
         ...(d.bySource.length ? ['4. Pipeline created by original source:', ...d.bySource.map((r) => `   ${r.source}: ${r.deals} deals, ${formatValue('usd', r.pipeline)}`), ''] : []),
-        ...demoNext(kind),
+        // The type asked for, so ecommerce, agency or creator are suggested as themselves, not as the sample shown.
+        ...demoNext(opts.type && isWorkspaceType(opts.type) ? opts.type : kind),
       ].join('\n')
     })
     return
@@ -1740,7 +1741,7 @@ program.command('demo').description('See it work on invented sample data. No key
       ...d.revenue.flows.map((f) => `   ${f.name}: $${f.revenuePerRecipient.toFixed(2)} per recipient`), '',
       `4. Flow audit found ${d.audit.findings.length} things to fix. The top three:`,
       ...d.audit.findings.slice(0, 3).map((f) => `   [${f.severity}] ${f.title}`), '',
-      ...demoNext('shopify'),
+      ...demoNext(opts.type && isWorkspaceType(opts.type) ? opts.type : 'shopify'),
     ].join('\n')
   })
 }))
