@@ -319,8 +319,8 @@ Cosmic Cloud is the hosted copy of a store. Logging in is optional. With it, `--
 
 ```sh
 export COSMIC_CLOUD_TOKEN=...                     # from Cosmic Cloud, Settings, Mac app access. Never paste it into a chat
-cosmic login --token-env COSMIC_CLOUD_TOKEN    # checks the token, prints the store name, saves the token to the keychain
-cosmic cloud status                            # the store, and each connection on Cloud
+cosmic login --token-env COSMIC_CLOUD_TOKEN    # signs in and shows a next step for this store
+cosmic cloud status                            # source health, a next command and the browser tutorial
 cosmic query "select * from fact_orders_daily limit 5" --cloud
 cosmic schema --cloud
 cosmic metrics list --cloud && cosmic metrics run shopify_orders --cloud

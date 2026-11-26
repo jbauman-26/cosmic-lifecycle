@@ -2,6 +2,12 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.21.3 (2026-11-26)
+
+### Changed
+
+- After `cosmic login` and `cosmic cloud status`, the terminal links to the selected workspace tutorial and suggests a next step based on source health. Empty workspaces can explore local sample data. Connected workspaces can check sync status, inspect recent runs, or browse available metrics.
+
 ## 0.21.2 (2026-11-26)
 
 ### Changed
