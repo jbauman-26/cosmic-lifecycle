@@ -1,0 +1,80 @@
+name: Publish Cosmic CLI 0.21.3
+on:
+  push:
+    branches: [release/publish-v0.21.3]
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: release-cosmic-cli-0.21.3
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'jbauman-26/cosmic-lifecycle' && github.ref == 'refs/heads/release/publish-v0.21.3'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      TAG: v0.21.3
+      SOURCE_COMMIT: 3aba7f6cbb227fd285706d89de670c851127955b
+      SOURCE_TREE: efe304dcb5d29ae374e056612856ce6bc85f3ff5
+      TARBALL_SHA256: c02074764ca7d8820a16f4f5631447f3c828ce5679ed663be6532bbd7198599b
+      GH_REPO: jbauman-26/cosmic-lifecycle
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 3aba7f6cbb227fd285706d89de670c851127955b
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.3
+      - name: Pack the verified release tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$(git rev-parse 'HEAD^{tree}')" = "$SOURCE_TREE"
+          test "$(node -p "require('./package.json').version")" = "${TAG#v}"
+          npm pack --ignore-scripts --silent --pack-destination "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP"
+          printf '%s  %s\n' "$TARBALL_SHA256" cosmic-lifecycle-0.21.3.tgz | sha256sum --check
+          cp cosmic-lifecycle-0.21.3.tgz cosmic-lifecycle.tgz
+      - name: Publish the two verified release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          endpoint="repos/$GH_REPO/releases"
+          latest=$(gh api "$endpoint/latest" --jq .tag_name)
+          [[ "$latest" = v0.21.2 || "$latest" = "$TAG" ]]
+          # If a tag already exists, it must resolve to the verified tree's exact commit.
+          tag_sha=$(gh api --paginate "repos/$GH_REPO/tags?per_page=100" --jq ".[] | select(.name == \"$TAG\") | .commit.sha")
+          [[ -z "$tag_sha" || "$tag_sha" = "$SOURCE_COMMIT" ]]
+          # Listing includes drafts visible to this repository token. A failed lookup stops the job.
+          release_id=$(gh api --paginate "$endpoint?per_page=100" --jq ".[] | select(.tag_name == \"$TAG\") | .id")
+          if [[ -z "$release_id" ]]; then
+            gh release create "$TAG" --draft --target "$SOURCE_COMMIT" --title "Cosmic CLI ${TAG#v}" \
+              --notes 'After signing in, use the workspace tutorial and the next command suggested by source health. Install with `npm install -g https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz`.'
+            release_id=$(gh release view "$TAG" --json databaseId --jq .databaseId)
+          fi
+          data=$(gh api "$endpoint/$release_id")
+          [[ -n "$tag_sha" || "$(jq -r .target_commitish <<< "$data")" = "$SOURCE_COMMIT" ]]
+          for asset in cosmic-lifecycle-0.21.3.tgz cosmic-lifecycle.tgz; do
+            digest=$(jq -r --arg name "$asset" '.assets[] | select(.name==$name) | .digest' <<< "$data")
+            if [[ -z "$digest" ]]; then
+              test "$(jq -r .draft <<< "$data")" = true
+              gh release upload "$TAG" "$asset"
+            else
+              test "$digest" = "sha256:$TARBALL_SHA256"
+            fi
+          done
+          data=$(gh api "$endpoint/$release_id")
+          for asset in cosmic-lifecycle-0.21.3.tgz cosmic-lifecycle.tgz; do
+            jq -e --arg name "$asset" --arg hash "sha256:$TARBALL_SHA256" '.assets[] | select(.name==$name and .state=="uploaded" and .digest==$hash)' <<< "$data" >/dev/null
+          done
+          if [[ "$(jq -r .draft <<< "$data")" = true ]]; then
+            gh release edit "$TAG" --draft=false --latest
+          fi
+          test "$(gh api "$endpoint/latest" --jq .tag_name)" = "$TAG"
