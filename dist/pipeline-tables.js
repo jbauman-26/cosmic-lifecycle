@@ -123,6 +123,9 @@ export function pipelineConn(urlEnv, env = process.env) {
             try {
                 await client.query('BEGIN READ ONLY');
                 await client.query(`SET LOCAL statement_timeout = '30s'`);
+                // Only built-in names resolve without a schema, so every table, view, function or operator a query reaches
+                // outside pg_catalog is written schema.name, which the checks see.
+                await client.query(`SET LOCAL search_path = pg_catalog`);
                 return (await client.query(sql, params)).rows;
             }
             finally {
@@ -226,43 +229,25 @@ export async function assertPlainQuery(conn, body) {
         calls.push({ schema: qualified ? tokens[i - 2].value : null, name: t.value });
     }
     assertNoBlockedFunctions(calls.map((c) => `${c.name}(`).join(' '));
-    const qualifiedOutside = calls.filter((c) => c.schema && !['pg_catalog'].includes(c.schema));
-    const names = [...new Set(calls.map((c) => c.name))];
-    const defined = names.length
-        ? (await conn.query(`SELECT DISTINCT lower(p.proname) AS name FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
-        WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND lower(p.proname) = ANY($1)`, [names])).map((r) => String(r.name))
-        : [];
-    const own = [...new Set([...qualifiedOutside.map((c) => c.name), ...defined])];
+    // With the search path set to pg_catalog, an unqualified call can only be a built-in. A qualified one outside it
+    // is a function defined in this database (or an extension's) and is refused.
+    const own = [...new Set(calls.filter((c) => c.schema && c.schema !== 'pg_catalog').map((c) => `${c.schema}.${c.name}`))];
     if (own.length)
         refuse(`the query calls ${own.join(', ')}, a function defined in this database. Only built-in functions can be used on pipeline tables.`);
-    // Views and materialized views: their columns can be renamed past the column rules, so they are never read.
-    // A relation reference is schema.name, or a bare name right after FROM, JOIN or a comma (which only reaches
-    // the search path, so public). A column or alias that happens to share a view's name is not one.
+    // Views and materialized views: their columns can be renamed past the column rules, so they are never read. Any
+    // view outside pg_catalog can only be reached as schema.name (see the search path above), in any position.
     const refs = [];
-    for (let i = 0; i < tokens.length; i++) {
+    for (let i = 2; i < tokens.length; i++) {
         const t = tokens[i];
-        if (t.kind !== 'ident')
-            continue;
-        const prev = tokens[i - 1];
-        if (prev?.kind === 'op' && prev.value === '.' && tokens[i - 2]?.kind === 'ident')
+        if (t.kind === 'ident' && tokens[i - 1]?.kind === 'op' && tokens[i - 1].value === '.' && tokens[i - 2]?.kind === 'ident')
             refs.push({ schema: tokens[i - 2].value, name: t.value });
-        else if (tokens[i + 1]?.kind === 'op' && tokens[i + 1].value === '.')
-            continue;
-        else if ((prev?.kind === 'ident' && !prev.quoted && (prev.value === 'from' || prev.value === 'join')) || (prev?.kind === 'op' && prev.value === ','))
-            refs.push({ schema: null, name: t.value });
     }
-    const candidates = await conn.query(`SELECT lower(c.relname) AS name, lower(n.nspname) AS schema FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-      WHERE c.relkind IN ('v', 'm') AND n.nspname NOT IN ('pg_catalog', 'information_schema') AND lower(c.relname) = ANY($1)`, [[...new Set(refs.map((r) => r.name))]]);
-    const views = candidates.filter((v) => refs.some((r) => r.name === v.name && (r.schema ? r.schema === v.schema : v.schema === 'public'))).map((r) => `${r.schema}.${r.name}`);
-    if (views.length)
-        refuse(`the query names ${views.join(', ')}, a view. Views can rename personal columns, so pipeline queries read loader tables only.`, 'Query the loader table the view is built on, naming the columns you need.');
-    // Operators someone defined: any of their symbols in the query is refused.
-    const ops = (await conn.query(`SELECT DISTINCT o.oprname AS op FROM pg_catalog.pg_operator o JOIN pg_catalog.pg_namespace n ON n.oid = o.oprnamespace WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')`)).map((r) => String(r.op));
-    if (ops.length) {
-        const symbols = body.replace(/'(?:[^']|'')*'/g, "''").replace(/"(?:[^"]|"")*"/g, '""').match(/[+\-*/<>=~!@#%^&|`?]+/g) ?? [];
-        const hit = ops.filter((op) => symbols.some((sym) => sym.includes(op)));
-        if (hit.length)
-            refuse(`the query uses ${hit.join(', ')}, an operator defined in this database.`);
+    if (refs.length) {
+        const candidates = await conn.query(`SELECT lower(c.relname) AS name, lower(n.nspname) AS schema FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relkind IN ('v', 'm') AND n.nspname NOT IN ('pg_catalog', 'information_schema') AND lower(c.relname) = ANY($1)`, [[...new Set(refs.map((r) => r.name))]]);
+        const views = candidates.filter((v) => refs.some((r) => r.name === v.name && r.schema === v.schema)).map((r) => `${r.schema}.${r.name}`);
+        if (views.length)
+            refuse(`the query names ${views.join(', ')}, a view. Views can rename personal columns, so pipeline queries read loader tables only.`, 'Query the loader table the view is built on, naming the columns you need.');
     }
 }
 /**
@@ -280,16 +265,10 @@ export async function pipelineQueryRun(conn, schemas, sql, cap, maxDays) {
     const plan = await tablesRead(conn, body);
     // Blocked functions, checked on Postgres's own spelling of the plan, so an escaped name (U&"...") is seen as itself.
     assertNoBlockedFunctions(callsIn(plan.text).map((c) => `${c.name}(`).join(' '));
-    // A function defined in this database can read any table without the plan showing it, so only built-in
-    // functions (pg_catalog) may be called.
+    // A function outside pg_catalog in the plan (printed schema-qualified, since the search path is pg_catalog) or
+    // a function scan from another schema can read any table unseen, so it is refused.
     const called = [...callsIn(plan.text), ...plan.functions.map((f) => ({ schema: f.schema, name: f.name.toLowerCase() }))];
-    const outsideSchema = called.filter((c) => c.schema && !['pg_catalog', 'information_schema'].includes(c.schema.toLowerCase()));
-    const names = [...new Set(called.map((c) => c.name))];
-    const userDefined = names.length
-        ? (await conn.query(`SELECT DISTINCT lower(p.proname) AS name FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
-        WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND lower(p.proname) = ANY($1)`, [names])).map((r) => String(r.name))
-        : [];
-    const own = [...new Set([...outsideSchema.map((c) => c.name), ...userDefined])];
+    const own = [...new Set(called.filter((c) => c.schema && !['pg_catalog', 'information_schema'].includes(c.schema.toLowerCase())).map((c) => `${c.schema}.${c.name}`))];
     if (own.length)
         throw new CliError(`Refused: the query calls ${own.join(', ')}, a function defined in this database. Only built-in functions can be used on pipeline tables.`, 'Use built-in functions such as count, sum, date_trunc and coalesce.', 'blocked_object');
     const read = plan.tables;
