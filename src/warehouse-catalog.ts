@@ -2357,14 +2357,65 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
   },
   {
     "slug": "aftership-returns",
-    "name": "AfterShip Returns",
+    "name": "AfterShip",
     "category": "returns",
-    "readiness": "planned",
+    "readiness": "built",
     "why": "#56 of 100 tools Shopify stores use. StoreLeads: Shopify app installed on 4,949 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/shopify/app/returns-center-by-aftership",
-    "docs": "https://www.aftership.com/docs/returns",
-    "credentials": [],
+    "docs": "https://www.aftership.com/docs/tracking/jh865r66gc6hi-get-trackings",
+    "credentials": [
+      {
+        "name": "api_key",
+        "label": "API key",
+        "help": "In AfterShip open Settings, then API keys, and create a key. Send it exactly as issued, since it goes in the as-api-key header. Create it with read-only scope where AfterShip offers it, so this connection can read your data but never change it. This connector only sends GET requests."
+      }
+    ],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "config": {
+      "client": {
+        "base_url": "https://api.aftership.com/tracking/2026-07/",
+        "headers": {
+          "Accept": "application/json"
+        },
+        "auth": {
+          "type": "api_key",
+          "name": "as-api-key",
+          "api_key": "{secret:api_key}",
+          "location": "header"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "trackings",
+          "endpoint": {
+            "path": "trackings",
+            "params": {
+              "limit": 200
+            },
+            "data_selector": "data.trackings",
+            "paginator": {
+              "type": "cursor",
+              "cursor_path": "data.pagination.next_cursor",
+              "cursor_param": "cursor"
+            }
+          }
+        },
+        {
+          "name": "couriers",
+          "endpoint": {
+            "path": "couriers",
+            "data_selector": "data.couriers",
+            "paginator": {
+              "type": "single_page"
+            }
+          }
+        }
+      ]
+    },
+    "notes": "Base https://api.aftership.com/tracking/2026-07/, from the request line on each reference page. Auth is the as-api-key header, which the overview states and the examples show. Responses use the documented body envelope: meta carries the status code and data carries the rows, so trackings sits at data.trackings and couriers at data.couriers. Trackings also return data.pagination with total, next_cursor and has_next_page, so the cursor pager follows next_cursor and stops when the list is empty; limit is capped at the value the reference shows. Couriers is a single request because the reference documents no page parameter for it. Two resources are built, trackings and couriers. Courier connections and item-level tracking events are documented and left out. Neither resource holds consumer personal data: a tracking row is shipment metadata such as number, courier, status and timestamps, so those fixtures carry no personal list. Fixture values are illustrative, built from the documented envelope and field names."
   },
   {
     "slug": "avalara",
