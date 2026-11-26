@@ -1,4 +1,4 @@
-export const READINESS_LEGEND = 'Readiness: native = built in with reconcile checks. tested = warehouse connector run on a real account. built = connector written from the vendor API docs, not yet run on a real account. planned = no connector yet; use cosmic sources import meanwhile.';
+export const READINESS_LEGEND = 'Readiness: native = built in with reconcile checks. tested = warehouse connector run on a real account. built = connector written from the vendor API docs, not yet run on a real account. planned = no connector yet; use lifecycle sources import meanwhile.';
 export const WAREHOUSE_CATALOG = [
     {
         "slug": "judge-me",
@@ -664,7 +664,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.klarna.com/api/settlements/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "afterpay",
@@ -675,7 +675,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://developers.afterpay.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "loox",
@@ -1129,12 +1129,50 @@ export const WAREHOUSE_CATALOG = [
         "slug": "microsoft-clarity",
         "name": "Microsoft Clarity",
         "category": "analytics",
-        "readiness": "planned",
+        "readiness": "built",
         "why": "#28 of 100 tools Shopify stores use. StoreLeads: detected on 210,181 Shopify stores (Oct 30 2026 snapshot). Alium: about one in eleven Shopify stacks, often replacing Hotjar. Source: https://storeleads.app/reports/technology/Microsoft%20Clarity",
         "docs": "https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-data-export-api",
-        "credentials": [],
-        "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "credentials": [
+            {
+                "name": "api_token",
+                "label": "Data Export API token",
+                "help": "In Clarity open your project, then Settings, then Data Export, then Generate new API token, and copy it when shown. The token reads aggregate insights for that project only. This connector only sends GET requests."
+            }
+        ],
+        "params": [
+            {
+                "name": "num_days",
+                "label": "Days of data to ask for (1, 2 or 3)",
+                "example": "3"
+            }
+        ],
+        "config": {
+            "client": {
+                "base_url": "https://www.clarity.ms/export-data/api/v1/",
+                "headers": {
+                    "Accept": "application/json"
+                },
+                "auth": {
+                    "type": "bearer",
+                    "token": "{secret:api_token}"
+                }
+            },
+            "resource_defaults": {
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "insights",
+                    "endpoint": {
+                        "path": "project-live-insights",
+                        "params": {
+                            "numOfDays": "{param:num_days}"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Single documented endpoint: GET https://www.clarity.ms/export-data/api/v1/project-live-insights, with numOfDays limited to 1, 2 or 3 for the last 24, 48 or 72 hours. Auth is Authorization Bearer with a token generated under Settings then Data Export. Auth is read only: the page exposes generated aggregate insights such as traffic, popular pages and page titles, not raw sessions. Only one resource exists, so this connector returns the insight groups as rows rather than several tables, and there is no cursor or primary key; it is a full refresh. Because insights are aggregates, the main personal-data risk is a page URL that contains an email or phone number, which the shared rules replace with [removed] inside kept text; the fixture tests exactly that."
     },
     {
         "slug": "zendesk",
@@ -1749,7 +1787,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://loyaltyapi.yotpo.com/reference",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "elevar",
@@ -1760,18 +1798,80 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with cosmic sources import."
+        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
     },
     {
         "slug": "tidio",
         "name": "Tidio",
         "category": "helpdesk",
-        "readiness": "planned",
+        "readiness": "built",
         "why": "#38 of 100 tools Shopify stores use. StoreLeads: Shopify app installed on 26,973 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/shopify/app/tidio-chat",
-        "docs": "https://developers.tidio.com/",
-        "credentials": [],
+        "docs": "https://developers.tidio.com/reference/get_contacts",
+        "credentials": [
+            {
+                "name": "client_id",
+                "label": "OpenAPI client ID",
+                "help": "In Tidio open Settings, then Developers, then API keys, and create an OpenAPI key pair. The client ID is the first half of the pair. This connector only sends GET requests."
+            },
+            {
+                "name": "client_secret",
+                "label": "OpenAPI client secret",
+                "help": "The secret half of the same Tidio OpenAPI key pair. It is shown once when the pair is created, so copy it then."
+            }
+        ],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "config": {
+            "client": {
+                "base_url": "https://api.tidio.com/",
+                "headers": {
+                    "Accept": "application/json",
+                    "X-Tidio-Openapi-Client-Secret": "{secret:client_secret}"
+                },
+                "auth": {
+                    "type": "api_key",
+                    "name": "X-Tidio-Openapi-Client-Id",
+                    "api_key": "{secret:client_id}",
+                    "location": "header"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "contacts",
+                    "endpoint": {
+                        "path": "contacts",
+                        "params": {
+                            "limit": 1000
+                        },
+                        "data_selector": "contacts",
+                        "paginator": {
+                            "type": "cursor",
+                            "cursor_path": "meta.cursor",
+                            "cursor_param": "cursor"
+                        }
+                    }
+                },
+                {
+                    "name": "operators",
+                    "endpoint": {
+                        "path": "operators",
+                        "params": {
+                            "limit": 1000
+                        },
+                        "data_selector": "operators",
+                        "paginator": {
+                            "type": "cursor",
+                            "cursor_path": "meta.cursor",
+                            "cursor_param": "cursor"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Base https://api.tidio.com/, taken from the servers block of the OpenAPI document published on the reference pages. Auth is the pair of headers X-Tidio-Openapi-Client-Id and X-Tidio-Openapi-Client-Secret, which their securitySchemes define as header api keys. List responses wrap the rows in a named array (contacts, operators) and add meta.cursor, which is the value to fetch the next page and is null on the last page, so the cursor pager stops on it. limit is taken from meta.limit, which reports how many items were displayed and shows 1000 in the example. Two resources are built, contacts and operators. Conversations and messages are documented and left out. Contacts carry a name, email and phone, which the shared rules remove. Fixture values are illustrative, built from the documented schemas."
     },
     {
         "slug": "appstle-subscriptions",
@@ -1782,18 +1882,56 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://developers.appstle.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "seal-subscriptions",
         "name": "Seal Subscriptions",
         "category": "subscriptions",
-        "readiness": "planned",
+        "readiness": "built",
         "why": "#40 of 100 tools Shopify stores use. StoreLeads: Shopify app installed on 33,941 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/shopify/app/seal-subscriptions",
         "docs": "https://www.sealsubscriptions.com/articles/merchant-api-documentation",
-        "credentials": [],
+        "credentials": [
+            {
+                "name": "api_token",
+                "label": "Merchant API token",
+                "help": "In the Seal Subscriptions app open Settings, then General Settings, then API, and copy the shop's API token. The token is unique to the shop, so treat it like a password. This connector only sends GET requests."
+            }
+        ],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "config": {
+            "client": {
+                "base_url": "https://app.sealsubscriptions.com/shopify/merchant/api/",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "auth": {
+                    "type": "api_key",
+                    "name": "X-Seal-Token",
+                    "api_key": "{secret:api_token}",
+                    "location": "header"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "subscriptions",
+                    "endpoint": {
+                        "path": "subscriptions",
+                        "data_selector": "payload",
+                        "paginator": {
+                            "type": "cursor",
+                            "cursor_path": "next_cursor",
+                            "cursor_param": "cursor"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "The docs describe a public REST merchant API with a per-shop token from Settings, General Settings, API, sent as the X-Seal-Token header, and the curl examples use https://app.sealsubscriptions.com/shopify/merchant/api/ as the base. One resource is built, GET /subscriptions, which pages by cursor: the response carries payload and next_cursor, and next_cursor is sent back as the cursor parameter. The docs also document GET /subscriptions-by-billing-date with from_datetime and to_date, and GET /subscriptions-by-order-id: the first needs a date window rather than a cursor so it was left out, and the second needs an order id so it cannot be a top-level list. A query parameter searches by a customer email, first or last name; it is not set here because it would be a filter, not a sync. Subscription rows carry customer email, first name and last name, which the shared rules remove. Fixture values are illustrative, built from documented field names."
     },
     {
         "slug": "skio",
@@ -2000,7 +2138,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://www.refersion.dev/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "goaffpro",
@@ -2011,7 +2149,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://api.goaffpro.com/docs/admin/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "fairing",
@@ -2112,7 +2250,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.sezzle.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "The API is the checkout integration: it drives a Sezzle payment and needs an approved Sezzle merchant account before either the sandbox or live gateway will answer. No documented read list endpoint returns a merchant's own orders or settlements (https://docs.sezzle.com/docs/api/v1/v1). CSV import meanwhile."
     },
     {
         "slug": "affirm",
@@ -2123,7 +2261,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.affirm.com/developers/reference",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "The API is real and documented: GET /v1/transactions on https://sandbox.affirm.com/api/v1 with HTTP Basic using the public and private key. The blocker is that its response examples render only inside the docs' API explorer and appear nowhere in the published text, so no recorded body can be verified against a source. Left unbuilt rather than shipping a guessed response shape (https://docs.affirm.com/developers/reference/list_transactions). CSV import meanwhile."
     },
     {
         "slug": "boost-search",
@@ -2145,7 +2283,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with cosmic sources import."
+        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
     },
     {
         "slug": "searchspring",
@@ -2156,7 +2294,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.searchspring.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "nosto",
@@ -2167,7 +2305,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.nosto.com/techdocs/apis/graphql-an-introduction",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "aftership-returns",
@@ -2178,7 +2316,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://www.aftership.com/docs/returns",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "avalara",
@@ -2189,7 +2327,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://developer.avalara.com/api-reference/avatax/rest/v2/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "amazon-ads",
@@ -2211,7 +2349,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with cosmic sources import."
+        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
     },
     {
         "slug": "reconvert",
@@ -2222,7 +2360,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with cosmic sources import."
+        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
     },
     {
         "slug": "zipify-ocu",
@@ -2233,7 +2371,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with cosmic sources import."
+        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
     },
     {
         "slug": "loyaltylion",
@@ -2367,7 +2505,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://junip.co/docs/api",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "re-amaze",
@@ -2467,7 +2605,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://developer.richpanel.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "kustomer",
@@ -2596,7 +2734,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://developer.shiphero.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "shipmonk",
@@ -2680,7 +2818,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://dearinventory.docs.apiary.io/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "inventory-planner",
@@ -2691,7 +2829,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://help.inventory-planner.com/en/articles/2565547-public-api",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "a2x",
@@ -2702,7 +2840,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with cosmic sources import."
+        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
     },
     {
         "slug": "taxjar",
@@ -2724,7 +2862,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://integrations.impact.com/impact-brand/reference",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "social-snowball",
@@ -2746,7 +2884,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.uppromote.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "awin",
@@ -2779,7 +2917,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with cosmic sources import."
+        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
     },
     {
         "slug": "gempages",
@@ -2790,7 +2928,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with cosmic sources import."
+        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
     },
     {
         "slug": "shogun",
@@ -2801,18 +2939,65 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with cosmic sources import."
+        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
     },
     {
         "slug": "printful",
         "name": "Printful",
         "category": "shipping",
-        "readiness": "planned",
+        "readiness": "built",
         "why": "#89 of 100 tools Shopify stores use. StoreLeads: Shopify app installed on 145,754 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/shopify/app/printful",
-        "docs": "https://developers.printful.com/docs/",
-        "credentials": [],
+        "docs": "https://developers.printful.com/docs/#tag/Order-API",
+        "credentials": [
+            {
+                "name": "api_token",
+                "label": "API token (private token)",
+                "help": "In Printful open Settings, then Developers, then API tokens, and add a token. Choose the store it applies to and copy it. This connector only sends GET requests."
+            }
+        ],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "config": {
+            "client": {
+                "base_url": "https://api.printful.com/",
+                "headers": {
+                    "Accept": "application/json"
+                },
+                "auth": {
+                    "type": "bearer",
+                    "token": "{secret:api_token}"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "orders",
+                    "endpoint": {
+                        "path": "orders",
+                        "params": {
+                            "limit": 100
+                        },
+                        "data_selector": "result",
+                        "paginator": {
+                            "type": "offset",
+                            "limit": 100,
+                            "offset": 0,
+                            "total_path": "paging.total"
+                        }
+                    }
+                },
+                {
+                    "name": "products",
+                    "endpoint": {
+                        "path": "products",
+                        "data_selector": "result"
+                    }
+                }
+            ]
+        },
+        "notes": "Base https://api.printful.com/, confirmed by the example requests. Auth is the Authorization Bearer header, which the docs show on their own example calls. Responses wrap their payload in result, and the paged endpoints add paging with total, offset and limit, so the offset pager stops on paging.total. The orders endpoint takes offset and limit. Two resources are built, orders and products. Products is a single call with no paging. The store and shipping-rate endpoints are documented and left out. Orders carry a recipient name, email, phone and address, which the shared rules remove; the order id, status, totals and timestamps stay. Fixture values are illustrative, built from documented field names."
     },
     {
         "slug": "feedonomics",
@@ -2969,12 +3154,68 @@ export const WAREHOUSE_CATALOG = [
         "slug": "stay-ai",
         "name": "Stay AI",
         "category": "subscriptions",
-        "readiness": "planned",
+        "readiness": "built",
         "why": "#92 of 100 tools Shopify stores use. Ranking position is judgment. No StoreLeads count checked. Growing Recharge alternative named by Solo Media Group in the core DTC stack. Source: https://solomediagroup.com/blogs/insights/best-shopify-apps-for-dtc-brands",
-        "docs": "https://docs.stay.ai/",
-        "credentials": [],
+        "docs": "https://docs.stay.ai/reference/query-all-subscriptions",
+        "credentials": [
+            {
+                "name": "access_token",
+                "label": "API key",
+                "help": "In the Stay AI Merchant Portal open API Keys and click New API Key, then copy it. Grant only the read scope this connector needs. This connector only sends GET requests."
+            }
+        ],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "config": {
+            "client": {
+                "base_url": "https://api.retextion.com/api/v2/",
+                "headers": {
+                    "Accept": "application/json"
+                },
+                "auth": {
+                    "type": "api_key",
+                    "name": "X-RETEXTION-ACCESS-TOKEN",
+                    "api_key": "{secret:access_token}",
+                    "location": "header"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "subscriptions",
+                    "endpoint": {
+                        "path": "subscriptions",
+                        "params": {
+                            "pageSize": 100
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "page_number",
+                            "page_param": "page",
+                            "total_path": "total"
+                        }
+                    }
+                },
+                {
+                    "name": "customers",
+                    "endpoint": {
+                        "path": "customers",
+                        "params": {
+                            "pageSize": 100
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "page_number",
+                            "page_param": "page",
+                            "total_path": "total"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Base https://api.retextion.com/api/v2/, confirmed in the endpoint reference. Auth is the X-RETEXTION-ACCESS-TOKEN header, and keys are created in the Stay AI Merchant Portal with scopes. Both list endpoints page by number: page starts at 1 and pageSize takes 5 to 100, and the body returns total, page, pageSize and data, so the page number pager stops on total. Two resources are built, subscriptions and customers. The subscription detail and cancel endpoints are single-record or write operations and were left out. Webhook subscription endpoints are configuration, not store data. Fixture values are illustrative, built from documented field names."
     },
     {
         "slug": "smartrr",
@@ -2985,18 +3226,73 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.smartrr.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "No public API reference is published. The documented developer surface is the help center's install guides (https://help.smartrr.com/docs/getting-started/implementation/installing-smartrr-on-a-headless-store), and there is no merchant-facing REST reference to build from. CSV import meanwhile."
     },
     {
         "slug": "ordergroove",
         "name": "Ordergroove",
         "category": "subscriptions",
-        "readiness": "planned",
+        "readiness": "built",
         "why": "#94 of 100 tools Shopify stores use. Ranking position is judgment. No count. Enterprise subscription platform with a Shopify app. Source: https://developer.ordergroove.com/",
-        "docs": "https://developer.ordergroove.com/",
-        "credentials": [],
+        "docs": "https://developer.ordergroove.com/reference/rest-rpc-api/subscriptions/list",
+        "credentials": [
+            {
+                "name": "api_key",
+                "label": "API key",
+                "help": "In the Ordergroove merchant portal open the API keys area and copy a key, or create one. Up to ten keys exist per store. For reporting across all customers the key needs the Bulk Operations permission, otherwise it only returns one customer's records. This connector only sends GET requests."
+            }
+        ],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "config": {
+            "client": {
+                "base_url": "https://restapi.ordergroove.com/",
+                "headers": {
+                    "Accept": "application/json",
+                    "X-OG-API-VERSION": "2"
+                },
+                "auth": {
+                    "type": "api_key",
+                    "name": "x-api-key",
+                    "api_key": "{secret:api_key}",
+                    "location": "header"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "public_id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "subscriptions",
+                    "endpoint": {
+                        "path": "subscriptions/",
+                        "params": {
+                            "page_size": 100
+                        },
+                        "data_selector": "results",
+                        "paginator": {
+                            "type": "json_link",
+                            "next_url_path": "next"
+                        }
+                    }
+                },
+                {
+                    "name": "customers",
+                    "endpoint": {
+                        "path": "customers/",
+                        "params": {
+                            "page_size": 100
+                        },
+                        "data_selector": "results",
+                        "paginator": {
+                            "type": "json_link",
+                            "next_url_path": "next"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Base https://restapi.ordergroove.com/, confirmed in the list references. Auth is the x-api-key header with up to ten keys per store. The docs require X-OG-API-VERSION 2 for current cursor behaviour, so it is sent on every request, and page_size takes up to 100 with a default of 10. The body carries count, next, previous and results, and next is an absolute URL such as https://restapi.ordergroove.com/subscriptions/?page=3, so the json_link pager follows next. The results wrapper is confirmed on the subscriptions reference; the customers reference uses the same list shape and was followed rather than re-read line by line. The Bulk Operations permission is the thing to check before a sync: without it a key returns only one customer's records, which looks like thin data rather than an error. Two resources are built. Items and the order resources are documented and left out because their list references were not read. Fixture values are illustrative, built from documented field names."
     },
     {
         "slug": "narvar",
@@ -3018,7 +3314,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with cosmic sources import."
+        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
     },
     {
         "slug": "replo",
@@ -3029,7 +3325,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with cosmic sources import."
+        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
     },
     {
         "slug": "tapcart",
@@ -3051,7 +3347,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.wonderment.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
     },
     {
         "slug": "littledata",
@@ -3062,7 +3358,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with cosmic sources import."
+        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
     },
     {
         "slug": "brevo",
@@ -3288,7 +3584,7 @@ export const WAREHOUSE_CATALOG = [
                 }
             ]
         },
-        "notes": "One row per deal and per contact with its HubSpot id, stage, original source, dates and amount. HubSpot returns only the properties named in the request, so no name, email, phone or company is ever asked for. hs_analytics_source_data_1 is HubSpot's source detail, such as a campaign or referring site; on some portals it holds a page URL. Full refresh merged on id every run. The built-in hubspot source (cosmic connect hubspot) keeps daily counts with reconcile checks; use this one when you want row-level pipeline analysis in SQL.",
+        "notes": "One row per deal and per contact with its HubSpot id, stage, original source, dates and amount. HubSpot returns only the properties named in the request, so no name, email, phone or company is ever asked for. hs_analytics_source_data_1 is HubSpot's source detail, such as a campaign or referring site; on some portals it holds a page URL. Full refresh merged on id every run. The built-in hubspot source (lifecycle connect hubspot) keeps daily counts with reconcile checks; use this one when you want row-level pipeline analysis in SQL.",
         "stripFields": [
             "dealname",
             "company",
@@ -3635,5 +3931,412 @@ export const WAREHOUSE_CATALOG = [
         "credentials": [],
         "params": [],
         "notes": "Planned. Mixpanel's raw export streams one event per line, not a JSON list, and carries person properties. Its segmentation query fits better and needs a runner change. CSV import of daily signups meanwhile."
+    },
+    {
+        "slug": "activecampaign",
+        "name": "ActiveCampaign",
+        "category": "email-sms",
+        "readiness": "built",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://developers.activecampaign.com/reference/list-all-contacts",
+        "credentials": [
+            {
+                "name": "api_key",
+                "label": "API key",
+                "help": "In ActiveCampaign open Settings, then the Developer tab, and copy the API key shown for your user. Each user has their own key and the key carries that user's permissions, so use a user whose role only needs to view contacts and automations. This connector only sends GET requests."
+            }
+        ],
+        "params": [
+            {
+                "name": "account",
+                "label": "ActiveCampaign account name (the part before .api-us1.com in the API URL)",
+                "example": "acme"
+            }
+        ],
+        "config": {
+            "client": {
+                "base_url": "https://{param:account}.api-us1.com/api/3/",
+                "headers": {
+                    "Accept": "application/json"
+                },
+                "auth": {
+                    "type": "api_key",
+                    "name": "Api-Token",
+                    "api_key": "{secret:api_key}",
+                    "location": "header"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "contacts",
+                    "endpoint": {
+                        "path": "contacts",
+                        "params": {
+                            "limit": 100
+                        },
+                        "data_selector": "contacts",
+                        "paginator": {
+                            "type": "offset",
+                            "limit": 100,
+                            "offset": 0,
+                            "total_path": "meta.total"
+                        }
+                    }
+                },
+                {
+                    "name": "automations",
+                    "endpoint": {
+                        "path": "automations",
+                        "params": {
+                            "limit": 100
+                        },
+                        "data_selector": "automations",
+                        "paginator": {
+                            "type": "offset",
+                            "limit": 100,
+                            "offset": 0,
+                            "total_path": "meta.total"
+                        }
+                    }
+                },
+                {
+                    "name": "accounts",
+                    "endpoint": {
+                        "path": "accounts",
+                        "params": {
+                            "limit": 100
+                        },
+                        "data_selector": "accounts",
+                        "paginator": {
+                            "type": "offset",
+                            "limit": 100,
+                            "offset": 0,
+                            "total_path": "meta.total"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Base URL is per account, https://<account>.api-us1.com/api/3/, confirmed on the Base URL page. Auth is the Api-Token header and the page says the key is found under Settings then the Developer tab. Collections page with limit (default 20, max 100) and zero-based offset, and the response carries the total in meta.total, so the offset pager stops on total. Every resource is a full refresh merged on id: the contacts page documents filters[created_after] and id_greater for narrowing, but the exact updated-since parameter and its timestamp field were not confirmed on the page, so no incremental cursor was set. Response shape for contacts (contacts plus meta with total, limit and offset) was read from the list-all-contacts reference. Automations and accounts are the documented collection endpoints from the docs index; their individual response shapes were not re-read, and their data_selector uses the collection name the same way contacts does. Rate limits are documented on a separate page that was not read during this pass, so no number is asserted here. Sample values in the fixture are illustrative, built from documented field names, not copied vendor records."
+    },
+    {
+        "slug": "kit",
+        "name": "Kit (formerly ConvertKit)",
+        "category": "email-sms",
+        "readiness": "built",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://developers.kit.com/api-reference/subscribers/list-subscribers",
+        "credentials": [
+            {
+                "name": "api_key",
+                "label": "V4 API key",
+                "help": "Kit, Settings, then Developer, then API keys, and create a V4 key. Copy it when it is shown, because Kit does not show it again. The key carries the account's own access, so use an account whose role only needs to read subscribers. This connector only sends GET requests."
+            }
+        ],
+        "params": [],
+        "config": {
+            "client": {
+                "base_url": "https://api.kit.com/v4/",
+                "headers": {
+                    "Accept": "application/json"
+                },
+                "auth": {
+                    "type": "api_key",
+                    "name": "X-Kit-Api-Key",
+                    "api_key": "{secret:api_key}",
+                    "location": "header"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "subscribers",
+                    "endpoint": {
+                        "path": "subscribers",
+                        "params": {
+                            "per_page": 500
+                        },
+                        "data_selector": "subscribers",
+                        "paginator": {
+                            "type": "cursor",
+                            "cursor_path": "pagination.end_cursor",
+                            "cursor_param": "after"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "V4 API. Auth is the X-Kit-Api-Key header, confirmed in the endpoint reference. Paging is cursor based: the request takes after (next page) or before (previous page), and the body returns pagination with start_cursor, end_cursor and per_page, so the end_cursor is sent back as after. The documented example shows per_page 500. One resource is built: subscriber status, created and updated dates. Subscriber-level custom fields were left out because their shape was not read. The docs state created_after and created_before plus updated_after and updated_before exist, so an incremental cursor is possible later; it is not set here because the exact interaction between those filters and the cursor was not confirmed. Fixture values are illustrative, built from documented field names."
+    },
+    {
+        "slug": "beehiiv",
+        "name": "beehiiv",
+        "category": "email-sms",
+        "readiness": "built",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://developers.beehiiv.com/api-reference/subscriptions/index",
+        "credentials": [
+            {
+                "name": "api_token",
+                "label": "API key",
+                "help": "In beehiiv open Settings, then Integrations, then API, and create a key. Choose an API key with the read scopes for subscriptions and posts only. This connector only sends GET requests."
+            }
+        ],
+        "params": [
+            {
+                "name": "publication_id",
+                "label": "Publication ID (starts pub_)",
+                "example": "pub_00000000-0000-0000-0000-000000000000"
+            }
+        ],
+        "config": {
+            "client": {
+                "base_url": "https://api.beehiiv.com/v2/",
+                "headers": {
+                    "Accept": "application/json"
+                },
+                "auth": {
+                    "type": "bearer",
+                    "token": "{secret:api_token}"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "subscriptions",
+                    "endpoint": {
+                        "path": "publications/{param:publication_id}/subscriptions",
+                        "params": {
+                            "limit": 100
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "cursor",
+                            "cursor_path": "next_cursor",
+                            "cursor_param": "cursor"
+                        }
+                    }
+                },
+                {
+                    "name": "posts",
+                    "endpoint": {
+                        "path": "publications/{param:publication_id}/posts",
+                        "params": {
+                            "limit": 100
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "cursor",
+                            "cursor_path": "next_cursor",
+                            "cursor_param": "cursor"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Base https://api.beehiiv.com/v2/. Auth is the Authorization Bearer header, described on the endpoint pages. Both list endpoints take a publication id in the path. Paging is cursor based (recommended, and the offset page parameter is marked deprecated): limit is 1 to 100 with a default of 10, the request takes cursor, and the body returns has_more and next_cursor, so next_cursor is sent back as cursor. Both resources are full refresh merged on id: the pages document filters but not an updated-since parameter that was confirmed. Fixture values are illustrative, built from documented field names."
+    },
+    {
+        "slug": "typeform",
+        "name": "Typeform",
+        "category": "surveys",
+        "readiness": "planned",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://www.typeform.com/developers/responses/reference/retrieve-responses/",
+        "credentials": [],
+        "params": [],
+        "notes": "Planned. One responses call returns at most 1000 rows, the docs say to narrow with since/until or before/after above that, and the page token comes from the last row, which the runner's pagers cannot express. A full refresh would silently truncate. CSV import meanwhile."
+    },
+    {
+        "slug": "amplitude",
+        "name": "Amplitude",
+        "category": "product-analytics",
+        "readiness": "planned",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://amplitude.com/docs/apis/analytics/export",
+        "credentials": [],
+        "params": [],
+        "notes": "Planned. Event data leaves through the Export API: a date range is requested and the response is one file with a 6 GB cap, and the data lands up to two hours after upload. That needs a file export runner, not a REST list spec. CSV import of daily counts meanwhile."
+    },
+    {
+        "slug": "paddle",
+        "name": "Paddle",
+        "category": "billing",
+        "readiness": "built",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://developer.paddle.com/api-reference/transactions/list-transactions",
+        "credentials": [
+            {
+                "name": "api_key",
+                "label": "API key",
+                "help": "In Paddle open My account, then Settings, then Authentication, and create an API key. Create a read-only key, and test with the sandbox key before using the live one. This connector only sends GET requests."
+            }
+        ],
+        "params": [],
+        "config": {
+            "client": {
+                "base_url": "https://api.paddle.com/",
+                "headers": {
+                    "Accept": "application/json"
+                },
+                "auth": {
+                    "type": "bearer",
+                    "token": "{secret:api_key}"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "transactions",
+                    "endpoint": {
+                        "path": "transactions",
+                        "params": {
+                            "per_page": 200
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "json_link",
+                            "next_url_path": "meta.pagination.next"
+                        }
+                    }
+                },
+                {
+                    "name": "customers",
+                    "endpoint": {
+                        "path": "customers",
+                        "params": {
+                            "per_page": 200
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "json_link",
+                            "next_url_path": "meta.pagination.next"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Base https://api.paddle.com/, confirmed by the absolute next URLs in the list response. Auth is the Authorization Bearer header with an API key created under Developer tools then Authentication. List endpoints take after and per_page, the body returns data plus meta.pagination, and next is a full URL such as https://api.paddle.com/transactions?after=..., so the json_link pager follows it. Paddle also serves a sandbox host; it was not confirmed on the pages read, so the host is fixed here rather than exposed as a setting. Two resources are built, transactions and customers. Subscriptions and products are documented and left out because their references were not read. Customer rows carry email and name, which the shared rules remove. Fixture values are illustrative, built from documented field names."
+    },
+    {
+        "slug": "intercom",
+        "name": "Intercom",
+        "category": "support",
+        "readiness": "built",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/contacts/listcontacts",
+        "credentials": [
+            {
+                "name": "access_token",
+                "label": "Access token",
+                "help": "In Intercom open Settings, then Integrations, then Developer Hub, open or create an app, then Authentication, and copy the Access Token. Scopes are set on the app: grant read on contacts and companies only. This connector only sends GET requests."
+            }
+        ],
+        "params": [],
+        "config": {
+            "client": {
+                "base_url": "https://api.intercom.io/",
+                "headers": {
+                    "Accept": "application/json",
+                    "Intercom-Version": "2.18"
+                },
+                "auth": {
+                    "type": "bearer",
+                    "token": "{secret:access_token}"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "contacts",
+                    "endpoint": {
+                        "path": "contacts",
+                        "params": {
+                            "per_page": 150
+                        },
+                        "data_selector": "data",
+                        "paginator": {
+                            "type": "cursor",
+                            "cursor_path": "pages.next.starting_after",
+                            "cursor_param": "starting_after"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Base https://api.intercom.io/. Auth is the Authorization Bearer header plus an Intercom-Version header; 2.18 is the version the contact pages are written against. Paging is cursor based: per_page defaults to 10 with a maximum of 150, and starting_after takes the value from pages.next.starting_after in the previous response, so that value is sent back as starting_after. A response carries type, data, total_count and pages. One resource is built, contacts. Companies and conversations were left out because their list endpoints and cursors were not read during this pass; they are the obvious next additions. Contacts carry email, name, phone and location, which the shared rules remove; company names on a contact are part of the person object and are removed with it. Fixture values are illustrative, built from documented field names."
+    },
+    {
+        "slug": "calendly",
+        "name": "Calendly",
+        "category": "scheduling",
+        "readiness": "built",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://developer.calendly.com/api-docs/calendly-api/scheduled-events/list-scheduled-events",
+        "credentials": [
+            {
+                "name": "api_token",
+                "label": "Personal access token",
+                "help": "Calendly, Integrations, then API and webhooks, then Personal access tokens, and create a token. Use a token owned by a user whose role only needs to read scheduled events. This connector only sends GET requests."
+            }
+        ],
+        "params": [
+            {
+                "name": "organization",
+                "label": "Organization URI from GET /users/me",
+                "example": "https://api.calendly.com/organizations/AAAAAAAAAAAAAAAA"
+            }
+        ],
+        "config": {
+            "client": {
+                "base_url": "https://api.calendly.com/",
+                "headers": {
+                    "Accept": "application/json"
+                },
+                "auth": {
+                    "type": "bearer",
+                    "token": "{secret:api_token}"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "uri",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "scheduled_events",
+                    "endpoint": {
+                        "path": "scheduled_events",
+                        "params": {
+                            "organization": "{param:organization}",
+                            "count": 100
+                        },
+                        "data_selector": "collection",
+                        "paginator": {
+                            "type": "cursor",
+                            "cursor_path": "pagination.next_page_token",
+                            "cursor_param": "page_token"
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Base https://api.calendly.com/. Auth is the Authorization Bearer header, shown on the endpoint page as either OAuth 2.0 or a Personal Access Token. The organization parameter is required for an organization-wide list and the page notes it needs admin or owner rights; the value comes from GET /users/me. Paging uses count (1 to 100, default 20) and page_token, and the body returns collection plus pagination. One resource is built. Invitees are only reachable per event uri, so they cannot be listed from the top level and were left out. Fixture values are illustrative, built from documented field names."
     }
 ];

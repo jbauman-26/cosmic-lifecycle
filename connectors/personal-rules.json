@@ -154,6 +154,7 @@
     "person",
     "recipient",
     "agent",
+    "operator",
     "reviewer",
     "shopper",
     "buyer",

@@ -67,7 +67,7 @@ export const PERSONAL_RULES = {
         'closedby', 'assignedto', 'assignedby', 'repliedby', 'submittedby', 'postedby', 'writtenby', 'reportedby', 'requestedby', 'ownedby',
     ],
     peopleTables: [
-        'user', 'customer', 'contact', 'member', 'subscriber', 'profile', 'people', 'person', 'recipient', 'agent', 'reviewer',
+        'user', 'customer', 'contact', 'member', 'subscriber', 'profile', 'people', 'person', 'recipient', 'agent', 'operator', 'reviewer',
         'shopper', 'buyer', 'author', 'requester', 'assignee', 'respondent', 'lead',
     ],
     authoredTables: ['review', 'testimonial'],

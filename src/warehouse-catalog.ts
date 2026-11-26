@@ -1810,12 +1810,74 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "slug": "tidio",
     "name": "Tidio",
     "category": "helpdesk",
-    "readiness": "planned",
+    "readiness": "built",
     "why": "#38 of 100 tools Shopify stores use. StoreLeads: Shopify app installed on 26,973 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/shopify/app/tidio-chat",
-    "docs": "https://developers.tidio.com/",
-    "credentials": [],
+    "docs": "https://developers.tidio.com/reference/get_contacts",
+    "credentials": [
+      {
+        "name": "client_id",
+        "label": "OpenAPI client ID",
+        "help": "In Tidio open Settings, then Developers, then API keys, and create an OpenAPI key pair. The client ID is the first half of the pair. This connector only sends GET requests."
+      },
+      {
+        "name": "client_secret",
+        "label": "OpenAPI client secret",
+        "help": "The secret half of the same Tidio OpenAPI key pair. It is shown once when the pair is created, so copy it then."
+      }
+    ],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "config": {
+      "client": {
+        "base_url": "https://api.tidio.com/",
+        "headers": {
+          "Accept": "application/json",
+          "X-Tidio-Openapi-Client-Secret": "{secret:client_secret}"
+        },
+        "auth": {
+          "type": "api_key",
+          "name": "X-Tidio-Openapi-Client-Id",
+          "api_key": "{secret:client_id}",
+          "location": "header"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "contacts",
+          "endpoint": {
+            "path": "contacts",
+            "params": {
+              "limit": 1000
+            },
+            "data_selector": "contacts",
+            "paginator": {
+              "type": "cursor",
+              "cursor_path": "meta.cursor",
+              "cursor_param": "cursor"
+            }
+          }
+        },
+        {
+          "name": "operators",
+          "endpoint": {
+            "path": "operators",
+            "params": {
+              "limit": 1000
+            },
+            "data_selector": "operators",
+            "paginator": {
+              "type": "cursor",
+              "cursor_path": "meta.cursor",
+              "cursor_param": "cursor"
+            }
+          }
+        }
+      ]
+    },
+    "notes": "Base https://api.tidio.com/, taken from the servers block of the OpenAPI document published on the reference pages. Auth is the pair of headers X-Tidio-Openapi-Client-Id and X-Tidio-Openapi-Client-Secret, which their securitySchemes define as header api keys. List responses wrap the rows in a named array (contacts, operators) and add meta.cursor, which is the value to fetch the next page and is null on the last page, so the cursor pager stops on it. limit is taken from meta.limit, which reports how many items were displayed and shows 1000 in the example. Two resources are built, contacts and operators. Conversations and messages are documented and left out. Contacts carry a name, email and phone, which the shared rules remove. Fixture values are illustrative, built from the documented schemas."
   },
   {
     "slug": "appstle-subscriptions",
