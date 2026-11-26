@@ -1,6 +1,7 @@
 import type { Db, Tx } from './db.js'
 import { CliError } from './errors.js'
-import { reconcile, tolerances, trustLine, type Check, type CheckStatus, type Tolerances } from './reconcile.js'
+import { reconcile, tolerances, trustLine, TOLERANCE, type Check, type CheckStatus, type Tolerances } from './reconcile.js'
+import { settingValue } from './config.js'
 import { packMetrics, type Metric } from './metrics.js'
 import { readWorkspace, type Workspace } from './workspace.js'
 import { workspaceName } from './paths.js'
@@ -14,12 +15,13 @@ import { workspaceName } from './paths.js'
 //
 // A KPI is reportable only when all of these hold for every source it needs:
 // 1. the source is connected, is not syncing, and has finished a sync since it was connected;
-// 2. that sync finished after the month ended, so the whole month was pulled;
+// 2. the data was pulled through the end of the month (the sync's start, or Shopify's cursor, is after it);
 // 3. it is not stale (last good sync within the freshness tolerance);
-// 4. the synced data reaches back to the first day of the month;
-// 5. at least one check that verifies the source's own count ran and passed (or warned), and
-// 6. no check on the source failed.
+// 4. the synced data reaches back to the first day of the month, by what each source's sync records;
+// and, for every table the KPI's SQL reads, a check that verifies that table's count ran and passed (or warned) on
+// a window that includes the month, with no check on its sources failing, and the month has a value.
 // The month itself must be over. A month still running, or one that has not started, holds back every KPI.
+// Tolerances come from the workspace's settings. Any that differ from the defaults are listed in settings_changed.
 
 export type KpiStatus = 'reportable' | 'withheld'
 export type PeriodState = 'complete' | 'in_progress' | 'future'
@@ -42,6 +44,8 @@ export type KpiVerdict = {
   checks: CheckRef[]
   reason: string | null
   next_checks: string[]
+  // The metric's own qualifications, such as which currency a money value is in. Carry them into any report.
+  notes: string[]
 }
 export type Verdict = {
   workspace: string
@@ -56,22 +60,37 @@ export type Verdict = {
   reportable: number
   withheld: number
   not_by_period: string[]
+  // Tolerances this workspace set away from the defaults, which loosen or tighten what passes.
+  settings_changed: string[]
 }
 
-// Checks that compare a source's own count against something independent. One of these must have run
-// for the source before its numbers count as checked.
-const VERIFIES: Record<string, string[]> = {
-  orders_complete: ['shopify'],
-  klaviyo_orders: ['klaviyo'],
-  flow_totals: ['klaviyo'],
-  ga4_purchases: ['ga4'],
-  ga4_vs_reference: ['ga4'],
-  stripe_daily_complete: ['stripe'],
-  subscriptions_balance: ['stripe'],
-  deals_complete: ['hubspot'],
-  contacts_complete: ['hubspot'],
+// Checks that compare a dataset's own count against something independent, by the table they vouch for.
+// A KPI counts as checked only when, for every table its SQL reads, one of these ran (passed or warned) on a
+// window that includes the month. A check on one table never certifies another (an order count says nothing
+// about flow revenue).
+const VERIFIES_TABLE: Record<string, string[]> = {
+  fact_orders_daily: ['orders_complete'],
+  fact_cohort_monthly: ['orders_complete'],
+  fact_klaviyo_orders_daily: ['klaviyo_orders'],
+  fact_flow_daily: ['flow_totals'],
+  fact_flow_window: ['flow_totals'],
+  fact_ga4_daily: ['ga4_purchases', 'ga4_vs_reference'],
+  fact_stripe_daily: ['stripe_daily_complete'],
+  fact_stripe_subscriptions_daily: ['subscriptions_balance'],
+  fact_stripe_mrr: ['subscriptions_balance'],
+  fact_crm_deals_daily: ['deals_complete'],
+  fact_crm_contacts_daily: ['contacts_complete'],
 }
-// Plausibility and internal-consistency checks (two tables built from the same pull). They never make a source "checked", but a failure still holds its KPIs back.
+// These checks compare only the trailing window (metrics.default_days up to yesterday), so they vouch for a
+// month only when the month lies inside that window.
+const TRAILING_CHECKS = new Set(['klaviyo_orders', 'ga4_purchases', 'ga4_vs_reference', 'flow_totals'])
+export const tablesOf = (sql: string) => [...new Set([...sql.matchAll(/FROM (fact_\w+)/g)].map((m) => m[1]!))]
+// Every check that can fail on a source, for holding its KPIs back.
+const VERIFIES: Record<string, string[]> = {
+  orders_complete: ['shopify'], klaviyo_orders: ['klaviyo'], flow_totals: ['klaviyo'], ga4_purchases: ['ga4'], ga4_vs_reference: ['ga4'],
+  stripe_daily_complete: ['stripe'], subscriptions_balance: ['stripe'], deals_complete: ['hubspot'], contacts_complete: ['hubspot'],
+}
+// Plausibility and internal-consistency checks (two tables built from the same pull). They never make a KPI checked, but a failure still holds it back.
 const GUARDS: Record<string, string[]> = {
   orders_vs_cohorts: ['shopify'],
   deals_daily_vs_pulled: ['hubspot'],
@@ -117,38 +136,60 @@ const one = async (db: Tx, sql: string, params: unknown[] = []) => (await db.que
 const iso = (v: unknown) => (v === null || v === undefined ? null : new Date(v as string).toISOString())
 const day = (v: unknown) => (v === null || v === undefined ? null : new Date(v as string).toISOString().slice(0, 10))
 
+const dayBefore = (d: string, n: number) => new Date(Date.parse(d + 'T00:00:00Z') - n * 86400000).toISOString().slice(0, 10)
+// Sources whose sync pulls only a trailing window (metrics.default_days) and keeps older rows: a month older than
+// the last sync's window may have gaps nobody can see. Stripe and HubSpot rebuild their daily tables from full history.
+const TRAILING_SOURCES = new Set(['ga4', 'meta'])
+
 async function coverage(db: Tx, source: string, connected: string[] | undefined, start: string, end: string, t: Tolerances, now: number): Promise<SourceCoverage> {
   const out = (o: Partial<SourceCoverage>): SourceCoverage => ({ source, connected: true, last_synced_at: null, data_from: null, covers_period: false, reason: null, ...o })
   if (connected && !connected.includes(source)) return out({ connected: false, reason: `${nameOf(source)} is not connected.` })
   const latest = await one(db, `SELECT status FROM meta_sync_run WHERE source = $1 ORDER BY started_at DESC LIMIT 1`, [source])
   if (latest.status === 'running') return out({ reason: `${nameOf(source)} is still syncing.` })
-  const good = await one(db, `SELECT max(finished_at) AS at FROM meta_sync_run WHERE source = $1 AND status IN ('ok', 'warning') AND coalesce(code, '') <> 'export_running'
-    AND started_at > coalesce((SELECT max(started_at) FROM meta_sync_run d WHERE d.source = $1 AND d.status = 'disconnected'), '-infinity'::timestamptz)`, [source])
-  const last = iso(good.at)
-  if (!last) return out({ reason: `${nameOf(source)} has not finished a sync since it was connected.` })
-  if (Date.parse(last) < Date.parse(end + 'T00:00:00Z')) return out({ last_synced_at: last, reason: `${nameOf(source)} last synced ${last.slice(0, 10)}, before the month ended, so the end of the month is missing.` })
+  const disconnected = iso((await one(db, `SELECT max(started_at) AS at FROM meta_sync_run WHERE source = $1 AND status = 'disconnected'`, [source])).at) ?? '1970-01-01T00:00:00.000Z'
+  const good = await one(db, `SELECT started_at, finished_at FROM meta_sync_run WHERE source = $1 AND status IN ('ok', 'warning') AND coalesce(code, '') <> 'export_running'
+    AND started_at > $2 ORDER BY started_at DESC LIMIT 1`, [source, disconnected])
+  const last = iso(good.finished_at)
+  const began = iso(good.started_at)
+  if (!last || !began) return out({ reason: `${nameOf(source)} has not finished a sync since it was connected.` })
+  const monthEnd = Date.parse(end + 'T00:00:00Z')
+
+  // What the data was pulled through. A sync reads the source when it starts, not when it finishes. Shopify keeps a
+  // cursor: a bulk export's own cut-off, or the newest change an incremental sync saw.
+  let through = began
+  if (source === 'shopify') {
+    const cur = iso((await one(db, `SELECT cursor_at FROM meta_shopify_sync WHERE id = 1`).catch(() => ({} as Record<string, unknown>))).cursor_at)
+    if (cur) through = cur
+  }
+  if (Date.parse(through) < monthEnd) return out({ last_synced_at: last, reason: `${nameOf(source)} data was pulled through ${through.slice(0, 16).replace('T', ' ')} UTC, before the month ended, so the end of the month may be missing.` })
   const age = (now - Date.parse(last)) / 86400000
   if (age > t.freshnessDays) return out({ last_synced_at: last, reason: `${nameOf(source)} last synced ${Math.floor(age)} days ago, past the ${t.freshnessDays}-day freshness limit.` })
 
-  // How far back the synced data reaches.
+  // How far back the synced data reaches, from what each sync records.
+  const syncDay = began.slice(0, 10)
   let from: string | null = null
   if (source === 'shopify') {
+    from = day((await one(db, `SELECT min(date) AS d FROM fact_orders_daily`)).d)
+    // Without read_all_orders Shopify hands over only the last 60 days. A keyed sync records that; otherwise an
+    // oldest order inside that window means the history may have been cut.
     const s = await one(db, `SELECT window_limited FROM meta_shopify_sync WHERE id = 1`).catch(() => ({} as Record<string, unknown>))
-    if (s.window_limited) {
-      from = day((await one(db, `SELECT min(processed_day) AS d FROM shopify_order_state`)).d)
-      if (!from || from > start) return out({ last_synced_at: last, data_from: from, reason: `Shopify handed over orders only from ${from ?? 'no date'} (no read_all_orders scope), so the start of the month may be missing.` })
-    }
+    const limited = s.window_limited === undefined || s.window_limited === null ? !from || from >= dayBefore(syncDay, 61) : Boolean(s.window_limited)
+    if (limited && start < dayBefore(syncDay, 60)) return out({ last_synced_at: last, data_from: from, reason: `Shopify may have handed over only the last 60 days of orders (oldest synced: ${from ?? 'none'}; no read_all_orders scope), so this month may be incomplete.` })
   } else if (source === 'klaviyo') {
     const w = await one(db, `SELECT window_start AS s, window_end AS e FROM meta_source_window WHERE source = 'klaviyo' AND metric = 'placed_orders'`)
     from = day(w.s)
     const to = day(w.e)
     if (!from || !to) return out({ last_synced_at: last, reason: 'Klaviyo has no synced window of Placed Order data.' })
-    if (from > start || to < new Date(Date.parse(end + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10)) return out({ last_synced_at: last, data_from: from, reason: `Klaviyo was synced for ${from} to ${to}, which does not cover the whole month.` })
+    // The window is stored as dates only, so a window that starts on the 1st may have started after midnight.
+    if (from >= start || to < dayBefore(end, 1)) return out({ last_synced_at: last, data_from: from, reason: `Klaviyo was synced for ${from} to ${to}, which does not cover the whole month${from === start ? ' (a window starting on the 1st may have started after midnight)' : ''}.` })
   } else if (FACT[source]) {
-    // No window is recorded for these sources, so the evidence is the rows: data must start on or before the month.
-    from = day((await one(db, `SELECT min(date) AS d FROM ${FACT[source]}`)).d)
+    from = day((await one(db, `SELECT min(date) AS d FROM ${FACT[source]} WHERE source_synced_at > $1`, [disconnected])).d)
     if (!from) return out({ last_synced_at: last, reason: `${nameOf(source)} has synced no daily rows yet.` })
     if (from > start) return out({ last_synced_at: last, data_from: from, reason: `${nameOf(source)} data starts ${from}, after the month began.` })
+    const window = settingValue('metrics.default_days')
+    if (TRAILING_SOURCES.has(source) && start < dayBefore(syncDay, window)) {
+      return out({ last_synced_at: last, data_from: from, reason: `${nameOf(source)} syncs only the last ${window} days, and this month is older than the last sync's window, so it may have gaps.` })
+    }
   }
   return out({ last_synced_at: last, data_from: from, covers_period: true })
 }
@@ -169,8 +210,8 @@ export type VerdictOptions = { now?: number; tolerances?: Tolerances; workspace?
 
 /**
  * The verdict for one workspace and one month. The workspace is the one this process has open (the
- * --workspace flag or LIFECYCLE_WORKSPACE); `opts` exists for tests and for Cosmic Cloud, which passes the
- * connected list it holds. Runs reconcile, so the stored check results are refreshed as `cosmic reconcile` would.
+ * --workspace flag or LIFECYCLE_WORKSPACE). `opts` exists for tests only; the CLI and Cosmic Cloud pass none
+ * (Cloud names a store's connected sources in config.json, which connectedNow reads). Runs reconcile, so the stored check results are refreshed as `cosmic reconcile` would.
  */
 export async function verdictFor(db: Db, period: string, opts: VerdictOptions = {}): Promise<Verdict> {
   const { start, end } = parsePeriod(period)
@@ -210,13 +251,25 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
       reasons.push(failReason(c))
       next.push(`cosmic reconcile, then fix ${c.name}: ${c.detail}`)
     }
-    for (const s of m.needs) {
-      const verifying = checks.filter((c) => (VERIFIES[c.name] ?? []).includes(s))
-      // A failed check already gave its reason above; unchecked is for checks that never ran.
-      if (!verifying.some((c) => c.status === 'pass' || c.status === 'warn' || c.status === 'fail')) {
-        const why = verifying.find((c) => c.status === 'skipped')?.detail
-        reasons.push(verifying.length ? `${nameOf(s)} numbers are unchecked: ${why ?? 'its checks did not run.'}` : `No check verifies ${nameOf(s)}'s numbers in this workspace yet.`)
-        if (verifying.length) next.push('cosmic sync, then cosmic reconcile')
+    // Every table the KPI reads needs its own verifying check, run on a window that includes this month.
+    const checkStart = dayBefore(t.today ?? new Date(now).toISOString().slice(0, 10), t.days)
+    for (const table of tablesOf(m.sql)) {
+      const names = VERIFIES_TABLE[table]
+      if (!names) {
+        reasons.push(`No check verifies ${table} yet, so ${m.title} is not checked.`)
+        continue
+      }
+      const verifying = checks.filter((c) => names.includes(c.name))
+      // A failed check already gave its reason above; unchecked is for checks that did not vouch for this month.
+      if (verifying.some((c) => c.status === 'fail')) continue
+      const ran = verifying.filter((c) => c.status === 'pass' || c.status === 'warn')
+      const forMonth = ran.filter((c) => !TRAILING_CHECKS.has(c.name) || start >= checkStart)
+      if (!forMonth.length) {
+        const why = ran.length
+          ? `${ran.map((c) => c.name).join(', ')} covers only the last ${t.days} days, from ${checkStart}, not this month.`
+          : verifying.find((c) => c.status === 'skipped')?.detail ?? `${names.join(' or ')} did not run.`
+        reasons.push(`${m.title} is unchecked for this month: ${why}`)
+        if (!ran.length) next.push('cosmic sync, then cosmic reconcile')
       }
     }
     const status: KpiStatus = reasons.length ? 'withheld' : 'reportable'
@@ -227,6 +280,8 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
     }
     kpis.push({
       kpi: m.name, title: m.title, unit: m.unit, status, value, sources: m.needs, checks: mine.map(ref),
+      // A checked month can still have no value: a ratio with nothing to divide by, such as AOV with no orders.
+      notes: [...(m.notes ?? []), ...(status === 'reportable' && value === null ? ['No value this month: there is nothing to divide by (for example, no orders). The data behind it was checked.'] : [])],
       reason: reasons.length ? [...new Set(reasons)].join(' ') : null, next_checks: [...new Set(next)],
     })
   }
@@ -241,6 +296,7 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
     reportable: kpis.filter((k) => k.status === 'reportable').length,
     withheld: kpis.filter((k) => k.status === 'withheld').length,
     not_by_period: all.filter((m) => !byPeriod(m)).map((m) => m.name),
+    settings_changed: (Object.keys(TOLERANCE) as (keyof typeof TOLERANCE)[]).filter((k) => t[k] !== TOLERANCE[k]).map((k) => `${k}: ${t[k]} (default ${TOLERANCE[k]})`),
   }
 }
 
@@ -254,6 +310,7 @@ export function formatVerdict(v: Verdict) {
     lines.push(k.status === 'reportable' ? `REPORT ${k.kpi}: ${k.value ?? 'no value'}` : `HOLD   ${k.kpi}: ${k.reason}`)
   }
   if (!v.kpis.length) lines.push('No KPIs to report: connect a source first. Next: cosmic doctor')
+  if (v.settings_changed.length) lines.push(`Tolerances changed from the defaults: ${v.settings_changed.join(', ')}.`)
   const next = [...new Set(v.kpis.flatMap((k) => k.next_checks))]
   if (next.length) lines.push('', 'Next:', ...next.map((n) => `  ${n}`))
   lines.push('', ...v.sources.map((s) => `${nameOf(s.source)}: ${s.covers_period ? `covers the month, last synced ${s.last_synced_at}` : s.reason}`))

@@ -16,18 +16,18 @@ The period verdict: for one workspace and one month, which KPIs can go in a clie
 
 Everything comes from what this CLI synced and the checks it ran now. Nothing is read from a caller, and a stored check result is never reused. A KPI is withheld when, for any source it needs:
 - the source is not connected, is syncing, or has not finished a sync since it was connected;
-- its last good sync finished before the month ended, or is past the freshness limit;
-- its data starts after the month began (Shopify without `read_all_orders`, a Klaviyo window that does not cover the month, daily rows that start mid-month);
-- no check that verifies the source's own count ran and passed, or
-- any check on the source failed.
+- its data was pulled through a time before the month ended (the sync's start, or Shopify's cursor: a bulk export's cut-off or the newest change an incremental sync saw), or its last sync is past the freshness limit;
+- its data may not reach the 1st: Shopify limited to 60 days (recorded by a keyed sync, or seen as an oldest order inside that window), a Klaviyo window that starts on or after the 1st (it is stored as dates only) or ends early, GA4 and Meta months older than their last sync's window, or daily rows that start mid-month.
 
-A month still running, and one that has not started, hold every KPI back.
+It is also withheld when any check on its sources failed, or when a table its SQL reads has no verifying check that ran on a window including the month. Each table needs its own check: a passing Klaviyo order count does not certify flow revenue. The Klaviyo and GA4 comparison checks cover only the last `metrics.default_days`, so they vouch only for months inside that window.
+
+A month still running, and one that has not started, hold every KPI back. A checked ratio with nothing to divide by (AOV in a month with no orders) is reportable with no value and a note. Each KPI carries its metric's notes, such as the currency a money value is in. Tolerances changed from the defaults are listed in `settings_changed`.
 
 ### Not covered yet
 
-- Meta, and every source without a check that verifies its count, is always withheld ("No check verifies Meta's numbers in this workspace yet").
+- Meta, and every table without a verifying check, is always withheld.
 - Point-in-time metrics (MRR, open pipeline), metrics counted from the first Meta day, and margin metrics have no monthly value. They are listed in `not_by_period`.
-- Comparison checks (Klaviyo and GA4 against Shopify) cover the last 90 days, not the month asked for.
+- Money values are in each metric's main currency, not converted; the notes say so.
 - Tested against built test databases, not yet against a real client account.
 
 ## 0.19.0 (2026-11-25)

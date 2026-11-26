@@ -57,6 +57,8 @@ describe('verdictFor: the three acceptance cases', () => {
   it('a genuine zero is reportable: the store had orders, just none that month', async () => {
     await syncShopify(db, async () => orders(BEFORE, 20), async () => 20)
     const v = await verdictFor(db, LAST, opts())
+    expect(v.kpis.find((k) => k.kpi === 'average_order_value')).toMatchObject({ status: 'reportable', value: null })
+    expect(v.kpis.find((k) => k.kpi === 'average_order_value')!.notes.join(' ')).toContain('nothing to divide by')
     expect(orderKpi(v)).toMatchObject({ status: 'reportable', value: 0 })
     expect(verdictExit(v)).toBe(0)
   })
@@ -99,13 +101,38 @@ describe('verdictFor: what must hold a KPI back', () => {
     expect(v.trust.status).toBe('unchecked')
   })
 
-  it('data that starts after the month began is withheld (Shopify gave only recent orders)', async () => {
+  it('a keyed Shopify sync limited to 60 days holds back a month older than that', async () => {
     await syncShopify(db, async () => orders(LAST, 801), async () => 801)
     await db.query(`INSERT INTO meta_shopify_sync (id, window_limited) VALUES (1, true)`)
-    await db.query(`INSERT INTO shopify_order_state (order_key, processed_at, processed_day, net, discounts, cancelled) VALUES ('k', $1::timestamptz, $2::date, 50, 0, false)`, [`${LAST}-10T00:00:00Z`, `${LAST}-10`])
+    const v = await verdictFor(db, BEFORE, opts())
+    expect(orderKpi(v).status).toBe('withheld')
+    expect(orderKpi(v).reason).toContain('last 60 days')
+  })
+
+  it('without a store key, orders that all fall in the last 60 days hold back older months (review finding)', async () => {
+    const recent = Array.from({ length: 40 }, (_, i) => ({ ...order(LAST, i), processedAt: new Date(Date.now() - (i % 30 + 1) * 86400000).toISOString() }))
+    await syncShopify(db, async () => recent, async () => 40)
+    const v = await verdictFor(db, monthOf(-4), opts())
+    expect(orderKpi(v)).toMatchObject({ status: 'withheld', value: null })
+    expect(orderKpi(v).reason).toContain('last 60 days')
+  })
+
+  it('a sync that started before the month ended is withheld, even if it finished after (review finding)', async () => {
+    await syncShopify(db, async () => orders(BEFORE, 10), async () => 10)
+    const end = Date.parse(`${LAST}-01T00:00:00Z`)
+    await db.query(`UPDATE meta_sync_run SET started_at = $1, finished_at = $2`, [new Date(end - 10 * 60000).toISOString(), new Date(end + 5 * 60000).toISOString()])
+    const v = await verdictFor(db, BEFORE, opts({ tolerances: T({ freshnessDays: 400 }) }))
+    expect(orderKpi(v).status).toBe('withheld')
+    expect(orderKpi(v).reason).toContain('pulled through')
+  })
+
+  it('a Shopify cursor (bulk export cut-off) before the month ended is withheld (review finding)', async () => {
+    await syncShopify(db, async () => orders(LAST, 801), async () => 801)
+    const cutoff = new Date(Date.parse(`${monthOf(0)}-01T00:00:00Z`) - 3600000).toISOString()
+    await db.query(`INSERT INTO meta_shopify_sync (id, cursor_at, window_limited) VALUES (1, $1, false)`, [cutoff])
     const v = await verdictFor(db, LAST, opts())
     expect(orderKpi(v).status).toBe('withheld')
-    expect(orderKpi(v).reason).toContain('start of the month may be missing')
+    expect(orderKpi(v).reason).toContain('pulled through')
   })
 
   it('a last sync that finished before the month ended is withheld', async () => {
@@ -158,6 +185,70 @@ describe('verdictFor: what must hold a KPI back', () => {
     expect(v.sources[0]).toMatchObject({ source: 'shopify', covers_period: true })
     expect(v.sources[0]!.last_synced_at).toBeTruthy()
     expect(Array.isArray(v.not_by_period)).toBe(true)
+  })
+})
+
+describe('verdictFor: each KPI needs the check for its own data (review findings)', () => {
+  const klaviyo = async (from: string) => {
+    await syncShopify(db, async () => orders(LAST, 801), async () => 801)
+    await db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status) VALUES ('k1', 'klaviyo', now(), now(), 'ok')`)
+    await db.query(`INSERT INTO meta_source_window VALUES ('klaviyo', 'placed_orders', $1, current_date, now())`, [from])
+    await db.query(`INSERT INTO fact_klaviyo_orders_daily VALUES ($1, 801, 0, now())`, [`${LAST}-10`])
+  }
+  const kpi = (v: Awaited<ReturnType<typeof verdictFor>>, name: string) => v.kpis.find((k) => k.kpi === name)!
+
+  it('a passing Klaviyo order check does not certify flow revenue when the flow check was skipped', async () => {
+    await klaviyo(`${BEFORE}-01`)
+    const v = await verdictFor(db, LAST, opts({ connected: ['shopify', 'klaviyo'] }))
+    expect(kpi(v, 'klaviyo_placed_orders')).toMatchObject({ status: 'reportable', value: 801 })
+    expect(kpi(v, 'flow_attributed_revenue').status).toBe('withheld')
+    expect(kpi(v, 'flow_attributed_revenue').reason).toContain('unchecked')
+  })
+
+  it('a trailing comparison check does not vouch for a month outside its window', async () => {
+    // Orders in the month and in the last few days; the Klaviyo check only compares the last 5.
+    const recent = Array.from({ length: 6 }, (_, i) => ({ ...order(LAST, 900 + i), processedAt: new Date(Date.now() - 2 * 86400000).toISOString() }))
+    await syncShopify(db, async () => [...orders(LAST, 801), ...recent], async () => 807)
+    await db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status) VALUES ('k1', 'klaviyo', now(), now(), 'ok')`)
+    await db.query(`INSERT INTO meta_source_window VALUES ('klaviyo', 'placed_orders', $1, current_date, now())`, [`${BEFORE}-01`])
+    await db.query(`INSERT INTO fact_klaviyo_orders_daily VALUES ($1, 801, 0, now()), (current_date - 2, 6, 0, now())`, [`${LAST}-10`])
+    const v = await verdictFor(db, LAST, opts({ connected: ['shopify', 'klaviyo'], tolerances: T({ days: 5 }) }))
+    expect(kpi(v, 'klaviyo_placed_orders').status).toBe('withheld')
+    expect(kpi(v, 'klaviyo_placed_orders').reason).toContain('covers only the last 5 days')
+    // Shopify's own count check covers all history, so its KPIs stand.
+    expect(orderKpi(v).status).toBe('reportable')
+  })
+
+  it('a Klaviyo window that starts on the 1st may have started after midnight, so it is withheld', async () => {
+    await klaviyo(`${LAST}-01`)
+    const v = await verdictFor(db, LAST, opts({ connected: ['shopify', 'klaviyo'] }))
+    expect(kpi(v, 'klaviyo_placed_orders').status).toBe('withheld')
+    expect(kpi(v, 'klaviyo_placed_orders').reason).toContain('after midnight')
+  })
+
+  it('GA4 rows with a gap: a month older than the last sync window is withheld', async () => {
+    await syncShopify(db, async () => orders(LAST, 801), async () => 801)
+    await db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status) VALUES ('g1', 'ga4', now(), now(), 'ok')`)
+    await db.query(`INSERT INTO fact_ga4_daily (date, sessions, purchases, source_synced_at) VALUES (current_date - 240, 100, 1, now()), (current_date - 3, 100, 1, now())`).catch(async () => {
+      // Columns differ by release; fall back to every NOT NULL column the table has.
+      const cols = (await db.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'fact_ga4_daily' AND is_nullable = 'NO'`)).map((r) => String(r.column_name))
+      for (const d of [240, 3]) await db.query(`INSERT INTO fact_ga4_daily (${cols.join(', ')}) VALUES (${cols.map((c) => (c === 'date' ? `current_date - ${d}` : c === 'source_synced_at' ? 'now()' : c.endsWith('channel') || c === 'channel_group' || c === 'source' ? "'x'" : '1')).join(', ')})`)
+    })
+    const v = await verdictFor(db, monthOf(-5), opts({ connected: ['shopify', 'ga4'] }))
+    expect(kpi(v, 'ga4_sessions').status).toBe('withheld')
+    expect(kpi(v, 'ga4_sessions').reason).toContain('syncs only the last')
+  })
+
+  it('tolerances changed from the defaults are listed in the verdict', async () => {
+    await syncShopify(db, async () => orders(LAST, 801), async () => 801)
+    const v = await verdictFor(db, LAST, opts({ tolerances: T({ freshnessDays: 365 }) }))
+    expect(v.settings_changed).toEqual(['freshnessDays: 365 (default 2)'])
+  })
+
+  it('carries the metric notes into the KPI', async () => {
+    await syncShopify(db, async () => orders(LAST, 801), async () => 801)
+    const v = await verdictFor(db, LAST, opts())
+    expect(kpi(v, 'returning_order_share').notes.join(' ')).toContain('returning')
   })
 })
 
