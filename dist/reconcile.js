@@ -1,7 +1,7 @@
 import { readRawConfig, settingValue } from './config.js';
 import { readWorkspace, REFERENCE_NAME } from './workspace.js';
 import { readCosts } from './costs.js';
-// The defaults. Each one can be changed with lifecycle config set, see tolerances().
+// The defaults. Each one can be changed with cosmic config set, see tolerances().
 export const TOLERANCE = { klaviyoOrders: 3, ga4Purchases: 15, attributedShareFlag: 60, freshnessDays: 2, minDifference: 3 };
 // Read on its own, not in tolerances(), so a store's tolerances read exactly as in 0.13.
 const adClaimFlag = (t) => t.adClaimFlag ?? settingValue('reconcile.ad_claim_flag');
@@ -230,7 +230,7 @@ export async function reconcile(db, t = tolerances(), ws = readWorkspace()) {
 export async function trustLine(db) {
     const rows = await db.query(`SELECT check_name, status, detail FROM meta_reconcile_result`);
     if (!rows.length)
-        return { status: 'unchecked', line: 'Numbers not checked yet. Run lifecycle reconcile.' };
+        return { status: 'unchecked', line: 'Numbers not checked yet. Run cosmic reconcile.' };
     const failed = rows.filter((r) => r.status === 'fail').map((r) => String(r.check_name));
     if (failed.length)
         return { status: 'failed', line: `DO NOT TRUST THESE NUMBERS YET. Failed checks: ${failed.join(', ')}.` };
@@ -268,10 +268,10 @@ export async function runReferenceChecks(db, t, ws) {
     const has = ws.reference === 'none' ? false : await synced(db, ws.reference);
     // The reference itself: is there one, and has it synced?
     if (ws.reference === 'none') {
-        checks.push({ name: REFERENCE_CHECK, status: 'skipped', expected: null, actual: null, diffPct: null, detail: 'Not checked against a source of truth: this workspace has no reference source set, so each number is its own tool\'s count. Set one with lifecycle config set workspace.reference stripe, hubspot, shopify or ga4.' });
+        checks.push({ name: REFERENCE_CHECK, status: 'skipped', expected: null, actual: null, diffPct: null, detail: 'Not checked against a source of truth: this workspace has no reference source set, so each number is its own tool\'s count. Set one with cosmic config set workspace.reference stripe, hubspot, shopify or ga4.' });
     }
     else if (!has) {
-        checks.push({ name: REFERENCE_CHECK, status: 'skipped', expected: null, actual: null, diffPct: null, detail: `Not checked against a source of truth yet: ${name} is this workspace's reference and has not synced. Each number is its own tool's count until it does. Connect ${ws.reference}, then lifecycle sync.` });
+        checks.push({ name: REFERENCE_CHECK, status: 'skipped', expected: null, actual: null, diffPct: null, detail: `Not checked against a source of truth yet: ${name} is this workspace's reference and has not synced. Each number is its own tool's count until it does. Connect ${ws.reference}, then cosmic sync.` });
     }
     else if (ws.reference === 'ga4') {
         checks.push({ name: REFERENCE_CHECK, status: 'warn', expected: null, actual: null, diffPct: null, detail: 'Checked against GA4 only. GA4 is a tracking tool, not a record of sales or pipeline, so treat these numbers as estimates.' });
@@ -289,7 +289,7 @@ export async function runReferenceChecks(db, t, ws) {
         // Do Stripe's daily rows add up to every charge the pull saw?
         const counted = await total(db, 'stripe', 'charges_counted');
         const d = await one(db, `SELECT sum(charges + failed_charges) AS n FROM fact_stripe_daily`);
-        checks.push(counted === null ? skip('stripe_daily_complete', 'Synced before 0.14.0. The next lifecycle sync records the count this check needs.') : compare('stripe_daily_complete', counted, num(d.n), 0, 'Charges in the daily table against every charge pulled from Stripe'));
+        checks.push(counted === null ? skip('stripe_daily_complete', 'Synced before 0.14.0. The next cosmic sync records the count this check needs.') : compare('stripe_daily_complete', counted, num(d.n), 0, 'Charges in the daily table against every charge pulled from Stripe'));
         // Do subscription starts minus ends match what is open in Stripe right now? Churn is built on these.
         const open = await total(db, 'stripe', 'subscriptions_open');
         const se = await one(db, `SELECT sum(started) AS started, sum(ended) AS ended FROM fact_stripe_subscriptions_daily`);

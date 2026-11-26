@@ -40,7 +40,7 @@ const BLOCKED = /\b(query_to_xml\w*|table_to_xml\w*|schema_to_xml\w*|database_to
 
 export function assertNoBlockedFunctions(sql: string) {
   const m = BLOCKED.exec(sql)
-  if (m) throw new CliError(`${(m[1] ?? 'query()').toLowerCase()} is blocked: it can run other SQL or read system data.`, 'lifecycle schema', 'blocked_object')
+  if (m) throw new CliError(`${(m[1] ?? 'query()').toLowerCase()} is blocked: it can run other SQL or read system data.`, 'cosmic schema', 'blocked_object')
 }
 
 type Token = { kind: 'ident' | 'string' | 'number' | 'param' | 'op'; value: string; quoted?: boolean }
@@ -48,7 +48,7 @@ type Token = { kind: 'ident' | 'string' | 'number' | 'param' | 'op'; value: stri
 const refuse = (why: string): never => {
   throw new CliError(
     `That query was refused because it could return personal details. ${why}`,
-    'lifecycle schema --format json marks personal columns. Name the other columns you need one by one, each table right after FROM or JOIN.',
+    'cosmic schema --format json marks personal columns. Name the other columns you need one by one, each table right after FROM or JOIN.',
     'personal_column',
   )
 }

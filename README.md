@@ -10,7 +10,7 @@ For anyone who markets something: founders and SaaS teams, marketers and freelan
 
 - **14 native sources:** Stripe, Google Analytics 4, HubSpot, Meta Ads, Google Ads, Microsoft Advertising, LinkedIn Ads, TikTok Ads, Pinterest Ads, Reddit Ads, Snapchat Ads, Google Merchant Center, Shopify and Klaviyo. Every connected source gets a freshness check, and the ones that overlap are checked against your source of truth (Stripe, Shopify or HubSpot).
 - **100 more in the warehouse catalog, with readiness shown for each:** 30 have connector code (such as Mailchimp, Brevo, Customer.io, Pipedrive, WooCommerce, BigCommerce, Zendesk, Freshdesk) and 70 are planned. `cosmic sources catalog` lists every one with its status.
-- **Your own pipeline:** already load Stripe or Shopify with Fivetran or Airbyte into your Postgres? `cosmic connect pipeline` reads those tables. See below.
+- **Your own pipeline:** reads any table Fivetran or Airbyte loads into your Postgres. Every table gets a freshness check. The count checks run only on the built-in sources, such as Shopify orders against Shopify's own count. See below.
 - **Anything else:** `cosmic sources import NAME --csv FILE` brings in daily totals from any tool.
 
 Only Shopify, Klaviyo and Stripe have synced against real accounts so far. Every other connector is tested against recorded answers. The full test record is under "Where this is today" below.
@@ -76,7 +76,21 @@ cosmic reconcile
 | Fivetran | `charge` table | `order` table; refunds are not subtracted unless the table has `current_total_price` |
 | Airbyte | `charges` stream | `orders` stream (`current_total_price` is used) |
 
-What it does not cover yet: Stripe subscriptions (so MRR and churn are skipped), Shopify's own order count (so the `orders_complete` check is skipped), BigQuery and Snowflake (Postgres only), and sources other than Stripe and Shopify. A loader that has not written for two days is flagged on the sync line. The URL stays in your environment variable; set it wherever `cosmic sync` runs, including the GitHub Actions secrets for `cosmic deploy`.
+What it does not cover yet: Stripe subscriptions (so MRR and churn are skipped) and Shopify's own order count (so the `orders_complete` check is skipped). A loader that has not written for two days is flagged on the sync line.
+
+### Any other connector: read in place, freshness checked
+
+Leave out `--source` and the CLI reads every table in the schema, for any connector (HubSpot, Salesforce, Zendesk, anything your loader writes):
+
+```sh
+cosmic connect pipeline --tool fivetran --schema hubspot --url-env PIPELINE_DATABASE_URL
+cosmic schema hubspot
+cosmic query "SELECT property_dealstage, count(*) FROM hubspot.deal GROUP BY 1"
+```
+
+Nothing is copied. `cosmic schema`, `cosmic query` and the MCP server read the tables where they are, read-only. Columns that look personal (emails, names, phone numbers, addresses) are left out of the schema and refused in queries, and email addresses or phone numbers in returned text are replaced. The only check is freshness: when the loader last wrote each table (`_fivetran_synced`, or Airbyte's `_airbyte_extracted_at`). Every answer says so: "Freshness only... They are not reconciled against any other source." It never says passed. `cosmic disconnect pipeline:hubspot` forgets the schema.
+
+Postgres only. BigQuery and Snowflake are on the roadmap. The URL stays in your environment variable; set it wherever `cosmic sync` runs, including the GitHub Actions secrets for `cosmic deploy`.
 
 Column names come from Fivetran's published dbt source models and Airbyte's Stripe and Shopify streams. Tested on tables built in that shape and on a local Postgres 16 server, not yet on a real Fivetran or Airbyte load.
 

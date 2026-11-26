@@ -330,10 +330,10 @@ describe('no stale public links', () => {
   })
 
   it('points people at the built-in quickstart, never at a download link they cannot open', () => {
-    expect(UPDATE_HINT).toMatch(/lifecycle docs quickstart/)
+    expect(UPDATE_HINT).toMatch(/cosmic docs quickstart/)
     expect(UPDATE_HINT).not.toMatch(/https?:/)
     const prompt = kitPrompt({ name: 'flow-audit', title: 'Flow audit', needs: ['klaviyo'] })
-    expect(prompt).toMatch(/lifecycle docs quickstart/)
+    expect(prompt).toMatch(/cosmic docs quickstart/)
     const all = [UPDATE_HINT, prompt, ...Object.values(DOCS)].join('\n')
     // 0.17.0: the repo is public, so the one install link is the public release asset. Nothing else.
     expect(all).toContain('https://github.com/jbauman-26/cosmic-lifecycle/releases/latest/download/cosmic-lifecycle.tgz')
@@ -423,7 +423,7 @@ describe('catalog additions in 0.12.0', () => {
   })
 
   it('lists Google Search Console as a planned built-in source that needs Google sign-in, with no connector', () => {
-    // Google Ads became a built-in source (lifecycle connect google-ads), so it left the warehouse catalog.
+    // Google Ads became a built-in source (cosmic connect google-ads), so it left the warehouse catalog.
     expect(bySlug('google-ads')).toBeUndefined()
     for (const slug of ['google-search-console']) {
       const s = bySlug(slug)

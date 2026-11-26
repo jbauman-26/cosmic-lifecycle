@@ -7,7 +7,7 @@ import { setSecret } from '../secrets.js'
 import { CliError } from '../errors.js'
 import { TYPES, WORKSPACE_TYPES, readWorkspace, type Reference, type WorkspaceType } from '../workspace.js'
 
-// `type` is written only when given, so `lifecycle init` on an install from before 0.14.0
+// `type` is written only when given, so `cosmic init` on an install from before 0.14.0
 // leaves the config exactly as it was and the workspace keeps reading as shopify.
 export async function init(opts: { databaseUrlEnv?: string; type?: WorkspaceType; reference?: Reference }) {
   const existing = existsSync(configPath()) ? JSON.parse(readFileSync(configPath(), 'utf8')) : {}
@@ -35,7 +35,7 @@ export async function init(opts: { databaseUrlEnv?: string; type?: WorkspaceType
   return { database: kind, type: w.type, reference: w.reference }
 }
 
-// The picker `lifecycle init` shows in a terminal when no --type is given on a new workspace.
+// The picker `cosmic init` shows in a terminal when no --type is given on a new workspace.
 // Anything that is not a terminal (the app, a script, CI) never sees it and gets shopify.
 export async function pickType(io: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream } = { input: process.stdin, output: process.stdout }): Promise<WorkspaceType> {
   const rl = createInterface({ input: io.input, output: io.output })
@@ -51,7 +51,7 @@ export async function pickType(io: { input: NodeJS.ReadableStream; output: NodeJ
       if (byName) return byName
       io.output.write(`Type a number from 1 to ${WORKSPACE_TYPES.length}.\n`)
     }
-    throw new CliError('No workspace type picked.', `lifecycle init --type ${WORKSPACE_TYPES.join('|')}`, 'bad_type')
+    throw new CliError('No workspace type picked.', `cosmic init --type ${WORKSPACE_TYPES.join('|')}`, 'bad_type')
   } finally {
     rl.close()
   }

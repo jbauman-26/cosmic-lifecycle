@@ -72,10 +72,10 @@ export function saveRun(run) {
 export async function runTool(id, rawInput, ctx, now = () => new Date()) {
     const tool = TOOLS.find((t) => t.id === id);
     if (!tool)
-        throw new CliError(`No tool named ${id}.`, 'lifecycle tools catalog', 'unknown_tool');
+        throw new CliError(`No tool named ${id}.`, 'cosmic tools catalog', 'unknown_tool');
     const parsed = tool.input.safeParse(rawInput ?? {});
     if (!parsed.success)
-        throw new CliError(`Bad input for ${id}: ${parsed.error.issues.map((x) => `${x.path.join('.') || 'input'} ${x.message}`).join('; ')}`, `lifecycle tools catalog`, 'bad_input');
+        throw new CliError(`Bad input for ${id}: ${parsed.error.issues.map((x) => `${x.path.join('.') || 'input'} ${x.message}`).join('; ')}`, `cosmic tools catalog`, 'bad_input');
     const run = { id: randomUUID().slice(0, 8), tool: id, input: parsed.data, status: 'succeeded', startedAt: now().toISOString(), finishedAt: '', request: toolRequest(tool.provider, id, parsed.data) };
     try {
         run.output = await tool.run(parsed.data, ctx);
@@ -90,7 +90,7 @@ export async function runTool(id, rawInput, ctx, now = () => new Date()) {
 export function getRun(id) {
     const p = join(runsDir(), `${id.replace(/[^\w-]/g, '')}.json`);
     if (!existsSync(p))
-        throw new CliError(`No run ${id}.`, 'lifecycle tools runs', 'unknown_run');
+        throw new CliError(`No run ${id}.`, 'cosmic tools runs', 'unknown_run');
     return JSON.parse(readFileSync(p, 'utf8'));
 }
 export function listRuns(limit = 20) {
@@ -134,14 +134,14 @@ export function defaultToolContext() {
         klaviyo: () => {
             const key = getSecret('klaviyo-read-key');
             if (!key)
-                throw new CliError('Klaviyo is not connected.', 'lifecycle connect klaviyo --key-env NAME', 'missing_secret');
+                throw new CliError('Klaviyo is not connected.', 'cosmic connect klaviyo --key-env NAME', 'missing_secret');
             return new Klaviyo(key);
         },
         shopify: async () => {
             const config = readConfig();
             const secret = getSecret('shopify-client-secret');
             if (!config.shopify || !secret)
-                throw new CliError('Shopify is not connected.', 'lifecycle connect shopify --store NAME.myshopify.com --client-id ID --secret-env NAME', 'missing_secret');
+                throw new CliError('Shopify is not connected.', 'cosmic connect shopify --store NAME.myshopify.com --client-id ID --secret-env NAME', 'missing_secret');
             return { store: config.shopify.store, token: await shopifyToken(config.shopify.store, config.shopify.clientId, secret) };
         },
     };

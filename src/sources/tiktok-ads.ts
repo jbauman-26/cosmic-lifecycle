@@ -76,7 +76,7 @@ export function toDaily(rows: RawReportRow[]): TikTokDaily[] {
 
 // Splits since..until into spans of at most 30 days, inclusive, because daily reports allow no more.
 export function spans(since: string, until: string, max = MAX_SPAN_DAYS): [string, string][] {
-  if (!DATE.test(since) || !DATE.test(until)) throw new CliError('Dates must be YYYY-MM-DD.', 'lifecycle sync', 'bad_value')
+  if (!DATE.test(since) || !DATE.test(until)) throw new CliError('Dates must be YYYY-MM-DD.', 'cosmic sync', 'bad_value')
   const out: [string, string][] = []
   const end = Date.parse(`${until}T00:00:00Z`)
   for (let start = Date.parse(`${since}T00:00:00Z`); start <= end; start += max * 86400000) {
@@ -94,11 +94,11 @@ const ACCOUNT_CODES = new Set([40300, 40301])
 
 function refuse(code: number, message: string): never {
   const detail = message ? `: ${message}` : '.'
-  if (TOKEN_CODES.has(code)) throw new CliError(`TikTok rejected the saved TikTok Ads token${detail}`, 'Ask the advertiser to authorize the app again for a new access token, then lifecycle connect tiktok-ads --account ID --app-id ID --token-env NAME', 'key_rejected')
-  if (RATE_CODES.has(code)) throw new CliError('TikTok is rate limiting this app.', 'Wait five minutes, then run lifecycle sync --only tiktok-ads again. The Basic app level allows 600 requests a minute.', 'rate_limited')
-  if (code === 40001 || code === 40119) throw new CliError(`The token cannot read that TikTok ad account${detail}`, 'Check the advertiser id, and that the advertiser authorized this app with the Reporting permission. Then lifecycle connect tiktok-ads again.', 'tiktok_ads_permission')
-  if (ACCOUNT_CODES.has(code)) throw new CliError(`TikTok cannot find that advertiser${detail}`, 'Check the advertiser id in TikTok Ads Manager, then lifecycle connect tiktok-ads --account ID', 'tiktok_ads_account')
-  throw new CliError(`TikTok answered with code ${code}${detail}`, code === 40002 || code === 40000 ? 'Check the advertiser id: lifecycle connect tiktok-ads --account ID' : 'Run the command again, then lifecycle doctor.', 'tiktok_ads_error')
+  if (TOKEN_CODES.has(code)) throw new CliError(`TikTok rejected the saved TikTok Ads token${detail}`, 'Ask the advertiser to authorize the app again for a new access token, then cosmic connect tiktok-ads --account ID --app-id ID --token-env NAME', 'key_rejected')
+  if (RATE_CODES.has(code)) throw new CliError('TikTok is rate limiting this app.', 'Wait five minutes, then run cosmic sync --only tiktok-ads again. The Basic app level allows 600 requests a minute.', 'rate_limited')
+  if (code === 40001 || code === 40119) throw new CliError(`The token cannot read that TikTok ad account${detail}`, 'Check the advertiser id, and that the advertiser authorized this app with the Reporting permission. Then cosmic connect tiktok-ads again.', 'tiktok_ads_permission')
+  if (ACCOUNT_CODES.has(code)) throw new CliError(`TikTok cannot find that advertiser${detail}`, 'Check the advertiser id in TikTok Ads Manager, then cosmic connect tiktok-ads --account ID', 'tiktok_ads_account')
+  throw new CliError(`TikTok answered with code ${code}${detail}`, code === 40002 || code === 40000 ? 'Check the advertiser id: cosmic connect tiktok-ads --account ID' : 'Run the command again, then cosmic doctor.', 'tiktok_ads_error')
 }
 
 function explainHttp(e: unknown): never {
@@ -113,8 +113,8 @@ function explainHttp(e: unknown): never {
     if (code) refuse(code, message)
     if (e.status === 401) refuse(40105, message)
     if (e.status === 429) refuse(40100, message)
-    if (e.status === 403) throw new CliError('TikTok refused the request.', 'lifecycle doctor', 'tiktok_ads_permission')
-    throw new CliError(`TikTok answered with status ${e.status}.`, 'Run the command again, then lifecycle doctor.', 'tiktok_ads_error')
+    if (e.status === 403) throw new CliError('TikTok refused the request.', 'cosmic doctor', 'tiktok_ads_permission')
+    throw new CliError(`TikTok answered with status ${e.status}.`, 'Run the command again, then cosmic doctor.', 'tiktok_ads_error')
   }
   throw e
 }
@@ -142,7 +142,7 @@ export class TikTokAds {
   async check(): Promise<TikTokAccount> {
     const data = await this.get('/advertiser/info/', { advertiser_ids: JSON.stringify([this.account]), fields: JSON.stringify(['advertiser_id', 'name', 'currency', 'timezone', 'display_timezone']) }, 'TikTok account check')
     const a = (data.list ?? []).find((x: any) => String(x?.advertiser_id) === this.account) ?? data.list?.[0]
-    if (!a) throw new CliError('TikTok returned no advertiser for that id.', 'Check the advertiser id in TikTok Ads Manager, then lifecycle connect tiktok-ads --account ID', 'tiktok_ads_account')
+    if (!a) throw new CliError('TikTok returned no advertiser for that id.', 'Check the advertiser id in TikTok Ads Manager, then cosmic connect tiktok-ads --account ID', 'tiktok_ads_account')
     return { account: this.account, name: String(a.name ?? ''), currency: String(a.currency ?? '').toUpperCase(), timezone: String(a.display_timezone || a.timezone || '') }
   }
 
@@ -170,7 +170,7 @@ export class TikTokAds {
         out.push(...(data.list ?? []))
         const total = Number(data.page_info?.total_page) || 1
         if (page >= total) break
-        if (page === 1000) throw new CliError('TikTok kept sending pages past 1,000.', 'Run lifecycle sync --only tiktok-ads again. If it repeats, report it: lifecycle feedback', 'tiktok_ads_error')
+        if (page === 1000) throw new CliError('TikTok kept sending pages past 1,000.', 'Run cosmic sync --only tiktok-ads again. If it repeats, report it: cosmic feedback', 'tiktok_ads_error')
       }
     }
     return out

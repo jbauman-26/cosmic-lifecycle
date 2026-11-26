@@ -32,7 +32,11 @@ const Config = z
     cloud: z.object({ url: z.string() }).partial().optional(),
     // 0.19.0: Stripe or Shopify read from tables a person's own Fivetran or Airbyte loads. The database URL
     // stays in the environment variable named here, never in this file.
-    pipeline: z.object({ sources: z.record(z.string(), z.object({ tool: z.enum(['fivetran', 'airbyte']), schema: z.string(), urlEnv: z.string(), connectedAt: z.string() })).default({}) }).optional(),
+    pipeline: z.object({
+        sources: z.record(z.string(), z.object({ tool: z.enum(['fivetran', 'airbyte']), schema: z.string(), urlEnv: z.string(), connectedAt: z.string() })).default({}),
+        // 0.21.0: any other schema a loader writes, read in place and checked for freshness only.
+        schemas: z.record(z.string(), z.object({ tool: z.enum(['fivetran', 'airbyte']), urlEnv: z.string(), connectedAt: z.string(), tables: z.array(z.string()) })).default({}),
+    }).optional(),
     // Warehouse sources: settings only. Their keys live in the keychain or the environment.
     warehouse: z
         .object({
@@ -55,7 +59,7 @@ export function readRawConfig() {
         return JSON.parse(readFileSync(configPath(), 'utf8'));
     }
     catch {
-        throw new CliError(`${configPath()} is not valid JSON.`, 'Fix or delete it, then lifecycle init', 'bad_config');
+        throw new CliError(`${configPath()} is not valid JSON.`, 'Fix or delete it, then cosmic init', 'bad_config');
     }
 }
 function writeRaw(data) {
@@ -67,19 +71,19 @@ export function readConfig() {
     const raw = readRawConfig();
     const parsed = Config.safeParse(raw);
     if (!parsed.success)
-        throw new CliError('Not set up yet.', 'lifecycle init', 'not_initialized');
+        throw new CliError('Not set up yet.', 'cosmic init', 'not_initialized');
     return parsed.data;
 }
 export function writeConfig(config) {
     writeRaw({ ...readRawConfig(), ...config });
 }
-// Settings a person may change with `lifecycle config`. Sources and the database
+// Settings a person may change with `cosmic config`. Sources and the database
 // are set by init and connect, which validate them first. A setting with a default
 // reads as that default until someone sets it, so an unset key changes nothing.
 const numberIn = (key, min, max, opts) => (v) => {
     const n = Number(v);
     if (v.trim() === '' || !Number.isFinite(n) || n < min || n > max || (opts.whole && !Number.isInteger(n))) {
-        throw new CliError(`Use ${opts.whole ? 'a whole number' : 'a number'} from ${min} to ${max}.`, `lifecycle config set ${key} ${opts.example}`, 'bad_value');
+        throw new CliError(`Use ${opts.whole ? 'a whole number' : 'a number'} from ${min} to ${max}.`, `cosmic config set ${key} ${opts.example}`, 'bad_value');
     }
     return n;
 };
@@ -87,15 +91,15 @@ export const SETTINGS = {
     'registry.uri': { description: 'Kit registry: a local folder or a git URL', parse: (v) => v },
     'deploy.repo': { description: 'GitHub repo that runs the daily sync, OWNER/NAME', parse: (v) => {
             if (!/^[\w.-]+\/[\w.-]+$/.test(v))
-                throw new CliError('Use OWNER/NAME.', 'lifecycle config set deploy.repo you/lifecycle-sync', 'bad_value');
+                throw new CliError('Use OWNER/NAME.', 'cosmic config set deploy.repo you/lifecycle-sync', 'bad_value');
             return v;
         } },
     'update.check': { description: 'Check GitHub for a newer release (true or false)', parse: (v) => {
             if (v !== 'true' && v !== 'false')
-                throw new CliError('Use true or false.', 'lifecycle config set update.check false', 'bad_value');
+                throw new CliError('Use true or false.', 'cosmic config set update.check false', 'bad_value');
             return v === 'true';
         } },
-    'cloud.url': { description: 'Cosmic Cloud address. lifecycle login sets it', parse: (v) => {
+    'cloud.url': { description: 'Cosmic Cloud address. cosmic login sets it', parse: (v) => {
             let u = null;
             try {
                 u = new URL(v);
@@ -105,7 +109,7 @@ export const SETTINGS = {
             }
             const local = u !== null && u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
             if (!u || (u.protocol !== 'https:' && !local))
-                throw new CliError('Use an https address.', 'lifecycle config set cloud.url https://cosmic-cloud.vercel.app', 'bad_value');
+                throw new CliError('Use an https address.', 'cosmic config set cloud.url https://cosmic-cloud.vercel.app', 'bad_value');
             return v.replace(/\/+$/, '');
         } },
     'reconcile.tolerance.klaviyo_orders': { description: 'Percent Klaviyo Placed Order may differ from Shopify orders before the check fails', default: 3, parse: numberIn('reconcile.tolerance.klaviyo_orders', 0, 100, { example: '3' }) },
@@ -115,10 +119,10 @@ export const SETTINGS = {
     'reconcile.freshness_days': { description: 'Days since a source last synced before the freshness check fails', default: 2, parse: numberIn('reconcile.freshness_days', 0.5, 365, { example: '2' }) },
     'warehouse.free_text': { description: 'Free text from warehouse sources, such as ticket subjects and review text: keep (with emails and phone numbers replaced) or drop', default: 'keep', parse: (v) => {
             if (v !== 'keep' && v !== 'drop')
-                throw new CliError('Use keep or drop.', 'lifecycle config set warehouse.free_text drop', 'bad_value');
+                throw new CliError('Use keep or drop.', 'cosmic config set warehouse.free_text drop', 'bad_value');
             return v;
         } },
-    'query.row_cap': { description: 'Most rows lifecycle query returns', default: 1000, parse: numberIn('query.row_cap', 1, 100000, { whole: true, example: '1000' }) },
+    'query.row_cap': { description: 'Most rows cosmic query returns', default: 1000, parse: numberIn('query.row_cap', 1, 100000, { whole: true, example: '1000' }) },
     'metrics.default_days': { description: 'Window in days for metrics, reports and sync pulls when none is given', default: 90, parse: numberIn('metrics.default_days', 1, 730, { whole: true, example: '90' }) },
     'shopify.bulk_min_orders': { description: 'Stores with at least this many orders sync Shopify through one bulk export instead of paging. 0 always uses the export', default: 25000, parse: numberIn('shopify.bulk_min_orders', 0, 1000000000, { whole: true, example: '25000' }) },
     'shopify.export_wait_seconds': { description: 'Seconds a sync waits for a Shopify bulk export to finish before leaving it for the next sync', default: 120, parse: numberIn('shopify.export_wait_seconds', 0, 3600, { whole: true, example: '120' }) },
@@ -128,22 +132,22 @@ export const SETTINGS = {
 // Settings added in 0.14.0 for workspaces that are not Shopify stores. They can be set in any
 // workspace, and `config list` shows them in every workspace but a store, whose list reads as in 0.13.
 export const WORKSPACE_SETTINGS = {
-    'workspace.currency': { description: 'This store\'s currency for a roll-up across stores, such as EUR. Read from Shopify by lifecycle costs sync when not set', parse: (v) => {
+    'workspace.currency': { description: 'This store\'s currency for a roll-up across stores, such as EUR. Read from Shopify by cosmic costs sync when not set', parse: (v) => {
             const c = v.trim().toUpperCase();
             if (!/^[A-Z]{3}$/.test(c))
-                throw new CliError('Use a three letter currency code, such as EUR.', 'lifecycle config set workspace.currency EUR', 'bad_value');
+                throw new CliError('Use a three letter currency code, such as EUR.', 'cosmic config set workspace.currency EUR', 'bad_value');
             return c;
         } },
     'rollup.currency': { description: 'Reporting currency for metrics run --all-stores, such as USD', parse: (v) => {
             const c = v.trim().toUpperCase();
             if (!/^[A-Z]{3}$/.test(c))
-                throw new CliError('Use a three letter currency code, such as USD.', 'lifecycle config set rollup.currency USD', 'bad_value');
+                throw new CliError('Use a three letter currency code, such as USD.', 'cosmic config set rollup.currency USD', 'bad_value');
             return c;
         } },
     'workspace.reference': { description: 'Source of truth the trust gate checks against: shopify, stripe, hubspot, ga4 or none. Default: the one for the workspace type', parse: (v) => {
             const r = v.trim().toLowerCase();
             if (!['shopify', 'stripe', 'hubspot', 'ga4', 'none'].includes(r))
-                throw new CliError('Use shopify, stripe, hubspot, ga4 or none.', 'lifecycle config set workspace.reference stripe', 'bad_value');
+                throw new CliError('Use shopify, stripe, hubspot, ga4 or none.', 'cosmic config set workspace.reference stripe', 'bad_value');
             return r;
         } },
     'reconcile.ad_claim_flag': { description: 'Warn when an ad platform claims more purchases than this percent of what the reference source recorded. Not used by Shopify workspaces', default: 100, parse: numberIn('reconcile.ad_claim_flag', 1, 1000, { example: '100' }) },
@@ -241,6 +245,16 @@ export function removePipelineSource(name) {
     if (!sources || !(name in sources))
         return false;
     delete sources[name];
+    writeRaw(raw);
+    return true;
+}
+// 0.21.0: forget a pipeline schema read in place.
+export function removePipelineSchema(name) {
+    const raw = readRawConfig();
+    const schemas = raw.pipeline?.schemas;
+    if (!schemas || !(name in schemas))
+        return false;
+    delete schemas[name];
     writeRaw(raw);
     return true;
 }

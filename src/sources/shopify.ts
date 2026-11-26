@@ -31,7 +31,7 @@ export async function shopifyToken(store: string, clientId: string, clientSecret
     },
     'Shopify token request',
   )
-  if (!body.access_token) throw new CliError('Shopify returned no access token.', 'lifecycle connect shopify')
+  if (!body.access_token) throw new CliError('Shopify returned no access token.', 'cosmic connect shopify')
   return body.access_token
 }
 
@@ -50,7 +50,7 @@ const ORDERS_QUERY = (sortKey: 'PROCESSED_AT' | 'UPDATED_AT') => `query($c: Stri
   }
 }`
 
-const SCOPE_NEXT = 'In the Shopify admin open Settings, then Apps and sales channels, then Develop apps, then your app, then Configuration, and add the read_orders scope, plus read_all_orders for orders older than 60 days. Install the app again, then lifecycle connect shopify.'
+const SCOPE_NEXT = 'In the Shopify admin open Settings, then Apps and sales channels, then Develop apps, then your app, then Configuration, and add the read_orders scope, plus read_all_orders for orders older than 60 days. Install the app again, then cosmic connect shopify.'
 
 export function scopeDenied(text: string) {
   const scope = /`?(read_[a-z_]+)`?/.exec(text)?.[1]
@@ -71,9 +71,9 @@ export function shopifyQueryError(errors: unknown): CliError {
   const denied = list.find((e: any) => e?.extensions?.code === 'ACCESS_DENIED' || /access denied|required access/i.test(String(e?.message ?? '')))
   if (denied) return scopeDenied(String((denied as any).message ?? ''))
   if (list.some((e: any) => e?.extensions?.code === 'THROTTLED')) {
-    return new CliError('Shopify is rate limiting this app.', 'Wait a few minutes, then run lifecycle sync again.', 'rate_limited')
+    return new CliError('Shopify is rate limiting this app.', 'Wait a few minutes, then run cosmic sync again.', 'rate_limited')
   }
-  return new CliError('Shopify rejected the orders query.', 'lifecycle doctor', 'shopify_query')
+  return new CliError('Shopify rejected the orders query.', 'cosmic doctor', 'shopify_query')
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))

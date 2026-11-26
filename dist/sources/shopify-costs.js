@@ -96,4 +96,4 @@ export async function fetchCostOrders(store, token, fetcher = fetchJson) {
     } while (cursor);
     return { orders: out, currency };
 }
-const costScope = () => new CliError('Shopify did not let this app read product costs. It needs the read_inventory and read_products scopes as well as read_orders.', 'Add read_inventory and read_products to the app, install it again, then lifecycle costs sync. Or set a percent instead: lifecycle costs set cogs_percent 35', 'scope_denied');
+const costScope = () => new CliError('Shopify did not let this app read product costs. It needs the read_inventory and read_products scopes as well as read_orders.', 'Add read_inventory and read_products to the app, install it again, then cosmic costs sync. Or set a percent instead: cosmic costs set cogs_percent 35', 'scope_denied');

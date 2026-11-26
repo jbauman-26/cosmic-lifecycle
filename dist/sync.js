@@ -156,7 +156,7 @@ export async function syncShopify(db, loadOrders, reportedCount, opts = {}) {
 async function incremental(db, deps) {
     const state = await readSyncState(db);
     if (!state?.cursor || state.keyCheck !== deps.keyer.check)
-        throw new CliError('The stored Shopify sync state was made with another key.', 'lifecycle sync --only shopify --full', 'state_mismatch');
+        throw new CliError('The stored Shopify sync state was made with another key.', 'cosmic sync --only shopify --full', 'state_mismatch');
     const orders = await deps.changed(changedSince(state.cursor, deps.overlapDays ?? 3));
     const rows = orders.map((o) => stateRow(o, deps.keyer));
     const at = now();
@@ -213,7 +213,7 @@ export async function syncShopifyBulk(db, deps) {
         }
         if (op.status !== 'COMPLETED') {
             await mark(op, true);
-            throw new CliError(`Shopify's order export ended as ${op.status.toLowerCase()}${op.errorCode ? ` (${op.errorCode})` : ''}.`, 'Run lifecycle sync again to start a new export.', 'export_failed');
+            throw new CliError(`Shopify's order export ended as ${op.status.toLowerCase()}${op.errorCode ? ` (${op.errorCode})` : ''}.`, 'Run cosmic sync again to start a new export.', 'export_failed');
         }
         const cutoff = op.createdAt ? Date.parse(op.createdAt) : Infinity;
         const buf = new CompactOrders(cutoff, deps.keyer ? new StateBuffer(deps.keyer) : undefined);
@@ -229,7 +229,7 @@ export async function syncShopifyBulk(db, deps) {
             }
         }
         if (buf.pulled !== op.objectCount) {
-            throw new CliError(`The Shopify export file had ${buf.pulled} orders, and Shopify says it holds ${op.objectCount}.`, 'Run lifecycle sync again. It reads the same file again.', 'export_incomplete');
+            throw new CliError(`The Shopify export file had ${buf.pulled} orders, and Shopify says it holds ${op.objectCount}.`, 'Run cosmic sync again. It reads the same file again.', 'export_incomplete');
         }
         // Without read_all_orders Shopify hands over only the last 60 days, and every older customer looks new.
         const today = deps.today ?? at.slice(0, 10);

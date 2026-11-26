@@ -7,7 +7,7 @@ import { assertNoPersonalColumns, markCatalog, type CatalogColumn } from './sql-
 import { sourceOfSchema } from './warehouse-names.js'
 import { scrubRows } from './personal.js'
 
-// The default. lifecycle config set query.row_cap changes it.
+// The default. cosmic config set query.row_cap changes it.
 export const ROW_CAP = 1000
 export const rowCap = () => settingValue('query.row_cap')
 
@@ -16,9 +16,9 @@ export const rowCap = () => settingValue('query.row_cap')
 export function assertReadOnlySql(sql: string) {
   const body = sql.trim().replace(/;\s*$/, '')
   if (body.includes(';')) throw new CliError('Run one statement at a time.', 'Remove the extra statement and try again.', 'multiple_statements')
-  if (!/^(select|with)\b/i.test(body)) throw new CliError('Only SELECT queries are allowed.', 'lifecycle schema', 'read_only')
+  if (!/^(select|with)\b/i.test(body)) throw new CliError('Only SELECT queries are allowed.', 'cosmic schema', 'read_only')
   if (/\b(pg_catalog|information_schema|pg_read_file|pg_ls_dir|dblink|copy)\b/i.test(body)) {
-    throw new CliError('System tables and file access are blocked.', 'lifecycle schema', 'blocked_object')
+    throw new CliError('System tables and file access are blocked.', 'cosmic schema', 'blocked_object')
   }
   return body
 }
@@ -37,7 +37,7 @@ export async function assertNoPersonal(db: Tx, body: string) {
   try {
     catalog = await pgCatalog(db)
   } catch (e) {
-    throw new CliError(`The database's columns could not be listed, so the query was not run: ${e instanceof Error ? e.message : e}`, 'lifecycle doctor', 'query_failed')
+    throw new CliError(`The database's columns could not be listed, so the query was not run: ${e instanceof Error ? e.message : e}`, 'cosmic doctor', 'query_failed')
   }
   assertNoPersonalColumns(body, catalog)
 }
@@ -49,7 +49,7 @@ export async function runQuery(db: Db, sql: string, cap = rowCap()) {
   try {
     rows = await db.readOnly(`SELECT * FROM (${body}) AS q LIMIT ${cap + 1}`)
   } catch (e) {
-    throw new CliError(`Query failed: ${e instanceof Error ? e.message : e}`, 'lifecycle schema', 'query_failed')
+    throw new CliError(`Query failed: ${e instanceof Error ? e.message : e}`, 'cosmic schema', 'query_failed')
   }
   const truncated = rows.length > cap
   // The last check: an email address or phone number in returned text is replaced, whatever column it came from.
@@ -60,7 +60,7 @@ export async function runQuery(db: Db, sql: string, cap = rowCap()) {
 // Normalized so the same question asked with different spacing or case counts once.
 export const normalizeSql = (sql: string) => sql.trim().replace(/;\s*$/, '').replace(/\s+/g, ' ').toLowerCase()
 
-// Logs a custom query so `lifecycle metrics candidates` can suggest new verified metrics.
+// Logs a custom query so `cosmic metrics candidates` can suggest new verified metrics.
 // Holds SQL text only; the database has no customer records to leak into it.
 // Never throws: a failed log must not fail the query the user asked for.
 export async function recordCustomQuery(db: Tx, sql: string) {

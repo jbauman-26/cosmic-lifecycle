@@ -49,20 +49,20 @@ description: Work with checked marketing numbers through the Cosmic Lifecycle CL
 This skill is a router. The playbook that matches the installed CLI ships inside it. Load it before any lifecycle work:
 
 \`\`\`sh
-lifecycle docs agents
+cosmic docs agents
 \`\`\`
 
 Then, as the task needs:
-- \`lifecycle workspace show\` says what kind of business this is and which source its numbers are checked against.
-- \`lifecycle docs workspaces\` explains the workspace types and their metric packs.
-- \`lifecycle docs setup\` connects Klaviyo, Shopify, GA4, Stripe, Meta Ads and HubSpot.
-- \`lifecycle docs kits\` explains kits.
-- \`lifecycle docs commands\` lists every command.
+- \`cosmic workspace show\` says what kind of business this is and which source its numbers are checked against.
+- \`cosmic docs workspaces\` explains the workspace types and their metric packs.
+- \`cosmic docs setup\` connects Klaviyo, Shopify, GA4, Stripe, Meta Ads and HubSpot.
+- \`cosmic docs kits\` explains kits.
+- \`cosmic docs commands\` lists every command.
 
 If \`lifecycle\` is not on PATH, stop and ask the user to install it from https://github.com/jbauman-26/cosmic-lifecycle.
 
 Rules:
-- Run \`lifecycle reconcile\` before quoting any number. If a check failed, say so first. If the trust line says the numbers were not checked against a source of truth, say that first instead.
+- Run \`cosmic reconcile\` before quoting any number. If a check failed, say so first. If the trust line says the numbers were not checked against a source of truth, say that first instead.
 - Nothing in this tool sends a message. Never claim attributed revenue proves causation.
 - "Audit my flows", "rank my flows" or "build a win-back segment" is a kit task. Prefer the kit skill:
 ${kits.map((k) => `  - \`/${PLUGIN}:kits:${k.name}\`: ${k.summary}`).join('\n')}
@@ -83,16 +83,16 @@ This skill is generated from the \`${k.name}\` kit at version ${k.version}.
 2. Load the playbook:
 
    \`\`\`sh
-   lifecycle docs agents
-   lifecycle kits show ${k.name}
-   lifecycle doctor --format json
+   cosmic docs agents
+   cosmic kits show ${k.name}
+   cosmic doctor --format json
    \`\`\`
 
-3. Connect what the kit needs (${k.needs.join(', ')}) with \`lifecycle docs setup\` if doctor says it is missing.
+3. Connect what the kit needs (${k.needs.join(', ')}) with \`cosmic docs setup\` if doctor says it is missing.
 4. Stage the kit:
 
    \`\`\`sh
-   lifecycle kits add ${k.name} --format json
+   cosmic kits add ${k.name} --format json
    \`\`\`
 
 5. Read \`lifecycle-kits/${k.name}/AGENT.md\` and follow it in order, including the Verify checklist at the end.
@@ -103,7 +103,7 @@ What it changes: ${k.writes}
 export function buildFiles(kits: IndexEntry[], target: Target): Record<string, string> {
   const files: Record<string, string> = {
     'SKILL.md': routerSkill(kits),
-    'README.md': `# Cosmic Lifecycle skills\n\nInstalled by \`lifecycle skills sync\`. Files you edit here are kept on the next sync. Remove everything with \`lifecycle skills uninstall\`.\n`,
+    'README.md': `# Cosmic Lifecycle skills\n\nInstalled by \`cosmic skills sync\`. Files you edit here are kept on the next sync. Remove everything with \`cosmic skills uninstall\`.\n`,
     [target === 'claude' ? '.claude-plugin/plugin.json' : '.cursor-plugin/plugin.json']: pluginJson(),
   }
   for (const k of kits) files[`skills/kit-${k.name}/SKILL.md`] = kitSkill(k)
@@ -172,7 +172,7 @@ export function findSecrets(files: SkillFile[]) {
 // Reads a skill folder for `skills push`. Refuses anything Cloud would refuse, before a byte is sent.
 export function readSkillDir(dir: string, slugOpt?: string) {
   const root = resolve(dir)
-  if (!existsSync(root) || !lstatSync(root).isDirectory()) throw new CliError(`${dir} is not a folder.`, 'lifecycle skills push DIRECTORY', 'bad_skill')
+  if (!existsSync(root) || !lstatSync(root).isDirectory()) throw new CliError(`${dir} is not a folder.`, 'cosmic skills push DIRECTORY', 'bad_skill')
   const slug = assertSlug(slugOpt ?? basename(root).toLowerCase())
   const files: SkillFile[] = []
   const walk = (rel: string) => {

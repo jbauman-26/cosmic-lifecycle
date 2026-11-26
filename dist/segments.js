@@ -74,19 +74,19 @@ export function readPlan(path) {
         raw = JSON.parse(readFileSync(path, 'utf8'));
     }
     catch {
-        throw new CliError(`Could not read plan file ${path}.`, 'lifecycle segments propose winback', 'bad_plan');
+        throw new CliError(`Could not read plan file ${path}.`, 'cosmic segments propose winback', 'bad_plan');
     }
     const plan = Plan.parse(raw);
     const { checksum: given, ...rest } = plan;
     if (checksum(rest) !== given)
-        throw new CliError('This plan was changed after it was written.', 'lifecycle segments propose winback', 'plan_changed');
+        throw new CliError('This plan was changed after it was written.', 'cosmic segments propose winback', 'plan_changed');
     return plan;
 }
 // The only write in the product. It creates a segment and nothing else, and it
 // needs both a reviewed plan and an explicit confirm.
 export async function applyPlan(plan, key, opts) {
     if (!opts.confirm)
-        throw new CliError('Nothing was created. Review the plan, then add --confirm.', 'lifecycle segments apply PLAN_FILE --confirm', 'not_confirmed');
+        throw new CliError('Nothing was created. Review the plan, then add --confirm.', 'cosmic segments apply PLAN_FILE --confirm', 'not_confirmed');
     const body = await fetchJson('https://a.klaviyo.com/api/segments', {
         method: 'POST',
         headers: { Authorization: `Klaviyo-API-Key ${key}`, revision: REVISION, accept: 'application/vnd.api+json', 'content-type': 'application/vnd.api+json' },

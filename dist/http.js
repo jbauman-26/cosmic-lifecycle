@@ -5,7 +5,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // slow down and still did after the retries. Anything else stays http_error.
 export const httpCode = (status) => (status === 401 ? 'key_rejected' : status === 429 ? 'rate_limited' : 'http_error');
 const httpMessage = (label, status) => status === 401 ? `${label} failed: the key was rejected.` : status === 429 ? `${label} failed: the service is rate limiting this key.` : `${label} failed with status ${status}.`;
-const httpNext = (status) => status === 401 || status === 403 ? 'lifecycle doctor' : status === 429 ? 'Wait a few minutes, then run the command again.' : 'Run the command again, then lifecycle doctor.';
+const httpNext = (status) => status === 401 || status === 403 ? 'cosmic doctor' : status === 429 ? 'Wait a few minutes, then run the command again.' : 'Run the command again, then cosmic doctor.';
 export class HttpError extends CliError {
     status;
     body;

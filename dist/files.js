@@ -12,7 +12,7 @@ function safePath(rel) {
     const root = resolve(filesDir());
     const p = resolve(root, rel);
     if (p !== root && !p.startsWith(root + sep))
-        throw new CliError('That path is outside the files folder.', 'lifecycle files ls', 'bad_path');
+        throw new CliError('That path is outside the files folder.', 'cosmic files ls', 'bad_path');
     return p;
 }
 export function saveArtifact(name, content, now = new Date()) {
@@ -49,13 +49,13 @@ export function listFiles(sub = '') {
 export function readFile(rel) {
     const p = safePath(rel);
     if (!existsSync(p) || statSync(p).isDirectory())
-        throw new CliError(`No file ${rel}.`, 'lifecycle files ls', 'missing_file');
+        throw new CliError(`No file ${rel}.`, 'cosmic files ls', 'missing_file');
     return readFileSync(p, 'utf8');
 }
 export function getFile(rel, dir) {
     const p = safePath(rel);
     if (!existsSync(p))
-        throw new CliError(`No file ${rel}.`, 'lifecycle files ls', 'missing_file');
+        throw new CliError(`No file ${rel}.`, 'cosmic files ls', 'missing_file');
     mkdirSync(dir, { recursive: true });
     const dest = join(dir, basename(p));
     copyFileSync(p, dest);
@@ -65,13 +65,13 @@ export const CLOUD_ARTIFACT = 'lifecycle-dashboard';
 // Downloads the dashboard artifact from the latest successful daily sync in your repo.
 export function pullCloud(repo) {
     if (!repo)
-        throw new CliError('No sync repo is set.', 'lifecycle config set deploy.repo OWNER/NAME', 'no_repo');
+        throw new CliError('No sync repo is set.', 'cosmic config set deploy.repo OWNER/NAME', 'no_repo');
     const list = spawnSync('gh', ['run', 'list', '--repo', repo, '--workflow', 'sync.yml', '--status', 'success', '--limit', '1', '--json', 'databaseId,createdAt'], { encoding: 'utf8' });
     if (list.status !== 0)
-        throw new CliError(`Could not read runs for ${repo}.`, 'gh auth login, then lifecycle jobs list', 'gh_runs');
+        throw new CliError(`Could not read runs for ${repo}.`, 'gh auth login, then cosmic jobs list', 'gh_runs');
     const run = JSON.parse(list.stdout || '[]')[0];
     if (!run)
-        throw new CliError('No successful run yet.', 'lifecycle jobs run', 'no_runs');
+        throw new CliError('No successful run yet.', 'cosmic jobs run', 'no_runs');
     const dest = join(filesDir(), 'cloud', String(run.databaseId));
     mkdirSync(dest, { recursive: true });
     const dl = spawnSync('gh', ['run', 'download', String(run.databaseId), '--repo', repo, '--name', CLOUD_ARTIFACT, '--dir', dest], { encoding: 'utf8' });

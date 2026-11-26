@@ -50,7 +50,7 @@ const NO_KEYS: KeyStorage = { keyStorage: 'keychain', keyEnv: [], keyNote: null 
 
 export async function connectKlaviyo(opts: { keyEnv?: string }) {
   const key = opts.keyEnv ? fromEnv(opts.keyEnv) : getSecret('klaviyo-read-key')
-  if (!key) throw new CliError('No Klaviyo key given.', 'lifecycle connect klaviyo --key-env NAME', 'missing_secret')
+  if (!key) throw new CliError('No Klaviyo key given.', 'cosmic connect klaviyo --key-env NAME', 'missing_secret')
   const account = await new Klaviyo(key).account()
   const kept = opts.keyEnv ? keepKeys([['klaviyo-read-key', key]]) : NO_KEYS
   writeConfig({ ...readConfig(), klaviyo: { connected: true } })
@@ -58,9 +58,9 @@ export async function connectKlaviyo(opts: { keyEnv?: string }) {
 }
 
 export async function connectShopify(opts: { store?: string; clientId?: string; secretEnv?: string }) {
-  if (!opts.store || !opts.clientId) throw new CliError('Store and client ID are required.', 'lifecycle connect shopify --store NAME.myshopify.com --client-id ID --secret-env NAME')
+  if (!opts.store || !opts.clientId) throw new CliError('Store and client ID are required.', 'cosmic connect shopify --store NAME.myshopify.com --client-id ID --secret-env NAME')
   const secret = opts.secretEnv ? fromEnv(opts.secretEnv) : getSecret('shopify-client-secret')
-  if (!secret) throw new CliError('No Shopify client secret given.', 'lifecycle connect shopify --secret-env NAME', 'missing_secret')
+  if (!secret) throw new CliError('No Shopify client secret given.', 'cosmic connect shopify --secret-env NAME', 'missing_secret')
   await shopifyToken(opts.store, opts.clientId, secret)
   const kept = opts.secretEnv ? keepKeys([['shopify-client-secret', secret]]) : NO_KEYS
   writeConfig({ ...readConfig(), shopify: { store: opts.store, clientId: opts.clientId } })
@@ -68,10 +68,10 @@ export async function connectShopify(opts: { store?: string; clientId?: string; 
 }
 
 export async function connectGa4(opts: { property?: string; clientId?: string; secretEnv?: string; refreshTokenEnv?: string }) {
-  if (!opts.property || !opts.clientId) throw new CliError('Property and client ID are required.', 'lifecycle connect ga4 --property ID --client-id ID --secret-env NAME --refresh-token-env NAME')
+  if (!opts.property || !opts.clientId) throw new CliError('Property and client ID are required.', 'cosmic connect ga4 --property ID --client-id ID --secret-env NAME --refresh-token-env NAME')
   const secret = opts.secretEnv ? fromEnv(opts.secretEnv) : getSecret('ga4-client-secret')
   const refresh = opts.refreshTokenEnv ? fromEnv(opts.refreshTokenEnv) : getSecret('ga4-refresh-token')
-  if (!secret || !refresh) throw new CliError('GA4 credentials are missing.', 'lifecycle docs troubleshooting', 'missing_secret')
+  if (!secret || !refresh) throw new CliError('GA4 credentials are missing.', 'cosmic docs troubleshooting', 'missing_secret')
   const token = await ga4AccessToken(opts.clientId, secret, refresh)
   const today = new Date().toISOString().slice(0, 10)
   await fetchGa4Daily(opts.property, token, today, today)
@@ -85,7 +85,7 @@ export async function connectGa4(opts: { property?: string; clientId?: string; s
 
 export async function connectStripe(opts: { keyEnv?: string }) {
   const key = opts.keyEnv ? fromEnv(opts.keyEnv) : getSecret('stripe-read-key')
-  if (!key) throw new CliError('No Stripe key given.', 'lifecycle connect stripe --key-env STRIPE_READ_KEY', 'missing_secret')
+  if (!key) throw new CliError('No Stripe key given.', 'cosmic connect stripe --key-env STRIPE_READ_KEY', 'missing_secret')
   if (!/^(sk|rk)_(test|live)_/.test(key)) throw new CliError('That is not a Stripe secret or restricted key.', 'Use a restricted key that starts with rk_live_ or rk_test_.', 'stripe_key')
   const { subscriptions } = await new Stripe(key).check()
   const mode = stripeMode(key)
@@ -101,10 +101,10 @@ export async function connectStripe(opts: { keyEnv?: string }) {
 }
 
 export async function connectMeta(opts: { account?: string; tokenEnv?: string }) {
-  if (!opts.account) throw new CliError('The ad account id is required.', 'lifecycle connect meta --account 1234567890 --token-env META_ADS_TOKEN')
+  if (!opts.account) throw new CliError('The ad account id is required.', 'cosmic connect meta --account 1234567890 --token-env META_ADS_TOKEN')
   const account = normalizeAccountId(opts.account)
   const token = opts.tokenEnv ? fromEnv(opts.tokenEnv) : getSecret('meta-ads-token')
-  if (!token) throw new CliError('No Meta token given.', 'lifecycle connect meta --account ID --token-env META_ADS_TOKEN', 'missing_secret')
+  if (!token) throw new CliError('No Meta token given.', 'cosmic connect meta --account ID --token-env META_ADS_TOKEN', 'missing_secret')
   const a = await new MetaAds(token, account).check()
   const kept = opts.tokenEnv ? keepKeys([['meta-ads-token', token]]) : NO_KEYS
   writeConfig({ ...readConfig(), meta: { account: a.id, name: a.name, currency: a.currency, timezone: a.timezone } })
@@ -113,7 +113,7 @@ export async function connectMeta(opts: { account?: string; tokenEnv?: string })
 
 export async function connectHubspot(opts: { tokenEnv?: string }) {
   const token = opts.tokenEnv ? fromEnv(opts.tokenEnv) : getSecret('hubspot-token')
-  if (!token) throw new CliError('No HubSpot token given.', 'lifecycle connect hubspot --token-env HUBSPOT_TOKEN', 'missing_secret')
+  if (!token) throw new CliError('No HubSpot token given.', 'cosmic connect hubspot --token-env HUBSPOT_TOKEN', 'missing_secret')
   if (/\s/.test(token)) throw new CliError('That token has spaces or line breaks in it.', 'Copy the access token from the private app again.', 'bad_token')
   const a = await new HubSpot(token).check()
   const kept = opts.tokenEnv ? keepKeys([['hubspot-token', token]]) : NO_KEYS
@@ -121,7 +121,7 @@ export async function connectHubspot(opts: { tokenEnv?: string }) {
   return { connected: true, portal: a.portal, currency: a.currency, ...kept }
 }
 
-const GOOGLE_ADS_NEXT = 'lifecycle connect google-ads --customer 123-456-7890 --client-id ID --secret-env NAME --refresh-token-env NAME'
+const GOOGLE_ADS_NEXT = 'cosmic connect google-ads --customer 123-456-7890 --client-id ID --secret-env NAME --refresh-token-env NAME'
 
 // Read only: the refresh token is for the adwords scope, but this CLI only ever calls GoogleAdsService.Search.
 export async function connectGoogleAds(opts: { customer?: string; loginCustomer?: string; clientId?: string; secretEnv?: string; refreshTokenEnv?: string }) {
@@ -141,7 +141,7 @@ export async function connectGoogleAds(opts: { customer?: string; loginCustomer?
   return { connected: true, customer, loginCustomer: loginCustomer ?? null, name: a.name, currency: a.currency, timezone: a.timezone, testAccount: a.testAccount, ...kept }
 }
 
-const MERCHANT_NEXT = 'lifecycle connect google-merchant-center --account 123456789 --client-id ID --secret-env NAME --refresh-token-env NAME'
+const MERCHANT_NEXT = 'cosmic connect google-merchant-center --account 123456789 --client-id ID --secret-env NAME --refresh-token-env NAME'
 
 // Read only: Google has no read-only Merchant scope, so the refresh token is for the content scope, but this CLI
 // only ever calls accounts.reports.search and accounts.get.
@@ -163,7 +163,7 @@ export async function connectMerchantCenter(opts: { account?: string; clientId?:
 
 type AdsConnectOpts = { account?: string; clientId?: string; secretEnv?: string; refreshTokenEnv?: string }
 
-const MICROSOFT_NEXT = 'lifecycle connect microsoft-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME --developer-token-env NAME'
+const MICROSOFT_NEXT = 'cosmic connect microsoft-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME --developer-token-env NAME'
 
 // Read only: the msads.manage scope is the only one Microsoft offers, but this CLI only ever calls GetAccount and
 // the reporting service. The developer token belongs to whoever registered the app; it is not the advertiser's.
@@ -191,7 +191,7 @@ export async function connectMicrosoftAds(opts: { account?: string; customer?: s
   return { connected: true, account, customer: a.customer, name: a.name, currency: a.currency, timezone: a.timezone, ...kept }
 }
 
-const LINKEDIN_NEXT = 'lifecycle connect linkedin-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME'
+const LINKEDIN_NEXT = 'cosmic connect linkedin-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME'
 
 // Read only: the refresh token needs r_ads and r_ads_reporting, and this CLI only ever reads the account, its
 // campaign names and adAnalytics.
@@ -211,7 +211,7 @@ export async function connectLinkedinAds(opts: { account?: string; clientId?: st
   return { connected: true, account, name: a.name, currency: a.currency, timezone: 'UTC', test: a.test, ...kept }
 }
 
-const REDDIT_ADS_NEXT = 'lifecycle connect reddit-ads --account a2_abc123 --client-id ID --secret-env NAME --refresh-token-env NAME'
+const REDDIT_ADS_NEXT = 'cosmic connect reddit-ads --account a2_abc123 --client-id ID --secret-env NAME --refresh-token-env NAME'
 
 // Read only: the refresh token carries the adsread scope, and this CLI only reads the account, campaign names and reports.
 export async function connectRedditAds(opts: AdsConnectOpts) {
@@ -229,7 +229,7 @@ export async function connectRedditAds(opts: AdsConnectOpts) {
   return { connected: true, account, name: a.name, currency: a.currency, timezone: a.timezone, ...kept }
 }
 
-const SNAPCHAT_ADS_NEXT = 'lifecycle connect snapchat-ads --account AD_ACCOUNT_ID --client-id ID --secret-env NAME --refresh-token-env NAME'
+const SNAPCHAT_ADS_NEXT = 'cosmic connect snapchat-ads --account AD_ACCOUNT_ID --client-id ID --secret-env NAME --refresh-token-env NAME'
 
 // Read only: Snap's snapchat-marketing-api scope also allows writes, but this CLI only reads the account, campaign names and stats.
 export async function connectSnapchatAds(opts: AdsConnectOpts) {
@@ -247,7 +247,7 @@ export async function connectSnapchatAds(opts: AdsConnectOpts) {
   return { connected: true, account, name: a.name, currency: a.currency, timezone: a.timezone, organizationId: a.organizationId || null, ...kept }
 }
 
-const TIKTOK_ADS_NEXT = 'lifecycle connect tiktok-ads --account ADVERTISER_ID --app-id ID --token-env NAME'
+const TIKTOK_ADS_NEXT = 'cosmic connect tiktok-ads --account ADVERTISER_ID --app-id ID --token-env NAME'
 
 // Read only: the token is TikTok's long-term advertiser token, and this CLI only ever calls
 // advertiser/info and report/integrated/get, both GET. The app id is kept to say which app the
@@ -264,7 +264,7 @@ export async function connectTiktokAds(opts: { account?: string; appId?: string;
   return { connected: true, account, appId: opts.appId, name: a.name, currency: a.currency, timezone: a.timezone, ...kept }
 }
 
-const PINTEREST_ADS_NEXT = 'lifecycle connect pinterest-ads --account AD_ACCOUNT_ID --client-id ID --secret-env NAME --refresh-token-env NAME'
+const PINTEREST_ADS_NEXT = 'cosmic connect pinterest-ads --account AD_ACCOUNT_ID --client-id ID --secret-env NAME --refresh-token-env NAME'
 
 // Read only: the refresh token is for the ads:read scope, and this CLI only ever reads the ad account,
 // its campaigns and campaign analytics.

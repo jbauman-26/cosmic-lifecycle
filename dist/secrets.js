@@ -44,7 +44,7 @@ const ENV = {
     'fal-key': 'LIFECYCLE_FAL_KEY',
     'apify-token': 'LIFECYCLE_APIFY_TOKEN',
     'scrapecreators-key': 'LIFECYCLE_SCRAPECREATORS_KEY',
-    // The store token `lifecycle login` saves for Cosmic Cloud.
+    // The store token `cosmic login` saves for Cosmic Cloud.
     'cloud-token': 'LIFECYCLE_CLOUD_TOKEN',
 };
 export const useKeychain = () => process.platform === 'darwin' && !process.env.LIFECYCLE_NO_KEYCHAIN;

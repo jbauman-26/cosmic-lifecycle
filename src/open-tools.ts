@@ -54,7 +54,7 @@ export function defaultOpenContext(): OpenContext {
     key: (provider) => {
       const p = OPEN_PROVIDERS[provider]
       const key = getSecret(p.secret)
-      if (!key) throw new CliError(`No ${p.name} key yet.`, `lifecycle secrets set ${p.secret} --from-env YOUR_VAR, or export ${envName(p.secret)}`, 'missing_secret')
+      if (!key) throw new CliError(`No ${p.name} key yet.`, `cosmic secrets set ${p.secret} --from-env YOUR_VAR, or export ${envName(p.secret)}`, 'missing_secret')
       return key
     },
     http: fetchJson,
@@ -72,7 +72,7 @@ type Outcome = { status: ToolRun['status']; output?: unknown; error?: string; co
 
 // Kie answers HTTP 200 even when it refuses, and puts the real result in `code`.
 function kieData(r: any, what: string) {
-  if (r?.code !== 200) throw new CliError(`Kie refused to ${what}: ${r?.msg ?? 'no reason given'} (code ${r?.code}).`, r?.code === 401 ? 'Check the key: lifecycle secrets list' : r?.code === 402 ? 'Add credits at https://kie.ai' : `Check the input against the model's page at ${OPEN_PROVIDERS.kie.catalog}`, 'provider_refused')
+  if (r?.code !== 200) throw new CliError(`Kie refused to ${what}: ${r?.msg ?? 'no reason given'} (code ${r?.code}).`, r?.code === 401 ? 'Check the key: cosmic secrets list' : r?.code === 402 ? 'Add credits at https://kie.ai' : `Check the input against the model's page at ${OPEN_PROVIDERS.kie.catalog}`, 'provider_refused')
   return r.data ?? {}
 }
 
@@ -158,8 +158,8 @@ function apply(run: ToolRun, o: Outcome, now: () => Date) {
 // Starts the job and saves the run at once, so a crash or a timeout after this point can never lose the id.
 export async function startOpenTool(ref: string, body: unknown, ctx: OpenContext, opts: { method?: string; now?: () => Date } = {}): Promise<ToolRun> {
   const parsed = parseRef(ref)
-  if (!parsed) throw new CliError(`${ref} is not an open tool ref.`, 'lifecycle tools providers', 'bad_ref')
-  if (body === null || typeof body !== 'object' || Array.isArray(body)) throw new CliError('Tool input must be a JSON object.', `lifecycle tools run ${ref} --input '{"prompt":"..."}'`, 'bad_input')
+  if (!parsed) throw new CliError(`${ref} is not an open tool ref.`, 'cosmic tools providers', 'bad_ref')
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) throw new CliError('Tool input must be a JSON object.', `cosmic tools run ${ref} --input '{"prompt":"..."}'`, 'bad_input')
   const now = opts.now ?? (() => new Date())
   const p = OPEN_PROVIDERS[parsed.provider]
   let started: Awaited<ReturnType<typeof start>>
@@ -169,7 +169,7 @@ export async function startOpenTool(ref: string, body: unknown, ctx: OpenContext
     // No answer, or a server or gateway error: the request left this machine and nothing says the job was turned down.
     if (transient(e) && !(e instanceof HttpError && e.status === 429)) throw new CliError(e instanceof HttpError ? `${p.name} answered with status ${e.status}, which does not say whether the job started.` : `No answer from ${p.name}: ${e instanceof Error ? e.message : String(e)}`, `Look in your ${p.name} dashboard before running this again. The job may have started.`, 'provider_unreachable')
     // A 4xx is a clear no. Nothing started and nothing was billed.
-    if (e instanceof HttpError) throw new CliError(`${p.name} turned the request down with status ${e.status}: ${e.body}`, e.status === 401 || e.status === 403 ? `Check the key: lifecycle secrets set ${p.secret} --from-env YOUR_VAR` : e.status === 429 ? `${p.name} is rate limiting this key. Nothing started. Wait a minute, then run it again.` : `Nothing started. Check the id and input against ${p.catalog}`, 'provider_refused')
+    if (e instanceof HttpError) throw new CliError(`${p.name} turned the request down with status ${e.status}: ${e.body}`, e.status === 401 || e.status === 403 ? `Check the key: cosmic secrets set ${p.secret} --from-env YOUR_VAR` : e.status === 429 ? `${p.name} is rate limiting this key. Nothing started. Wait a minute, then run it again.` : `Nothing started. Check the id and input against ${p.catalog}`, 'provider_refused')
     throw e
   }
   const method = (opts.method ?? 'GET').toUpperCase()
@@ -188,9 +188,9 @@ export async function refreshRun(run: ToolRun, ctx: OpenContext, now: () => Date
 // Apify and fal can stop a job. Kie cannot, and ScrapeCreators answers at once, so there is nothing to stop.
 // A stopped job may still be billed for the work it did.
 export async function abortRun(run: ToolRun, ctx: OpenContext, now: () => Date = () => new Date()): Promise<{ run: ToolRun; aborted: boolean }> {
-  if (run.status !== 'running') throw new CliError(`Run ${run.id} is not running. It ${run.status === 'aborted' ? 'was already stopped' : run.status}.`, `lifecycle tools get ${run.id}`, 'not_running')
+  if (run.status !== 'running') throw new CliError(`Run ${run.id} is not running. It ${run.status === 'aborted' ? 'was already stopped' : run.status}.`, `cosmic tools get ${run.id}`, 'not_running')
   const provider = run.provider as Provider | undefined
-  if (!provider || !run.remote || !(provider in OPEN_PROVIDERS)) throw new CliError(`Run ${run.id} cannot be stopped from here.`, `lifecycle tools get ${run.id}`, 'cannot_abort')
+  if (!provider || !run.remote || !(provider in OPEN_PROVIDERS)) throw new CliError(`Run ${run.id} cannot be stopped from here.`, `cosmic tools get ${run.id}`, 'cannot_abort')
   // It may have finished since the last look. A finished run is saved as it ended, not as aborted.
   try {
     run = await refreshRun(run, ctx, now)
@@ -214,10 +214,10 @@ export async function abortRun(run: ToolRun, ctx: OpenContext, now: () => Date =
       throw e
     }
   } else {
-    throw new CliError(`${p.name} has no way to stop a job once it starts. It will finish and bill as usual.`, `Check it with: lifecycle tools get ${run.id}`, 'cannot_abort')
+    throw new CliError(`${p.name} has no way to stop a job once it starts. It will finish and bill as usual.`, `Check it with: cosmic tools get ${run.id}`, 'cannot_abort')
   }
   run.status = 'aborted'
-  run.error = `Stopped with lifecycle tools abort. ${p.name} may still bill for the work done before it stopped.`
+  run.error = `Stopped with cosmic tools abort. ${p.name} may still bill for the work done before it stopped.`
   run.finishedAt = now().toISOString()
   return { run: saveRun(run), aborted: true }
 }

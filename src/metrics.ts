@@ -8,7 +8,7 @@ import { readWorkspace, WORKSPACE_TYPES, type WorkspaceType } from './workspace.
 import { costsConfigured } from './costs.js'
 import { computeMargin, MARGIN_SQL } from './margin.js'
 
-// 90 unless someone ran lifecycle config set metrics.default_days.
+// 90 unless someone ran cosmic config set metrics.default_days.
 export const defaultDays = () => settingValue('metrics.default_days')
 
 // Verified metrics: fixed, reviewed SQL an agent picks from instead of writing its own.
@@ -83,7 +83,7 @@ export const METRICS: Metric[] = [
   { name: 'stripe_failed_payment_rate', title: 'Stripe failed payment rate', description: 'Failed Stripe charges divided by all attempted charges.', unit: 'percent', needs: ['stripe'], sql: ratio(STRIPE_FAILED, `(${STRIPE_FAILED} + ${STRIPE_CHARGES})`, 100), notes: ['Each retry is its own attempt, so a card retried three times counts three times.'] },
   { name: 'stripe_subscriptions_started', title: 'Subscriptions started', description: 'Stripe subscriptions created in the window.', unit: 'count', needs: ['stripe'], sql: single(STRIPE_STARTED) },
   { name: 'stripe_subscriptions_ended', title: 'Subscriptions ended', description: 'Stripe subscriptions that ended in the window: canceled and gone, not just set to cancel later.', unit: 'count', needs: ['stripe'], sql: single(STRIPE_ENDED) },
-  { name: 'stripe_mrr', title: 'Stripe MRR', description: 'Monthly recurring revenue at the last sync: active and past_due subscriptions at list price, scaled to a month. Ignores the window.', unit: 'usd', needs: ['stripe'], sql: single(STRIPE_MRR), notes: ['Discounts are not applied. Tiered and metered prices are left out; lifecycle sync reports how many.', CCY_NOTE] },
+  { name: 'stripe_mrr', title: 'Stripe MRR', description: 'Monthly recurring revenue at the last sync: active and past_due subscriptions at list price, scaled to a month. Ignores the window.', unit: 'usd', needs: ['stripe'], sql: single(STRIPE_MRR), notes: ['Discounts are not applied. Tiered and metered prices are left out; cosmic sync reports how many.', CCY_NOTE] },
   { name: 'meta_ad_spend', title: 'Meta ad spend', description: 'What the Meta ad account spent in the window.', unit: 'usd', needs: ['meta'], sql: single(META_SPEND), notes: [META_CCY_NOTE] },
   { name: 'meta_attributed_purchases', title: 'Meta attributed purchases', description: 'Purchases Meta attributes to its ads in the window.', unit: 'count', needs: ['meta'], sql: single(META_PURCHASES), notes: [META_CLAIM_NOTE] },
   { name: 'meta_reported_roas', title: 'Meta reported ROAS', description: 'Purchase value Meta attributes to its ads, divided by spend. Meta\'s own claim.', unit: 'ratio', needs: ['meta'], sql: ratio(META_VALUE, META_SPEND), notes: [META_CLAIM_NOTE, META_CCY_NOTE] },
@@ -188,7 +188,7 @@ const SOURCE_TABLE: Record<Source, string> = { shopify: 'fact_orders_daily', kla
 
 export function findMetric(name: string) {
   const m = ALL_METRICS.find((x) => x.name === name)
-  if (!m) throw new CliError(`No metric named ${name}.`, 'lifecycle metrics list', 'unknown_metric')
+  if (!m) throw new CliError(`No metric named ${name}.`, 'cosmic metrics list', 'unknown_metric')
   return m
 }
 
@@ -198,7 +198,7 @@ export function listMetrics(pack: Pack = readWorkspace().type) {
 }
 
 // Saved numbers: a SELECT the owner named, kept in the store's own database next to the data.
-// They run through the same read-only path as `lifecycle query`, carry the same trust line,
+// They run through the same read-only path as `cosmic query`, carry the same trust line,
 // and can never take the name of a built-in metric. Cosmic has not reviewed their SQL, and
 // every answer says so.
 export const UNITS: Unit[] = ['count', 'usd', 'percent', 'usd_per_recipient', 'ratio']
@@ -253,7 +253,7 @@ export async function describeMetric(db: Tx | null, name: string) {
   const builtIn = ALL_METRICS.find((x) => x.name === name)
   if (builtIn) return { ...builtIn, saved: false as const }
   const m = db ? await findSavedMetric(db, name) : null
-  if (!m) throw new CliError(`No metric named ${name}.`, 'lifecycle metrics list', 'unknown_metric')
+  if (!m) throw new CliError(`No metric named ${name}.`, 'cosmic metrics list', 'unknown_metric')
   return { name: m.name, title: m.title, description: SAVED_NOTE, unit: m.unit, needs: [] as Source[], sql: m.sql, notes: savedNotes(m.sql), saved: true as const, createdAt: m.createdAt, updatedAt: m.updatedAt }
 }
 
@@ -263,7 +263,7 @@ const savedNotes = (sql: string) => (usesWindow(sql) ? [SAVED_NOTE] : [SAVED_NOT
 function assertSavedSql(sql: string) {
   const body = assertReadOnlySql(sql)
   const other = body.match(/\$(\d+)/g)?.find((p) => p !== '$1')
-  if (other) throw new CliError(`Only $1 is available, the first day of the window. Found ${other}.`, "lifecycle metrics save NAME --sql 'SELECT sum(orders) FROM fact_orders_daily WHERE date >= $1'", 'bad_metric')
+  if (other) throw new CliError(`Only $1 is available, the first day of the window. Found ${other}.`, "cosmic metrics save NAME --sql 'SELECT sum(orders) FROM fact_orders_daily WHERE date >= $1'", 'bad_metric')
   return body
 }
 
@@ -275,7 +275,7 @@ async function runSavedSql(db: Db, sql: string, since: string) {
   try {
     rows = await db.readOnly(`SELECT * FROM (${body}) AS q LIMIT 2`, usesWindow(body) ? [since] : undefined)
   } catch (e) {
-    throw new CliError(`Query failed: ${e instanceof Error ? e.message : e}`, 'lifecycle schema', 'query_failed')
+    throw new CliError(`Query failed: ${e instanceof Error ? e.message : e}`, 'cosmic schema', 'query_failed')
   }
   if (rows.length > 1) throw new CliError('A saved metric must return one row.', 'Wrap it in an aggregate, such as SELECT sum(...) or SELECT count(*).', 'bad_metric')
   const row = rows[0] ?? {}
@@ -287,9 +287,9 @@ async function runSavedSql(db: Db, sql: string, since: string) {
 }
 
 export async function saveMetric(db: Db, name: string, opts: { sql?: string; title?: string; unit?: string }, now = Date.now()) {
-  if (!SAVED_NAME.test(name)) throw new CliError('Use 3 to 48 lowercase letters, numbers and underscores, starting with a letter.', "lifecycle metrics save repeat_buyers --sql 'SELECT ...'", 'bad_name')
+  if (!SAVED_NAME.test(name)) throw new CliError('Use 3 to 48 lowercase letters, numbers and underscores, starting with a letter.', "cosmic metrics save repeat_buyers --sql 'SELECT ...'", 'bad_name')
   if (ALL_METRICS.some((m) => m.name === name)) throw new CliError(`${name} is a built-in metric, and a saved one cannot replace it.`, `Pick another name, such as my_${name}.`, 'reserved_name')
-  if (!opts.sql?.trim()) throw new CliError('The SQL is missing.', `lifecycle metrics save ${name} --sql 'SELECT sum(orders) FROM fact_orders_daily WHERE date >= $1'`, 'bad_metric')
+  if (!opts.sql?.trim()) throw new CliError('The SQL is missing.', `cosmic metrics save ${name} --sql 'SELECT sum(orders) FROM fact_orders_daily WHERE date >= $1'`, 'bad_metric')
   const unit = (opts.unit ?? 'count') as Unit
   if (!UNITS.includes(unit)) throw new CliError(`Unknown unit ${opts.unit}.`, `Units: ${UNITS.join(', ')}`, 'bad_value')
   const title = (opts.title ?? name).trim().slice(0, 120) || name
@@ -307,9 +307,9 @@ export async function saveMetric(db: Db, name: string, opts: { sql?: string; tit
 }
 
 export async function deleteMetric(db: Tx, name: string) {
-  if (ALL_METRICS.some((m) => m.name === name)) throw new CliError(`${name} is a built-in metric and cannot be deleted.`, 'lifecycle metrics list', 'reserved_name')
+  if (ALL_METRICS.some((m) => m.name === name)) throw new CliError(`${name} is a built-in metric and cannot be deleted.`, 'cosmic metrics list', 'reserved_name')
   const gone = await db.query(`DELETE FROM meta_saved_metric WHERE metric = $1 RETURNING metric`, [name])
-  if (!gone.length) throw new CliError(`No saved metric named ${name}.`, 'lifecycle metrics list', 'unknown_metric')
+  if (!gone.length) throw new CliError(`No saved metric named ${name}.`, 'cosmic metrics list', 'unknown_metric')
   return { name, deleted: true as const }
 }
 
@@ -321,13 +321,13 @@ export function sinceDate(days: number, now = Date.now()) {
 }
 
 const assertDays = (name: string, days: number) => {
-  if (!Number.isInteger(days) || days < 1 || days > 730) throw new CliError('Days must be a whole number from 1 to 730.', `lifecycle metrics run ${name} --days 90`, 'bad_days')
+  if (!Number.isInteger(days) || days < 1 || days > 730) throw new CliError('Days must be a whole number from 1 to 730.', `cosmic metrics run ${name} --days 90`, 'bad_days')
 }
 
 async function runSavedMetric(db: Tx | Db, name: string, days: number, now: number) {
   const m = await findSavedMetric(db, name)
-  if (!m) throw new CliError(`No metric named ${name}.`, 'lifecycle metrics list', 'unknown_metric')
-  if (!('readOnly' in db)) throw new CliError('Saved metrics need a read-only connection.', 'lifecycle metrics run NAME', 'query_failed')
+  if (!m) throw new CliError(`No metric named ${name}.`, 'cosmic metrics list', 'unknown_metric')
+  if (!('readOnly' in db)) throw new CliError('Saved metrics need a read-only connection.', 'cosmic metrics run NAME', 'query_failed')
   assertDays(name, days)
   const since = sinceDate(days, now)
   const r = await runSavedSql(db, m.sql, since)
@@ -368,7 +368,7 @@ export async function runMetric(db: Tx | Db, name: string, days = defaultDays(),
     return { ...base, notes: [...r.notes, ...r.missing.map((x) => `Counted as zero: ${x}.`)], value, ...parts, ...extra, trust: r.trust, status: value === null ? ('no_data' as const) : ('ok' as const), detail: value === null ? 'No value for this window.' : '' }
   }
   if (missing.length) {
-    return { ...base, value: null, numerator: null, denominator: null, missing, trust: await trustLine(db), status: 'no_data' as const, detail: `No ${missing.join(' or ')} data synced. Connect it, then lifecycle sync.` }
+    return { ...base, value: null, numerator: null, denominator: null, missing, trust: await trustLine(db), status: 'no_data' as const, detail: `No ${missing.join(' or ')} data synced. Connect it, then cosmic sync.` }
   }
 
   const row = (await db.query(m.sql, [since]))[0] ?? {}

@@ -10,7 +10,7 @@ import { assertCurrency, fetchRates, parseRates, rateLine, type Rates } from './
 import { readWorkspace } from './workspace.js'
 
 // One number across several stores, in one currency. Each store is a workspace on this machine:
-// the default one and any named one (lifecycle --workspace NAME). Each runs the same metric with
+// the default one and any named one (cosmic --workspace NAME). Each runs the same metric with
 // its own trust line, its value is converted at a stated rate on a stated date, then they are added.
 
 type How = 'money' | 'count' | 'money_per_count' | 'money_over_money' | 'count_over_count'
@@ -66,10 +66,10 @@ export async function rollupMetric(name: string, opts: RollupOptions) {
   const how = rollupHow(name)
   if (!how) throw new CliError(`${name} cannot be added up across stores.`, 'Run it per store, or pick a total, a count or a metric with a numerator and denominator.', 'not_summable')
   const wanted = opts.currency ?? (getSetting('rollup.currency') as string | undefined)
-  if (!wanted) throw new CliError('Which currency should the total be in?', `lifecycle metrics run ${name} --all-stores --currency USD, or lifecycle config set rollup.currency USD`, 'no_currency')
+  if (!wanted) throw new CliError('Which currency should the total be in?', `cosmic metrics run ${name} --all-stores --currency USD, or cosmic config set rollup.currency USD`, 'no_currency')
   const currency = assertCurrency(wanted)
   const stores = opts.stores === 'all' || !opts.stores?.length ? listStores() : opts.stores
-  if (opts.rateDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(opts.rateDate)) throw new CliError('Use a rate date like 2026-11-20.', `lifecycle metrics run ${name} --all-stores --currency ${currency} --rate-date 2026-11-20`, 'bad_value')
+  if (opts.rateDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(opts.rateDate)) throw new CliError('Use a rate date like 2026-11-20.', `cosmic metrics run ${name} --all-stores --currency ${currency} --rate-date 2026-11-20`, 'bad_value')
   const manual = parseRates(opts.rates)
   const m = findMetric(name)
   const counts = how === 'count' || how === 'count_over_count'
@@ -99,7 +99,7 @@ export async function rollupMetric(name: string, opts: RollupOptions) {
         const set = getSetting('workspace.currency')
         const ccy = (await storeCurrency(db)) ?? (set ? String(set) : null)
         const base = { store, status: r.status, value: r.value, numerator: r.numerator, denominator: r.denominator, trust: r.trust, notes: r.notes, detail: r.detail, workspace: readWorkspace().type }
-        if (!ccy && !counts) return { ...base, status: 'no_currency', detail: `This store's currency is not known. Set it in the app under Settings, Costs, or: lifecycle --workspace ${store} costs set currency EUR` }
+        if (!ccy && !counts) return { ...base, status: 'no_currency', detail: `This store's currency is not known. Set it in the app under Settings, Costs, or: cosmic --workspace ${store} costs set currency EUR` }
         return { ...base, currency: ccy }
       } finally {
         if (!held) await db.close()

@@ -3,7 +3,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { openDb, migrate, wrapPglite } from './db.js';
 import { CliError } from './errors.js';
-import { recordCustomQuery, runQuery } from './query.js';
+import { recordCustomQuery, rowCap, runQuery } from './query.js';
+import { pipelineListing, queryNamedPipeline } from './pipeline-tables.js';
+import { readRawConfig, settingValue } from './config.js';
 import { reconcile } from './reconcile.js';
 import { auditFlows, revenuePerFlow } from './reports.js';
 import { PUBLIC_TABLES } from './schema.js';
@@ -21,8 +23,19 @@ import { rollupMetric } from './rollup.js';
 import { workspaceName } from './paths.js';
 import { NOTES_RULE, readNotes, withNotes } from './notes.js';
 const text = (data) => ({ content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] });
+// 0.21.0: pipeline schemas from config.json, read in place. Unreadable config means none.
+const registered = () => {
+    try {
+        const raw = readRawConfig();
+        return Object.entries(raw?.pipeline?.schemas ?? {}).map(([schema, x]) => ({ schema, ...x }));
+    }
+    catch {
+        return [];
+    }
+};
 export async function schemaInfo(db) {
     const out = {};
+    Object.assign(out, await pipelineListing(registered()));
     for (const t of [...PUBLIC_TABLES, ...(await customTables(db))]) {
         const rows = await db.query(`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position`, [t]);
         out[t] = rows.map((r) => `${r.column_name} ${r.data_type}`);
@@ -30,7 +43,7 @@ export async function schemaInfo(db) {
     return out;
 }
 // Read-only by construction: there is no sync, connect or segment tool here.
-export const NOT_SET_UP = 'This workspace is not set up yet, so there are no numbers. Tell the user to run lifecycle init, or follow lifecycle docs quickstart. Until then every tool that needs the workspace answers with "Not set up yet".';
+export const NOT_SET_UP = 'This workspace is not set up yet, so there are no numbers. Tell the user to run cosmic init, or follow cosmic docs quickstart. Until then every tool that needs the workspace answers with "Not set up yet".';
 export async function startMcp() {
     // 0.17.0: a fresh install starts the server too, so `claude mcp add` works before setup.
     // It runs on an empty in-memory database and says plainly that nothing is set up.
@@ -96,6 +109,10 @@ export function buildMcpServer(db, notice) {
     server.registerTool('read_file', { description: 'Read one saved report, dashboard or plan by its path from list_files.', inputSchema: { path: z.string() }, annotations: readOnly }, async ({ path }) => text({ path, content: readFile(path) }));
     server.registerTool('explore_schema', { description: 'List tables and columns. Call this before writing SQL.', annotations: readOnly }, async () => text(await schemaInfo(db)));
     server.registerTool('query', { description: 'Run one read-only SELECT, capped at 1,000 rows. Use only when no verified metric fits. The SQL text is logged locally so repeated questions can become verified metrics.', inputSchema: { sql: z.string() }, annotations: { openWorldHint: false } }, async ({ sql }) => {
+        // A query naming a pipeline schema runs on that database, read-only, with a freshness-only trust line.
+        const piped = await queryNamedPipeline(sql, registered(), rowCap(), settingValue('reconcile.freshness_days'));
+        if (piped)
+            return text(withNotes(piped));
         const r = await runQuery(db, sql);
         // The log is a write. If a sync holds the store, skip the log rather than write beside it.
         const lock = tryWriteLock('mcp query log');

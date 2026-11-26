@@ -2,6 +2,32 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.21.0 (2026-11-25)
+
+Any table Fivetran or Airbyte loads into your own Postgres, for any connector, read in place with a freshness check.
+
+### Added
+
+- **`cosmic connect pipeline --tool fivetran|airbyte --schema NAME --url-env NAME`, without `--source`.** It lists every table in the schema (leaving out loader bookkeeping such as `fivetran_audit`), marks each column with the personal data rules, checks freshness and saves the schema. Nothing is copied, and the database URL stays in the environment variable.
+- **`cosmic schema NAME` and `cosmic schema NAME.TABLE`** list those tables with their personal columns left out. `cosmic schema` names the connected pipeline schemas.
+- **`cosmic query`** runs a query that names a connected pipeline schema on that database, in a read-only transaction with a 30-second limit and the usual row cap. Personal columns are refused before it runs. Email addresses and phone numbers in returned text are replaced. Schemas in the same database can be joined. The MCP `query` and `explore_schema` tools do the same.
+- **A freshness check per table** from `_fivetran_synced` or `_airbyte_extracted_at`, against `reconcile.freshness_days`, on connect, on every answer and on `cosmic sync`. The trust line for these tables says "Freshness only... They are not reconciled against any other source." It never says passed, and a stale table starts with STALE.
+- `cosmic sources list` shows each pipeline schema. `cosmic disconnect pipeline:NAME` forgets it.
+
+### Changed
+
+- Every "Next:" hint and error step says `cosmic`, not `lifecycle`. Both commands still work. The daily sync workflow `cosmic deploy` writes still runs `npx lifecycle`, so older installs keep working.
+- `init` and `cosmic workspace` suggest only sources that can connect today, so a SaaS workspace is no longer pointed at PostHog, which is planned.
+- `cosmic sources list` puts the workspace type's usual sources first, so a SaaS workspace starts with Stripe, GA4, Meta and HubSpot. A Shopify store keeps its order.
+- `init` and `sources list` point to the easy path: paste one sentence into Claude Code, Cursor or Codex and let the agent run `cosmic docs quickstart`.
+- A `cosmic sync` with only pipeline schemas connected checks their freshness instead of failing with "No sources connected", and prints no reconcile line.
+
+### Not covered yet
+
+- BigQuery and Snowflake (Postgres only).
+- Pipeline tables have no count checks and are not part of `cosmic verdict`.
+- Stripe and Shopify through `--source` keep their deep checks, unchanged.
+
 ## 0.20.0 (2026-11-25)
 
 The period verdict: for one workspace and one month, which KPIs can go in a client report and which are held back, with the reason and the next step.

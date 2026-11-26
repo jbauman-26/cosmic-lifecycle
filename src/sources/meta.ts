@@ -89,12 +89,12 @@ function explain(e: unknown): never {
     }
     // 190 is an expired or invalid token. 200 and 10 are missing permission. 100 is a bad parameter, often the account id.
     // 4, 17, 32, 613 and 80000 to 80014 are Meta's rate limits, which it often sends with status 400.
-    if (code === 190 || e.status === 401) throw new CliError(`Meta refused the token${detail ? `: ${detail}` : '.'}`, 'Create a new system user token with ads_read, then lifecycle connect meta --account ID --token-env NAME', 'key_rejected')
+    if (code === 190 || e.status === 401) throw new CliError(`Meta refused the token${detail ? `: ${detail}` : '.'}`, 'Create a new system user token with ads_read, then cosmic connect meta --account ID --token-env NAME', 'key_rejected')
     if (e.status === 429 || code === 4 || code === 17 || code === 32 || code === 613 || (code !== undefined && code >= 80000 && code <= 80014)) {
-      throw new CliError('Meta is rate limiting this token.', 'Wait a few minutes, then run lifecycle sync --only meta again.', 'rate_limited')
+      throw new CliError('Meta is rate limiting this token.', 'Wait a few minutes, then run cosmic sync --only meta again.', 'rate_limited')
     }
     if (code === 200 || code === 10 || e.status === 403) throw new CliError(`This token cannot read that ad account${detail ? `: ${detail}` : '.'}`, 'Give the system user access to the ad account and the ads_read permission, then connect again.', 'meta_permission')
-    if (detail) throw new CliError(`Meta answered with status ${e.status}: ${detail}`, e.status === 400 ? 'Check the ad account id: lifecycle connect meta --account ID --token-env NAME' : 'Run the command again, then lifecycle doctor.', 'meta_error')
+    if (detail) throw new CliError(`Meta answered with status ${e.status}: ${detail}`, e.status === 400 ? 'Check the ad account id: cosmic connect meta --account ID --token-env NAME' : 'Run the command again, then cosmic doctor.', 'meta_error')
   }
   throw e
 }

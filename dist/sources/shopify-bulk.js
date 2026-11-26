@@ -53,11 +53,11 @@ export async function startOrdersExport(gql) {
     if (errors.length || !r?.bulkOperation?.id) {
         const text = errors.map((e) => e.message ?? '').join(' ');
         if (/in progress|already/i.test(text)) {
-            throw new CliError('Shopify is already running an export for this app.', 'Wait for it to finish, then run lifecycle sync again.', 'export_busy');
+            throw new CliError('Shopify is already running an export for this app.', 'Wait for it to finish, then run cosmic sync again.', 'export_busy');
         }
         if (/access|scope|denied/i.test(text))
             throw scopeDenied(text);
-        throw new CliError('Shopify would not start the order export.', 'lifecycle doctor', 'shopify_query');
+        throw new CliError('Shopify would not start the order export.', 'cosmic doctor', 'shopify_query');
     }
     return { id: r.bulkOperation.id, status: r.bulkOperation.status, errorCode: null, objectCount: 0, url: null, partialDataUrl: null, createdAt: null };
 }
@@ -213,7 +213,7 @@ export async function readExport(url, into, fetchImpl = fetch) {
     if (!res.ok || !res.body) {
         // A signed address lasts a week. After that the file is gone and a new export is needed.
         const code = res.status === 403 || res.status === 404 || res.status === 410 ? 'export_expired' : 'export_download';
-        throw new CliError(`Downloading the Shopify export failed with status ${res.status}.`, 'Run lifecycle sync again.', code);
+        throw new CliError(`Downloading the Shopify export failed with status ${res.status}.`, 'Run cosmic sync again.', code);
     }
     const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
     let rest = '';

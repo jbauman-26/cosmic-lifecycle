@@ -80,7 +80,7 @@ const nextDay = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 86400000)
 
 // The report body. Dates are checked first, so nothing outside can change it.
 export function reportBody(since: string, until: string, timezone: string) {
-  if (!DATE.test(since) || !DATE.test(until)) throw new CliError('Dates must be YYYY-MM-DD.', 'lifecycle sync', 'bad_value')
+  if (!DATE.test(since) || !DATE.test(until)) throw new CliError('Dates must be YYYY-MM-DD.', 'cosmic sync', 'bad_value')
   return {
     data: {
       breakdowns: ['CAMPAIGN_ID', 'DATE'],
@@ -96,7 +96,7 @@ export function reportBody(since: string, until: string, timezone: string) {
 const basic = (clientId: string, secret: string) => `Basic ${Buffer.from(`${clientId}:${secret}`).toString('base64')}`
 
 export async function redditAccessToken(clientId: string, clientSecret: string, refreshToken: string, fetcher = fetchJson): Promise<string> {
-  const rejected = () => new CliError('Reddit rejected the saved Reddit Ads sign-in.', 'Sign in with Reddit again for a new refresh token, then lifecycle connect reddit-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME', 'key_rejected')
+  const rejected = () => new CliError('Reddit rejected the saved Reddit Ads sign-in.', 'Sign in with Reddit again for a new refresh token, then cosmic connect reddit-ads --account ID --client-id ID --secret-env NAME --refresh-token-env NAME', 'key_rejected')
   const body = await fetcher(
     TOKEN_URL,
     {
@@ -130,12 +130,12 @@ function explain(e: unknown): never {
   if (e instanceof HttpError) {
     const { message } = redditError(e.body)
     const detail = message ? `: ${message}` : '.'
-    if (e.status === 401) throw new CliError(`Reddit Ads refused the sign-in${detail}`, 'Sign in with Reddit again, then lifecycle connect reddit-ads', 'key_rejected')
+    if (e.status === 401) throw new CliError(`Reddit Ads refused the sign-in${detail}`, 'Sign in with Reddit again, then cosmic connect reddit-ads', 'key_rejected')
     if (e.status === 403) throw new CliError(`The signed-in Reddit account cannot read that ad account${detail}`, 'Ask a business admin for at least reporting access to the ad account, or sign in as a member who has it.', 'reddit_ads_permission')
-    if (e.status === 404) throw new CliError(`Reddit Ads has no ad account with that id${detail}`, 'Check the id under Accounts in Reddit Ads Manager, then lifecycle connect reddit-ads --account ID', 'reddit_ads_account')
-    if (e.status === 429) throw new CliError('Reddit Ads is rate limiting this app.', 'Wait a minute, then run lifecycle sync --only reddit-ads again. Reports allow 60 requests a minute.', 'rate_limited')
+    if (e.status === 404) throw new CliError(`Reddit Ads has no ad account with that id${detail}`, 'Check the id under Accounts in Reddit Ads Manager, then cosmic connect reddit-ads --account ID', 'reddit_ads_account')
+    if (e.status === 429) throw new CliError('Reddit Ads is rate limiting this app.', 'Wait a minute, then run cosmic sync --only reddit-ads again. Reports allow 60 requests a minute.', 'rate_limited')
     if (e.status === 410) throw new CliError('Reddit Ads API v3 has reached end of support.', 'Update the CLI: npm install -g cosmic-lifecycle', 'reddit_ads_error')
-    throw new CliError(`Reddit Ads answered with status ${e.status}${detail}`, 'Run the command again, then lifecycle doctor.', 'reddit_ads_error')
+    throw new CliError(`Reddit Ads answered with status ${e.status}${detail}`, 'Run the command again, then cosmic doctor.', 'reddit_ads_error')
   }
   throw e
 }
@@ -169,10 +169,10 @@ export class RedditAds {
       out.push(...rows(body))
       const next = body?.pagination?.next_url
       if (!next || typeof next !== 'string' || seen.has(next)) return out
-      if (!next.startsWith(HOST)) throw new CliError('Reddit Ads sent a next page on another host.', 'Run lifecycle sync --only reddit-ads again. If it repeats, report it: lifecycle feedback', 'reddit_ads_error')
+      if (!next.startsWith(HOST)) throw new CliError('Reddit Ads sent a next page on another host.', 'Run cosmic sync --only reddit-ads again. If it repeats, report it: cosmic feedback', 'reddit_ads_error')
       url = next
     }
-    throw new CliError('Reddit Ads kept sending pages past 1,000.', 'Run lifecycle sync --only reddit-ads again. If it repeats, report it: lifecycle feedback', 'reddit_ads_error')
+    throw new CliError('Reddit Ads kept sending pages past 1,000.', 'Run cosmic sync --only reddit-ads again. If it repeats, report it: cosmic feedback', 'reddit_ads_error')
   }
 
   // Proves the sign-in can read this account before anything is saved.
