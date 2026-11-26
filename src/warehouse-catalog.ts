@@ -2205,7 +2205,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://docs.affirm.com/developers/reference",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "The API is real and documented: GET /v1/transactions on https://sandbox.affirm.com/api/v1 with HTTP Basic using the public and private key. The blocker is that its response examples render only inside the docs' API explorer and appear nowhere in the published text, so no recorded body can be verified against a source. Left unbuilt rather than shipping a guessed response shape (https://docs.affirm.com/developers/reference/list_transactions). CSV import meanwhile."
   },
   {
     "slug": "boost-search",

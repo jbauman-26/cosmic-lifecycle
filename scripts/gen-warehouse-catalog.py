@@ -39,6 +39,7 @@ CATEGORY = {
 
 # Looked at closely and not built, with the reason a buyer should hear.
 SKIPPED = {
+    "affirm": "The API is real and documented: GET /v1/transactions on https://sandbox.affirm.com/api/v1 with HTTP Basic using the public and private key. The blocker is that its response examples render only inside the docs' API explorer and appear nowhere in the published text, so no recorded body can be verified against a source. Left unbuilt rather than shipping a guessed response shape (https://docs.affirm.com/developers/reference/list_transactions). CSV import meanwhile.",
     "sezzle": "The API is the checkout integration: it drives a Sezzle payment and needs an approved Sezzle merchant account before either the sandbox or live gateway will answer. No documented read list endpoint returns a merchant's own orders or settlements (https://docs.sezzle.com/docs/api/v1/v1). CSV import meanwhile.",
     "smartrr": "No public API reference is published. The documented developer surface is the help center's install guides (https://help.smartrr.com/docs/getting-started/implementation/installing-smartrr-on-a-headless-store), and there is no merchant-facing REST reference to build from. CSV import meanwhile.",
     "postscript": "API keys only work on Postscript's enterprise plan; every other shop needs an integration partner's token, and the one list endpoint is subscribers (https://developers.postscript.io/docs/who-has-access-to-the-partner-api). CSV import meanwhile.",
