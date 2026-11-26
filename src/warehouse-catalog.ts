@@ -2194,7 +2194,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://docs.sezzle.com/",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "The API is the checkout integration: it drives a Sezzle payment and needs an approved Sezzle merchant account before either the sandbox or live gateway will answer. No documented read list endpoint returns a merchant's own orders or settlements (https://docs.sezzle.com/docs/api/v1/v1). CSV import meanwhile."
   },
   {
     "slug": "affirm",

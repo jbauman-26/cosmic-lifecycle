@@ -39,6 +39,7 @@ CATEGORY = {
 
 # Looked at closely and not built, with the reason a buyer should hear.
 SKIPPED = {
+    "sezzle": "The API is the checkout integration: it drives a Sezzle payment and needs an approved Sezzle merchant account before either the sandbox or live gateway will answer. No documented read list endpoint returns a merchant's own orders or settlements (https://docs.sezzle.com/docs/api/v1/v1). CSV import meanwhile.",
     "smartrr": "No public API reference is published. The documented developer surface is the help center's install guides (https://help.smartrr.com/docs/getting-started/implementation/installing-smartrr-on-a-headless-store), and there is no merchant-facing REST reference to build from. CSV import meanwhile.",
     "postscript": "API keys only work on Postscript's enterprise plan; every other shop needs an integration partner's token, and the one list endpoint is subscribers (https://developers.postscript.io/docs/who-has-access-to-the-partner-api). CSV import meanwhile.",
     "attentive": "A merchant can make a custom app key, but the public API has no read endpoints for campaigns, messages, journeys or results; those leave Attentive by SFTP feed and webhook only (https://docs.attentive.com/docs/create-and-manage-custom-apps). CSV import meanwhile.",
