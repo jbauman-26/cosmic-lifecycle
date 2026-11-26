@@ -9,7 +9,7 @@ For anyone who markets something: founders and SaaS teams, marketers and freelan
 ## What it connects
 
 - **14 native sources:** Stripe, Google Analytics 4, HubSpot, Meta Ads, Google Ads, Microsoft Advertising, LinkedIn Ads, TikTok Ads, Pinterest Ads, Reddit Ads, Snapchat Ads, Google Merchant Center, Shopify and Klaviyo. Every connected source gets a freshness check, and the ones that overlap are checked against your source of truth (Stripe, Shopify or HubSpot).
-- **100 more in the warehouse catalog, with readiness shown for each:** 30 have connector code (such as Mailchimp, Brevo, Customer.io, Pipedrive, WooCommerce, BigCommerce, Zendesk, Freshdesk) and 70 are planned. `cosmic sources catalog` lists every one with its status.
+- **100 more in the warehouse catalog, with readiness shown for each:** 30 have connector code (such as Mailchimp, Brevo, Customer.io, Pipedrive, WooCommerce, BigCommerce, Zendesk, Freshdesk) and 70 are still to build. `cosmic sources catalog` lists every one with its status.
 - **Your own pipeline:** reads any table Fivetran or Airbyte loads into your Postgres. Every table gets a freshness check. The count checks run only on the built-in sources, such as Shopify orders against Shopify's own count. See below.
 - **Anything else:** `cosmic sources import NAME --csv FILE` brings in daily totals from any tool.
 
@@ -302,6 +302,16 @@ cosmic files pull                             # the dashboard from the last dail
 ```
 
 Every command by the job it does: [docs/COMMANDS.md](docs/COMMANDS.md).
+
+## Plans
+
+| Plan | Price | What you get |
+|---|---|---|
+| Local | Free | This open-source CLI on your own computer: demo, checks, metrics, notes, skills and MCP, with your own database and your own AI |
+| Pro | $39 a month, 14-day trial | One hosted workspace: checks re-run daily on Cosmic Cloud, an alert when a number becomes unreliable, and a shared history of briefs and evidence |
+| Agency | $99 a month for 5 client workspaces, plus $19 for each extra active client, 14-day trial | Pro for each client, team access, and one view of which clients need attention |
+
+The hosted Pro and Agency features are being built now. Join the early access list at [cosmicai.tech/cli](https://cosmicai.tech/cli#waitlist); nobody is charged until they work end to end.
 
 ## Cosmic Cloud
 
