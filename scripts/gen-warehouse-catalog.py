@@ -139,6 +139,11 @@ EXTRA = [
         "notes": "Planned. Event data leaves through the Export API: a date range is requested and the response is one file with a 6 GB cap, and the data lands up to two hours after upload. That needs a file export runner, not a REST list spec. CSV import of daily counts meanwhile.",
     },
     {
+        "slug": "avalara-avatax", "name": "Avalara AvaTax", "category": "tax",
+        "why": "In the 100-tool research, which the generator's API filter drops, so the row is restated here. Tax engine used by mid-market DTC brands.",
+        "docs": "https://developer.avalara.com/api-reference/avatax/rest/v2/methods/Companies/GetCompanies/",
+    },
+    {
         "slug": "impact-com", "name": "impact.com", "category": "affiliate/influencer",
         "why": "In the 100-tool research at rank 81, which the generator's API filter drops, so the row is restated here. Enterprise affiliate network for larger DTC brands.",
         "docs": "https://integrations.impact.com/brand-api-reference/reference/deals/deals.md",

@@ -4355,6 +4355,77 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "notes": "Planned. Event data leaves through the Export API: a date range is requested and the response is one file with a 6 GB cap, and the data lands up to two hours after upload. That needs a file export runner, not a REST list spec. CSV import of daily counts meanwhile."
   },
   {
+    "slug": "avalara-avatax",
+    "name": "Avalara AvaTax",
+    "category": "tax",
+    "readiness": "built",
+    "why": "In the 100-tool research, which the generator's API filter drops, so the row is restated here. Tax engine used by mid-market DTC brands.",
+    "docs": "https://developer.avalara.com/api-reference/avatax/rest/v2/methods/Companies/GetCompanies/",
+    "credentials": [
+      {
+        "name": "bearer_token",
+        "label": "Bearer token",
+        "help": "In the AvaTax admin open Settings, then License and API keys, and generate a bearer token for your account. A license key with account ID also works as HTTP Basic if you prefer. Create the token with read-only scope where Avalara offers it, so this connection can read your data but never change it."
+      }
+    ],
+    "params": [
+      {
+        "name": "avatax_host",
+        "label": "API host, rest for production or sandbox-rest for the sandbox",
+        "example": "sandbox-rest"
+      }
+    ],
+    "config": {
+      "client": {
+        "base_url": "https://{param:avatax_host}.avatax.com/",
+        "headers": {
+          "Accept": "application/json"
+        },
+        "auth": {
+          "type": "bearer",
+          "token": "{secret:bearer_token}"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "companies",
+          "endpoint": {
+            "path": "api/v2/companies",
+            "params": {
+              "$top": 1000
+            },
+            "paginator": {
+              "type": "offset",
+              "limit": 1000,
+              "limit_param": "$top",
+              "offset_param": "$skip"
+            }
+          }
+        },
+        {
+          "name": "contacts",
+          "endpoint": {
+            "path": "api/v2/contacts",
+            "params": {
+              "$top": 1000
+            },
+            "paginator": {
+              "type": "offset",
+              "limit": 1000,
+              "limit_param": "$top",
+              "offset_param": "$skip"
+            }
+          }
+        }
+      ]
+    },
+    "notes": "The AvaTax v2 Swagger published at https://sandbox-rest.avatax.com/swagger/v2/swagger.json defines the paths, the paging parameters and the auth. Every path sits under api/v2, including companies, transactions, items, contacts and locations. Paging is $top for the row count and $skip for the offset, which is what the offset pager uses; responses for these list endpoints are bare arrays, so no selector is set. Auth is the Authorization header carrying a bearer token, with the older license key and account ID pair working as HTTP Basic. The host is a setting because AvaTax serves production at rest.avatax.com and sandbox at sandbox-rest.avatax.com, and a new customer should start on the sandbox. Two resources are built, companies and contacts. Transactions and items are documented and left out. Contacts carry name, email and phone, which the shared rules remove. Fixture values are illustrative, built from the documented schemas."
+  },
+  {
     "slug": "impact-com",
     "name": "impact.com",
     "category": "affiliate/influencer",

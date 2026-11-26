@@ -1,0 +1,78 @@
+{
+  "source": "https://sandbox-rest.avatax.com/swagger/v2/swagger.json",
+  "note": "Illustrative rows following the documented bare array responses, not vendor sample records.",
+  "resources": {
+    "companies": {
+      "response": [
+        {
+          "id": 91001,
+          "accountId": 2000123,
+          "companyCode": "CEDARLINE",
+          "name": "Cedarline Goods",
+          "isDefault": true,
+          "isActive": true,
+          "taxpayerIdNumber": "12-3456789",
+          "createdDate": "2026-01-05T08:00:00Z"
+        },
+        {
+          "id": 91002,
+          "accountId": 2000123,
+          "companyCode": "NORTHFIELD",
+          "name": "Northfield Supply",
+          "isDefault": false,
+          "isActive": true,
+          "taxpayerIdNumber": "98-7654321",
+          "createdDate": "2026-02-11T08:00:00Z"
+        }
+      ]
+    },
+    "contacts": {
+      "response": [
+        {
+          "id": 5501,
+          "companyId": 91001,
+          "contactType": "Billing",
+          "firstName": "Priya",
+          "lastName": "Natarajan",
+          "email": "priya@natarajan.example",
+          "phone": "+14155550142",
+          "city": "Austin",
+          "region": "TX",
+          "country": "US",
+          "createdDate": "2026-03-01T09:00:00Z"
+        },
+        {
+          "id": 5502,
+          "companyId": 91002,
+          "contactType": "Billing",
+          "firstName": "Sam",
+          "lastName": "Okafor",
+          "email": "sam.okafor@northfield.example",
+          "phone": "+14155550188",
+          "city": "Denver",
+          "region": "CO",
+          "country": "US",
+          "createdDate": "2026-03-08T09:00:00Z"
+        }
+      ]
+    }
+  },
+  "personal": [
+    "Priya",
+    "Natarajan",
+    "priya@natarajan.example",
+    "+14155550142",
+    "Sam",
+    "Okafor",
+    "sam.okafor@northfield.example",
+    "+14155550188"
+  ],
+  "kept": [
+    "\"id\": 91001",
+    "CEDARLINE",
+    "Cedarline Goods",
+    "12-3456789",
+    "\"contactType\": \"Billing\"",
+    "2026-01-05T08:00:00Z"
+  ]
+}
