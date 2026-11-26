@@ -2817,14 +2817,92 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
   },
   {
     "slug": "cin7",
-    "name": "Cin7",
+    "name": "Cin7 Omni",
     "category": "ops-erp",
-    "readiness": "planned",
+    "readiness": "built",
     "why": "#77 of 100 tools Shopify stores use. Ranking position is judgment. No count. Common inventory/OMS for multichannel brands below NetSuite scale. Source: https://www.cin7.com/",
-    "docs": "https://dearinventory.docs.apiary.io/",
-    "credentials": [],
+    "docs": "https://api.cin7.com/api",
+    "credentials": [
+      {
+        "name": "username",
+        "label": "API username",
+        "help": "In Cin7 Omni open Integrations, then API Connection, and create a connection. The username it issues is the first half of the Basic credentials. Create the connection with read-only scope where Cin7 offers it, so this connection can read your data but never change it."
+      },
+      {
+        "name": "api_key",
+        "label": "API key",
+        "help": "The key issued alongside the API username. Together they form the Basic Authorization header. This connector only sends GET requests."
+      }
+    ],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "config": {
+      "client": {
+        "base_url": "https://api.cin7.com/api/",
+        "headers": {
+          "Accept": "application/json"
+        },
+        "auth": {
+          "type": "http_basic",
+          "username": "{secret:username}",
+          "password": "{secret:api_key}"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "products",
+          "endpoint": {
+            "path": "v1/Products",
+            "params": {
+              "rows": 250
+            },
+            "paginator": {
+              "type": "page_number",
+              "page_param": "page",
+              "base_page": 1,
+              "total_path": null,
+              "stop_after_empty_page": true
+            }
+          }
+        },
+        {
+          "name": "sales_orders",
+          "endpoint": {
+            "path": "v1/SalesOrders",
+            "params": {
+              "rows": 250
+            },
+            "paginator": {
+              "type": "page_number",
+              "page_param": "page",
+              "base_page": 1,
+              "total_path": null,
+              "stop_after_empty_page": true
+            }
+          }
+        },
+        {
+          "name": "contacts",
+          "endpoint": {
+            "path": "v1/Contacts",
+            "params": {
+              "rows": 250
+            },
+            "paginator": {
+              "type": "page_number",
+              "page_param": "page",
+              "base_page": 1,
+              "total_path": null,
+              "stop_after_empty_page": true
+            }
+          }
+        }
+      ]
+    },
+    "notes": "Base https://api.cin7.com/api/, stated on the API page and in the OpenAPI servers. Auth is Basic, built from the API username and key that Cin7 Omni issues under Integrations then API Connection. List endpoints take page, which defaults to 1, and rows, which defaults to 50 with a maximum of 250, and the 200 response is a bare array rather than a wrapper, so no selector is set and the page number pager stops on an empty page because no total is returned. Three resources are built, products, sales orders and contacts. The remaining v1 resources are documented and left out. Contacts carry a name, email and phone, which the shared rules remove. Fixture values are illustrative, built from the documented field names in the OpenAPI schemas."
   },
   {
     "slug": "inventory-planner",
