@@ -14,6 +14,7 @@ import { fetchGa4Daily, ga4AccessToken } from './sources/ga4.js';
 import { reconcile } from './reconcile.js';
 import { verdictFor, verdictExit, formatVerdict, parsePeriod } from './verdict.js';
 import { checkSchemaSettings, discoverTables, pipelineConn, pipelineSchemaInfo, queryNamedPipeline, tableFreshness, freshnessTrust } from './pipeline-tables.js';
+import { syncStripeReport } from './stripe-report.js';
 import { Klaviyo } from './sources/klaviyo.js';
 import { Stripe } from './sources/stripe.js';
 import { MetaAds } from './sources/meta.js';
@@ -577,7 +578,13 @@ program.command('sync').description('Pull fresh totals from connected sources, t
                 }
                 else if (source === 'stripe') {
                     const stripe = new Stripe(stripeKey);
-                    results.push(await syncStripe(db, { charges: () => stripe.charges(), subscriptions: () => stripe.subscriptions() }));
+                    const r = await syncStripe(db, { charges: () => stripe.charges(), subscriptions: () => stripe.subscriptions() });
+                    // 0.20.1: Stripe's own report for the last finished months, which cosmic verdict holds charge KPIs against.
+                    if (r.status !== 'failed') {
+                        const rep = await syncStripeReport(db, stripe).catch((e) => ({ status: 'pending', detail: `Stripe's own report could not be read this time: ${e instanceof Error ? e.message : e}` }));
+                        r.detail = [r.detail, rep.detail].filter(Boolean).join(' ');
+                    }
+                    results.push(r);
                 }
                 else if (source === 'hubspot') {
                     const hs = new HubSpot(hubspotToken);
