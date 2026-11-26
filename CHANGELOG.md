@@ -21,13 +21,14 @@ Any table Fivetran or Airbyte loads into your own Postgres, for any connector, r
 - `cosmic sources list` puts the workspace type's usual sources first, so a SaaS workspace starts with Stripe, GA4, Meta and HubSpot. A Shopify store keeps its order.
 - `init` and `sources list` point to the easy path: paste one sentence into Claude Code, Cursor or Codex and let the agent run `cosmic docs quickstart`.
 - A `cosmic sync` with only pipeline schemas connected checks their freshness instead of failing with "No sources connected", and prints no reconcile line.
-- `cosmic sync` rediscovers each pipeline schema's tables, so a table the loader added later gets a freshness check. A pipeline database that cannot be read fails the sync (exit 1).
+- `cosmic sync` rediscovers each pipeline schema's tables, so a table the loader added later gets a freshness check. Freshness on connect and sync runs inside the same 30-second read-only limit as queries. A pipeline database that cannot be read fails the sync (exit 1).
 - Cosmic Cloud's default address is now https://cloud.cosmicai.tech. The old address keeps working for existing installs.
 
 ### Security (independent review and Codex review)
 
 - **Only connected tables can be read.** Before a pipeline query runs, Postgres plans it (EXPLAIN, which does not run it), and any table it would read that is not a connected loader table is refused: another schema, a staging or audit table, or a table hidden behind a comment.
-- **Personal columns are checked in the plan too,** so a view or an expression that renames a personal column is refused.
+- **Personal columns are checked in the plan too,** so a view or an expression that renames a personal column is refused. The query is planned wrapped and limited, as it runs, so a `SELECT *` view over a connected table names every column it returns.
+- **Functions:** blocked functions (such as `query_to_xml`) are checked on Postgres's own spelling of the plan, so an escaped name (`U&"..."`) is caught. Functions defined in the database, which could read any table unseen, are refused: only built-in functions can be used.
 - **Routing ignores strings and comments.** A schema name inside a string or a comment never routes a local query to the pipeline database.
 - **More columns are treated as personal in loader tables:** phones, social handles, job titles, free-text bodies and raw JSON records. Views are not registered.
 

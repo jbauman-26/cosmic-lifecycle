@@ -1,7 +1,7 @@
 import pg from 'pg'
 import { CliError } from './errors.js'
 import { assertReadOnlySql } from './query.js'
-import { assertNoPersonalColumns, markCatalog, type CatalogColumn } from './sql-guard.js'
+import { assertNoBlockedFunctions, assertNoPersonalColumns, markCatalog, type CatalogColumn } from './sql-guard.js'
 import { scrubRows } from './personal.js'
 import { PIPELINE_TOOLS, type PipelineTool, type Query } from './pipeline.js'
 
@@ -161,14 +161,21 @@ export function pipelineConn(urlEnv: string, env: NodeJS.ProcessEnv = process.en
 // comments, quoting and string tricks do not matter. EXPLAIN plans the query without running it.
 type PlanNode = { 'Relation Name'?: string; Schema?: string; Plans?: PlanNode[]; Output?: string[]; [k: string]: unknown }
 export type TableRead = { schema: string; table: string; outputs: string[][] }
-export type PlanRead = { tables: TableRead[]; tokens: Set<string> }
+export type PlanRead = { tables: TableRead[]; tokens: Set<string>; text: string[]; functions: { schema: string | null; name: string }[] }
 // Words in plan expressions (outputs, filters, keys, conditions), so a column read through a view, a function or a
 // cast is still seen under its real name.
 export function words(v: unknown, out: Set<string>) {
   if (typeof v === 'string') for (const m of v.matchAll(/"((?:[^"]|"")+)"|([A-Za-z_][A-Za-z0-9_$]*)/g)) out.add((m[1] ?? m[2]!).replace(/""/g, '"').toLowerCase())
   else if (Array.isArray(v)) v.forEach((x) => typeof x !== 'object' && words(x, out))
 }
-function walk(node: PlanNode, tables: Map<string, TableRead>, tokens: Set<string>) {
+// Every expression string in the plan, as Postgres prints it: function names decoded, whatever the SQL spelled.
+function strings(v: unknown, out: string[]) {
+  if (typeof v === 'string') out.push(v)
+  else if (Array.isArray(v)) v.forEach((x) => typeof x !== 'object' && strings(x, out))
+}
+function walk(node: PlanNode, tables: Map<string, TableRead>, tokens: Set<string>, text: string[] = [], functions: PlanRead['functions'] = []) {
+  for (const [k, v] of Object.entries(node)) if (k !== 'Plans' && k !== 'Node Type' && k !== 'Relation Name' && k !== 'Schema' && k !== 'Alias') strings(v, text)
+  if (typeof node['Function Name'] === 'string') functions.push({ schema: typeof node.Schema === 'string' ? node.Schema : null, name: node['Function Name'] as string })
   const scan = Boolean(node['Relation Name'])
   if (scan) {
     const key = `${node.Schema ?? ''}\0${node['Relation Name']}`
@@ -183,18 +190,30 @@ function walk(node: PlanNode, tables: Map<string, TableRead>, tokens: Set<string
     words(v, tokens)
   }
   for (const v of Object.values(node)) {
-    if (Array.isArray(v)) v.forEach((x) => typeof x === 'object' && x && walk(x as PlanNode, tables, tokens))
-    else if (typeof v === 'object' && v) walk(v as PlanNode, tables, tokens)
+    if (Array.isArray(v)) v.forEach((x) => typeof x === 'object' && x && walk(x as PlanNode, tables, tokens, text, functions))
+    else if (typeof v === 'object' && v) walk(v as PlanNode, tables, tokens, text, functions)
   }
 }
 export async function tablesRead(conn: PipelineConn, body: string): Promise<PlanRead> {
-  const rows = await conn.readOnly(`EXPLAIN (FORMAT JSON, VERBOSE) ${body}`)
+  // The query is planned the way it runs: wrapped and limited. The top node then always lists the columns returned,
+  // so a SELECT * view that flattens into a bare scan still names every column it hands back.
+  const rows = await conn.readOnly(`EXPLAIN (FORMAT JSON, VERBOSE) SELECT * FROM (\n${body}\n) AS q LIMIT 1`)
   const plan = rows[0]?.['QUERY PLAN'] as unknown
   const parsed = (typeof plan === 'string' ? JSON.parse(plan) : plan) as { Plan: PlanNode }[]
   const tables = new Map<string, TableRead>()
   const tokens = new Set<string>()
-  for (const p of parsed ?? []) walk(p.Plan, tables, tokens)
-  return { tables: [...tables.values()], tokens }
+  const text: string[] = []
+  const functions: PlanRead['functions'] = []
+  for (const p of parsed ?? []) walk(p.Plan, tables, tokens, text, functions)
+  return { tables: [...tables.values()], tokens, text, functions }
+}
+
+// Function names called in the plan's expressions: name( or schema.name(.
+const CALLS = /(?:"?([A-Za-z_][\w$]*)"?\.)?"?([A-Za-z_][\w$]*)"?\s*\(/g
+export function callsIn(text: string[]) {
+  const out: { schema: string | null; name: string }[] = []
+  for (const t of text) for (const m of t.replace(/'(?:[^']|'')*'/g, "''").matchAll(CALLS)) out.push({ schema: m[1] ?? null, name: m[2]!.toLowerCase() })
+  return out
 }
 
 /**
@@ -209,6 +228,19 @@ export async function pipelineQueryRun(conn: PipelineConn, schemas: { schema: st
   const allowed = new Set(found.flatMap((f) => f.tables.map((t) => `${f.schema}\0${t.table}`)))
   assertNoPersonalColumns(body, found.flatMap((f) => catalogFor(f.schema, f.tables)))
   const plan = await tablesRead(conn, body)
+  // Blocked functions, checked on Postgres's own spelling of the plan, so an escaped name (U&"...") is seen as itself.
+  assertNoBlockedFunctions(callsIn(plan.text).map((c) => `${c.name}(`).join(' '))
+  // A function defined in this database can read any table without the plan showing it, so only built-in
+  // functions (pg_catalog) may be called.
+  const called = [...callsIn(plan.text), ...plan.functions.map((f) => ({ schema: f.schema, name: f.name.toLowerCase() }))]
+  const outsideSchema = called.filter((c) => c.schema && !['pg_catalog', 'information_schema'].includes(c.schema.toLowerCase()))
+  const names = [...new Set(called.map((c) => c.name))]
+  const userDefined = names.length
+    ? (await conn.query(`SELECT DISTINCT lower(p.proname) AS name FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND lower(p.proname) = ANY($1)`, [names])).map((r) => String(r.name))
+    : []
+  const own = [...new Set([...outsideSchema.map((c) => c.name), ...userDefined])]
+  if (own.length) throw new CliError(`Refused: the query calls ${own.join(', ')}, a function defined in this database. Only built-in functions can be used on pipeline tables.`, 'Use built-in functions such as count, sum, date_trunc and coalesce.', 'blocked_object')
   const read = plan.tables
   const outside = read.filter((r) => !allowed.has(`${r.schema}\0${r.table}`))
   if (outside.length) {

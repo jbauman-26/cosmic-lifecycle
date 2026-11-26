@@ -280,7 +280,8 @@ connect.command('pipeline').description('Read tables your own Fivetran or Airbyt
     let tables, fresh
     try {
       tables = await discoverTables(conn.query, tool, opts.schema)
-      fresh = await tableFreshness(conn.query, tool, opts.schema, tables.map((t) => t.table), settingValue('reconcile.freshness_days'))
+      // Inside the same 30-second read-only limit as queries.
+      fresh = await tableFreshness((q, p) => conn.readOnly(q, p), tool, opts.schema, tables.map((t) => t.table), settingValue('reconcile.freshness_days'))
     } finally {
       await conn.close().catch(() => undefined)
     }
@@ -624,12 +625,12 @@ program.command('sync').description('Pull fresh totals from connected sources, t
     const pipeline: { schema: string; status: string; line: string }[] = []
     if (!only) {
       for (const p of pipelineSchemas(config)) {
-        let conn
+        let conn: ReturnType<typeof pipelineConn> | undefined
         try {
           conn = pipelineConn(p.urlEnv)
           // The tables the loader has now, not the list saved at connect time, so a table added later is checked too.
           const tables = (await discoverTables(conn.query, p.tool, p.schema)).map((x) => x.table)
-          const t = freshnessTrust(p.schema, await tableFreshness(conn.query, p.tool, p.schema, tables, settingValue('reconcile.freshness_days')), settingValue('reconcile.freshness_days'))
+          const t = freshnessTrust(p.schema, await tableFreshness((q, ps) => conn!.readOnly(q, ps), p.tool, p.schema, tables, settingValue('reconcile.freshness_days')), settingValue('reconcile.freshness_days'))
           pipeline.push({ schema: p.schema, status: t.status, line: t.line })
         } catch (e) {
           pipeline.push({ schema: p.schema, status: 'failed', line: e instanceof Error ? e.message : String(e) })

@@ -27,6 +27,7 @@ function fakeDb(tables: Record<string, Table>, schema = 'hubspot') {
       const t = tables[String(params[1])]
       return t?.columns.some(([c]) => c === params[2]) ? [{ '?column?': 1 }] : []
     }
+    if (sql.includes('pg_proc')) return []
     const max = /SELECT max\("(\w+)"\) AS at FROM "(\w+)"\."(\w+)"/.exec(sql)
     if (max) {
       const rows = tables[max[3]!]!.rows
@@ -208,6 +209,25 @@ describe('review blockers: protection never depends on the SQL text', () => {
       ? [{ 'QUERY PLAN': [{ Plan: { 'Node Type': 'Seq Scan', Schema: 'hubspot', 'Relation Name': 'contact', Output: ['contact.id', 'contact.property_email'] } }] }]
       : (sql.includes('information_schema') || sql.includes('max(')) ? query(sql, params) : [{ addr: 'x' }]
     await expect(pipelineQueryRun(conn, [{ schema: 'hubspot', tool: 'fivetran' }], 'SELECT addr FROM hubspot.contact_view', 100, 2)).rejects.toThrow(/property_email is marked personal/)
+  })
+
+  it('checks blocked functions on the plan\'s own spelling, so an escaped name is caught (review finding)', async () => {
+    // A schema with no personal columns, where the SQL-text guard has nothing to look for.
+    const { query, conn } = fakeDb({ deal: { columns: [['deal_id', 'bigint'], ['_fivetran_synced', 'timestamptz']], rows: [{ _fivetran_synced: at(1) }] } })
+    conn.readOnly = async (sql, params) => sql.startsWith('EXPLAIN')
+      ? [{ 'QUERY PLAN': [{ Plan: { 'Node Type': 'Limit', Output: ["query_to_xml('select 1'::text, true, false, ''::text)"], Plans: [{ 'Node Type': 'Seq Scan', Schema: 'hubspot', 'Relation Name': 'deal', Output: ['deal.deal_id'] }] } }] }]
+      : (sql.includes('information_schema') || sql.includes('max(')) ? query(sql, params) : [{ n: 1 }]
+    await expect(pipelineQueryRun(conn, [{ schema: 'hubspot', tool: 'fivetran' }], 'SELECT U&"query\\005fto\\005fxml"(\'x\', true, false, \'\') FROM hubspot.deal', 100, 2)).rejects.toThrow(/query_to_xml is blocked/)
+  })
+
+  it('refuses a function defined in the database, which could read any table (review finding)', async () => {
+    const { query, conn } = hubspot()
+    const q2: typeof query = async (sql, params) => (sql.includes('pg_proc') ? [{ name: 'all_contacts' }] : query(sql, params))
+    conn.query = q2
+    conn.readOnly = async (sql, params) => sql.startsWith('EXPLAIN')
+      ? [{ 'QUERY PLAN': [{ Plan: { 'Node Type': 'Function Scan', 'Function Name': 'all_contacts', Schema: 'public', Output: ['hubspot.property_firstname'] } }] }]
+      : (sql.includes('information_schema') || sql.includes('max(')) ? query(sql, params) : [{ n: 1 }]
+    await expect(pipelineQueryRun(conn, [{ schema: 'hubspot', tool: 'fivetran' }], 'SELECT hubspot.property_firstname FROM public.all_contacts() hubspot', 100, 2)).rejects.toThrow(/all_contacts, a function defined in this database/)
   })
   it('says when deleted source rows are still in the table', async () => {
     const { query, conn } = fakeDb({ deal: { columns: [['deal_id', 'bigint'], ['_fivetran_deleted', 'boolean'], ['_fivetran_synced', 'timestamptz']], rows: [{ _fivetran_synced: at(1) }] } })
