@@ -139,6 +139,11 @@ EXTRA = [
         "notes": "Planned. Event data leaves through the Export API: a date range is requested and the response is one file with a 6 GB cap, and the data lands up to two hours after upload. That needs a file export runner, not a REST list spec. CSV import of daily counts meanwhile.",
     },
     {
+        "slug": "impact-com", "name": "impact.com", "category": "affiliate/influencer",
+        "why": "In the 100-tool research at rank 81, which the generator's API filter drops, so the row is restated here. Enterprise affiliate network for larger DTC brands.",
+        "docs": "https://integrations.impact.com/brand-api-reference/reference/deals/deals.md",
+    },
+    {
         "slug": "paddle", "name": "Paddle", "category": "billing",
         "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
         "docs": "https://developer.paddle.com/api-reference/transactions/list-transactions",

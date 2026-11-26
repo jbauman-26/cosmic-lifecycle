@@ -7,7 +7,7 @@ import { WAREHOUSE_CATALOG } from '../src/warehouse-catalog.js'
 // The connectors added in 0.22.0 go through the runner's own personal-data filter, as the 0.14.0 ones do.
 // The table name is passed in, so the people-table rules apply exactly as they do in a real sync.
 const FIXTURES = join('test', 'fixtures', 'connectors-0220')
-const BUILT = ['activecampaign', 'beehiiv', 'calendly', 'intercom', 'kit', 'microsoft-clarity', 'ordergroove', 'paddle', 'printful', 'seal-subscriptions', 'stay-ai', 'tidio', 'uppromote', 'cin7', 'yotpo-loyalty']
+const BUILT = ['activecampaign', 'beehiiv', 'calendly', 'intercom', 'kit', 'microsoft-clarity', 'ordergroove', 'paddle', 'printful', 'seal-subscriptions', 'stay-ai', 'tidio', 'uppromote', 'cin7', 'yotpo-loyalty', 'impact-com']
 
 const STRIP = `
 import json, sys

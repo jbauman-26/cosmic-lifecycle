@@ -1795,7 +1795,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_key",
         "label": "Loyalty API key",
-        "help": "In the Yotpo Loyalty admin open Settings and copy the account API key. It is sent as the X-API-KEY header. Use a key scoped for read access where Yotpo offers it, so this connection can read your data but never change it."
+        "help": "In the Yotpo Loyalty admin open Settings and copy the account API key. It is sent as the X-API-KEY header. Create the key with read-only scope where Yotpo offers it, so this connection can read your data but never change it."
       },
       {
         "name": "guid",
@@ -4353,6 +4353,67 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "credentials": [],
     "params": [],
     "notes": "Planned. Event data leaves through the Export API: a date range is requested and the response is one file with a 6 GB cap, and the data lands up to two hours after upload. That needs a file export runner, not a REST list spec. CSV import of daily counts meanwhile."
+  },
+  {
+    "slug": "impact-com",
+    "name": "impact.com",
+    "category": "affiliate/influencer",
+    "readiness": "built",
+    "why": "In the 100-tool research at rank 81, which the generator's API filter drops, so the row is restated here. Enterprise affiliate network for larger DTC brands.",
+    "docs": "https://integrations.impact.com/brand-api-reference/reference/deals/deals.md",
+    "credentials": [
+      {
+        "name": "account_sid",
+        "label": "Account SID",
+        "help": "In the impact.com platform open Settings, then API, and find your Account SID. It is the HTTP Basic username and also part of every request path. Create the token with read-only scope where impact.com offers it, so this connection can read your data but never change it."
+      },
+      {
+        "name": "auth_token",
+        "label": "Auth Token",
+        "help": "The secret half of the same impact.com API credential pair. It is the HTTP Basic password. Tokens created before April 2025 are legacy tokens with wider write access, so create a new one. This connector only sends GET requests."
+      }
+    ],
+    "params": [],
+    "config": {
+      "client": {
+        "base_url": "https://api.impact.com/",
+        "headers": {
+          "Accept": "application/json"
+        },
+        "auth": {
+          "type": "http_basic",
+          "username": "{secret:account_sid}",
+          "password": "{secret:auth_token}"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "Id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "deals",
+          "endpoint": {
+            "path": "Advertisers/{secret:account_sid}/Deals",
+            "data_selector": "Deals",
+            "paginator": {
+              "type": "single_page"
+            }
+          }
+        },
+        {
+          "name": "catalogs",
+          "endpoint": {
+            "path": "Advertisers/{secret:account_sid}/Catalogs",
+            "data_selector": "Catalogs",
+            "paginator": {
+              "type": "single_page"
+            }
+          }
+        }
+      ]
+    },
+    "notes": "Base https://api.impact.com, from the servers block of the brand API definitions, and the account SID sits in the path as Advertisers/{AccountSID}. Auth is HTTP Basic with the Account SID as the username and the Auth Token as the password, which the reference states as Authorization: Basic base64(AccountSID:AuthToken). List responses wrap rows in a named array, Deals and Catalogs respectively. The deals and catalogs references document no page or page-size parameters and no next-page field, so the connector makes one request per resource rather than inventing a pager that could loop. Two resources are built. Actions, clicks and call data are documented and left out because they require a date range and would need start and end dates the connector cannot supply on a schedule. Neither of the two resources built here carries consumer personal data, so their fixtures have no personal list; the useful identifiers and statuses are what the fixture checks."
   },
   {
     "slug": "paddle",
