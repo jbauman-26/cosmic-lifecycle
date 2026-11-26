@@ -109,7 +109,7 @@ export const SETTINGS = {
             }
             const local = u !== null && u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
             if (!u || (u.protocol !== 'https:' && !local))
-                throw new CliError('Use an https address.', 'cosmic config set cloud.url https://cosmic-cloud.vercel.app', 'bad_value');
+                throw new CliError('Use an https address.', 'cosmic config set cloud.url https://cloud.cosmicai.tech', 'bad_value');
             return v.replace(/\/+$/, '');
         } },
     'reconcile.tolerance.klaviyo_orders': { description: 'Percent Klaviyo Placed Order may differ from Shopify orders before the check fails', default: 3, parse: numberIn('reconcile.tolerance.klaviyo_orders', 0, 100, { example: '3' }) },

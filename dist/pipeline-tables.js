@@ -81,8 +81,16 @@ export function freshnessTrust(schema, fresh, maxDays) {
     return { status: 'freshness_only', tables: fresh, line: `${[head, tail].filter(Boolean).join(' ') || 'No load times found.'} ${FRESHNESS_ONLY}` };
 }
 /** The registered schemas a query names, such as hubspot in "SELECT ... FROM hubspot.deal". */
+// Strings and comments removed first, so 'hubspot.deal' as a label or in a comment never routes a local query.
+// Routing only picks the database: what the query may read is decided by the plan check in pipelineQueryRun.
+export const codeOnly = (sql) => sql
+    .replace(/'(?:[^']|'')*'/g, "''")
+    .replace(/\$([A-Za-z_]*)\$[\s\S]*?\$\1\$/g, "''")
+    .replace(/--[^\n]*/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ');
 export function schemasIn(sql, schemas) {
-    return schemas.filter((s) => new RegExp(`(^|[^a-z0-9_"])"?${s}"?\\s*\\.`, 'i').test(sql));
+    const code = codeOnly(sql);
+    return schemas.filter((s) => new RegExp(`(^|[^a-z0-9_"])"?${s}"?\\s*\\.`, 'i').test(code));
 }
 export function catalogFor(schema, tables) {
     return tables.flatMap((t) => t.columns.map((c) => ({ schema, table: t.table, column: c.name, type: c.type, personal: c.personal })));

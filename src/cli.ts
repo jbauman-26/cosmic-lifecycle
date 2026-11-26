@@ -620,7 +620,9 @@ program.command('sync').description('Pull fresh totals from connected sources, t
         let conn
         try {
           conn = pipelineConn(p.urlEnv)
-          const t = freshnessTrust(p.schema, await tableFreshness(conn.query, p.tool, p.schema, p.tables, settingValue('reconcile.freshness_days')), settingValue('reconcile.freshness_days'))
+          // The tables the loader has now, not the list saved at connect time, so a table added later is checked too.
+          const tables = (await discoverTables(conn.query, p.tool, p.schema)).map((x) => x.table)
+          const t = freshnessTrust(p.schema, await tableFreshness(conn.query, p.tool, p.schema, tables, settingValue('reconcile.freshness_days')), settingValue('reconcile.freshness_days'))
           pipeline.push({ schema: p.schema, status: t.status, line: t.line })
         } catch (e) {
           pipeline.push({ schema: p.schema, status: 'failed', line: e instanceof Error ? e.message : String(e) })
@@ -636,7 +638,8 @@ program.command('sync').description('Pull fresh totals from connected sources, t
       // Pipeline tables read in place are never reconciled, so a sync of only those says nothing about reconcile.
       ...(results.length ? [failed.length ? `Reconcile: ${failed.length} failed. Run cosmic reconcile for details.` : 'Reconcile: passed.'] : []),
     ].join('\n'))
-    if (results.some((r) => r.status === 'failed')) process.exitCode = 1
+    // A pipeline schema whose database could not be read fails the sync too, so a scheduled job sees it.
+    if (results.some((r) => r.status === 'failed') || pipeline.some((p) => p.status === 'failed')) process.exitCode = 1
   } finally {
     await db.close()
   }

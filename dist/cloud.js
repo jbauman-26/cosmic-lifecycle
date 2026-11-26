@@ -16,7 +16,7 @@ import { envName, getSecret } from './secrets.js';
 // 4. The token only goes to an address the owner chose: LIFECYCLE_CLOUD_URL or the one `login`
 //    saved. With neither (after `logout`, say), a token left in the environment is not sent to
 //    the public address: the command stops with `not_logged_in` before anything leaves.
-export const DEFAULT_CLOUD_URL = 'https://cosmic-cloud.vercel.app';
+export const DEFAULT_CLOUD_URL = 'https://cloud.cosmicai.tech';
 export const CLOUD_URL_ENV = 'LIFECYCLE_CLOUD_URL';
 export const CLOUD_TOKEN_ENV = envName('cloud-token');
 const TIMEOUT_MS = 30_000;

@@ -104,8 +104,17 @@ export function freshnessTrust(schema: string, fresh: TableFreshness[], maxDays:
 }
 
 /** The registered schemas a query names, such as hubspot in "SELECT ... FROM hubspot.deal". */
+// Strings and comments removed first, so 'hubspot.deal' as a label or in a comment never routes a local query.
+// Routing only picks the database: what the query may read is decided by the plan check in pipelineQueryRun.
+export const codeOnly = (sql: string) => sql
+  .replace(/'(?:[^']|'')*'/g, "''")
+  .replace(/\$([A-Za-z_]*)\$[\s\S]*?\$\1\$/g, "''")
+  .replace(/--[^\n]*/g, ' ')
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+
 export function schemasIn(sql: string, schemas: string[]) {
-  return schemas.filter((s) => new RegExp(`(^|[^a-z0-9_"])"?${s}"?\\s*\\.`, 'i').test(sql))
+  const code = codeOnly(sql)
+  return schemas.filter((s) => new RegExp(`(^|[^a-z0-9_"])"?${s}"?\\s*\\.`, 'i').test(code))
 }
 
 export function catalogFor(schema: string, tables: DiscoveredTable[]): CatalogColumn[] {

@@ -87,6 +87,10 @@ describe('discovery', () => {
     expect(schemasIn('SELECT count(*) FROM hubspot.deal d JOIN "salesforce".opportunity o ON true', ['hubspot', 'salesforce', 'stripe'])).toEqual(['hubspot', 'salesforce'])
     expect(schemasIn('SELECT * FROM fact_orders_daily', ['hubspot'])).toEqual([])
     expect(schemasIn('SELECT * FROM my_hubspot.deal', ['hubspot'])).toEqual([])
+    // A name inside a string or a comment is not a table reference (Codex review on PR #25).
+    expect(schemasIn("SELECT 'hubspot.deal' AS label FROM fact_orders_daily", ['hubspot'])).toEqual([])
+    expect(schemasIn('SELECT 1 FROM fact_orders_daily -- hubspot.deal', ['hubspot'])).toEqual([])
+    expect(schemasIn('SELECT 1 FROM fact_orders_daily /* hubspot.deal */', ['hubspot'])).toEqual([])
   })
 })
 
