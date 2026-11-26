@@ -256,15 +256,6 @@ describe('verdictFor: each KPI needs the check for its own data (review findings
     expect(kpi(v, 'ga4_sessions').reason).toContain('no recorded sync window')
   })
 
-  it('Stripe has no independent count to check against, so its KPIs are withheld (review finding)', async () => {
-    const charge = (i: number) => ({ id: `ch${i}`, created: Date.parse(`${LAST}-10T12:00:00Z`) / 1000, amount: 5000, amount_refunded: 0, currency: 'usd', status: 'succeeded', customer: `cus${i}` })
-    await syncStripe(db, { charges: async () => [charge(1), charge(2)], subscriptions: async () => null })
-    const v = await verdictFor(db, LAST, opts({ connected: ['stripe'], workspace: { type: 'saas', reference: 'stripe', referenceSet: true, title: 'SaaS' } }))
-    const k = kpi(v, 'stripe_net_revenue')
-    expect(k.status).toBe('withheld')
-    expect(k.reason).toContain('No check verifies fact_stripe_daily')
-  })
-
   it('days changed from the default are listed too (review finding)', async () => {
     await syncShopify(db, async () => orders(LAST, 801), async () => 801)
     const v = await verdictFor(db, LAST, opts({ tolerances: T({ days: 730 }) }))
@@ -281,6 +272,90 @@ describe('verdictFor: each KPI needs the check for its own data (review findings
     await syncShopify(db, async () => orders(LAST, 801), async () => 801)
     const v = await verdictFor(db, LAST, opts())
     expect(kpi(v, 'returning_order_share').notes.join(' ')).toContain('returning')
+  })
+})
+
+describe('0.20.1: KPIs from the workspace\'s own source of truth', () => {
+  const saas = { type: 'saas', reference: 'stripe', referenceSet: true, title: 'SaaS' } as const
+  const at = (month: string, day = 10) => Date.parse(`${month}-${String(day).padStart(2, '0')}T12:00:00Z`) / 1000
+  const charges = (month: string, n: number, from = 0) => Array.from({ length: n }, (_, i) => ({ id: `ch${month}${from + i}`, created: at(month), amount: 5000, amount_refunded: 0, currency: 'usd', status: 'succeeded', customer: `cus${from + i}` }))
+  const subs = Array.from({ length: 10 }, (_, i) => ({ id: `sub${i}`, created: at(BEFORE, 5), status: 'active', ended_at: null, currency: 'usd', items: { data: [{ quantity: 1, price: { unit_amount: 4900, recurring: { interval: 'month', interval_count: 1 } } }] } }))
+  const stripe = async (inMonth = 452) => {
+    await syncStripe(db, { charges: async () => [...charges(BEFORE, 30), ...charges(LAST, inMonth, 100)], subscriptions: async () => subs })
+    // MRR is recorded on the days Stripe syncs; an earlier sync took one late in the month.
+    await db.query(`INSERT INTO fact_stripe_mrr VALUES ($1, 'usd', 10, 490, 0, now())`, [`${LAST}-28`])
+  }
+  const kpi = (v: Awaited<ReturnType<typeof verdictFor>>, name: string) => v.kpis.find((k) => k.kpi === name)!
+  const saasOpts = (o: VerdictOptions = {}) => opts({ connected: ['stripe'], workspace: saas, ...o })
+
+  it('Stripe MRR is reportable on a complete, fresh, finished month, labelled "matches Stripe"', async () => {
+    await stripe()
+    const v = await verdictFor(db, LAST, saasOpts())
+    const mrr = kpi(v, 'stripe_mrr')
+    expect(mrr).toMatchObject({ status: 'reportable', value: 490, basis: 'matches Stripe', reason: null })
+    expect(mrr.notes.join(' ')).toContain(`at the last sync in the month, ${LAST}-28`)
+    expect(kpi(v, 'stripe_net_revenue')).toMatchObject({ status: 'reportable', basis: 'matches Stripe' })
+    expect(kpi(v, 'stripe_net_revenue').value).toBeGreaterThan(0)
+    expect(JSON.stringify(v)).not.toMatch(/independent/i)
+    expect(v.not_by_period).not.toContain('stripe_mrr')
+  })
+
+  it('Stripe MRR is withheld when stripe_daily_complete fails, 446 against 452', async () => {
+    // 30 charges before the month and 416 in it: 446 in the daily table, while the pull counted 452.
+    await stripe(416)
+    await db.query(`UPDATE meta_source_total SET value = 452 WHERE source = 'stripe' AND metric = 'charges_counted'`)
+    const v = await verdictFor(db, LAST, saasOpts())
+    const mrr = kpi(v, 'stripe_mrr')
+    expect(mrr).toMatchObject({ status: 'withheld', value: null, basis: null })
+    expect(mrr.reason).toContain('6 charges missing: 446 against 452 (stripe_daily_complete)')
+    expect(mrr.checks.find((c) => c.name === 'stripe_daily_complete')).toMatchObject({ status: 'fail', expected: 452, actual: 446 })
+  })
+
+  it('Stripe MRR is withheld on an unfinished month', async () => {
+    await stripe()
+    await db.query(`INSERT INTO fact_stripe_mrr VALUES (current_date, 'usd', 10, 490, 0, now()) ON CONFLICT DO NOTHING`)
+    const v = await verdictFor(db, monthOf(0), saasOpts())
+    expect(kpi(v, 'stripe_mrr').status).toBe('withheld')
+    expect(kpi(v, 'stripe_mrr').reason).toContain('still running')
+  })
+
+  it('Stripe MRR is withheld when no snapshot was taken during the month', async () => {
+    await stripe()
+    await db.query(`DELETE FROM fact_stripe_mrr WHERE date = $1`, [`${LAST}-28`])
+    const v = await verdictFor(db, LAST, saasOpts())
+    expect(kpi(v, 'stripe_mrr')).toMatchObject({ status: 'withheld', value: null })
+    expect(kpi(v, 'stripe_mrr').reason).toContain('no snapshot')
+  })
+
+  it('Stripe KPIs are withheld when Stripe is not the workspace\'s source of truth', async () => {
+    await stripe()
+    const v = await verdictFor(db, LAST, opts({ connected: ['stripe'], workspace: { type: 'saas', reference: 'hubspot', referenceSet: true, title: 'SaaS' } }))
+    expect(kpi(v, 'stripe_mrr')).toMatchObject({ status: 'withheld', basis: null })
+    expect(kpi(v, 'stripe_net_revenue').reason).toContain('No check verifies fact_stripe_daily')
+  })
+
+  it('a KPI that mixes Stripe with another source gets no source-of-truth pass (visit to paid rate needs GA4 too)', async () => {
+    await stripe()
+    const v = await verdictFor(db, LAST, saasOpts({ connected: ['stripe', 'ga4'] }))
+    expect(kpi(v, 'visit_to_paid_rate').status).toBe('withheld')
+  })
+
+  it('Meta stays withheld: its numbers are the platform\'s own claims', async () => {
+    await stripe()
+    const v = await verdictFor(db, LAST, saasOpts({ connected: ['stripe', 'meta'] }))
+    for (const name of ['meta_ad_spend', 'meta_attributed_purchases']) {
+      const k = v.kpis.find((x) => x.kpi === name)
+      if (!k) continue
+      expect(k.status).toBe('withheld')
+      expect(k.reason).toContain('No check verifies fact_meta_ads_daily')
+    }
+    expect(v.kpis.some((k) => k.kpi.startsWith('meta_'))).toBe(true)
+  })
+
+  it('a Shopify KPI in a store says "matches Shopify"', async () => {
+    await syncShopify(db, async () => orders(LAST, 801), async () => 801)
+    const v = await verdictFor(db, LAST, opts())
+    expect(orderKpi(v)).toMatchObject({ status: 'reportable', value: 801, basis: 'matches Shopify' })
   })
 })
 

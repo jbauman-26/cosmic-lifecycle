@@ -2,6 +2,33 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.20.1 (2026-11-25)
+
+KPIs built only from a workspace's own source of truth can be reported in `cosmic verdict`.
+
+### Changed
+
+- **A KPI built only from the workspace's source of truth** (`workspace.reference`: Stripe for SaaS, Shopify for a store, HubSpot for a pipeline) is reportable when all three hold:
+  - its completeness check passes: the daily totals match the full pull from that source;
+  - the source synced through the end of the month;
+  - the month is over.
+- **Stripe:** `stripe_daily_complete` is that check for Stripe KPIs, in a workspace whose reference is Stripe. It still only guards Stripe KPIs anywhere else.
+- **Shopify and HubSpot:** they already had such checks (`orders_complete`, `deals_complete`, `contacts_complete`). If a HubSpot table has no completeness check, its KPIs stay withheld and say why.
+- **The `basis` field:** these KPIs carry `"basis": "matches Stripe"` (or Shopify, or HubSpot) in JSON, and "(matches Stripe)" in text. It is a match with that source's own pull, never an independent confirmation. Every other KPI has `"basis": null`. No existing key was renamed or removed.
+- **`stripe_mrr`** has a value for a finished month: MRR at the last sync inside the month, with that date in its notes. It is withheld if no sync ran during the month. It is no longer listed in `not_by_period`.
+
+### Unchanged
+
+- KPIs from other sources follow the 0.20.0 rules.
+- Meta and other ad-platform numbers stay withheld: they are the platform's own claims.
+- A KPI that mixes the source of truth with another source (for example, visit to paid rate needs GA4) gets no source-of-truth pass.
+
+### Not covered yet
+
+- MRR for a month with no sync inside it.
+- Other point-in-time metrics (ARPA, open pipeline).
+- Any check of Stripe against a total Stripe computes itself, such as its Reports API.
+
 ## 0.20.0 (2026-11-25)
 
 The period verdict: for one workspace and one month, which KPIs can go in a client report and which are held back, with the reason and the next step.
@@ -26,7 +53,7 @@ A month still running, and one that has not started, hold every KPI back. A chec
 
 ### Not covered yet
 
-- Meta and Stripe, and every table without a verifying check, are always withheld. Stripe's two checks count from the same pull they check, and Stripe gives no total of its own, so they guard but do not verify.
+- Meta, and every table without a verifying check, are always withheld. Stripe's two checks count from the same pull they check, and Stripe gives no total of its own, so they guard but do not verify. (0.20.1: in a workspace whose source of truth is Stripe, Stripe-only KPIs are reportable as "matches Stripe".)
 - Point-in-time metrics (MRR, open pipeline), metrics counted from the first Meta day, and margin metrics have no monthly value. They are listed in `not_by_period`.
 - Money values are in each metric's main currency, not converted; the notes say so.
 - Tested against built test databases, not yet against a real client account.

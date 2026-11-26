@@ -40,6 +40,9 @@ export type KpiVerdict = {
   unit: Metric['unit']
   status: KpiStatus
   value: number | null
+  // 0.20.1: "matches Stripe" (or the workspace's other source of truth) when the KPI is built only from that
+  // source and checked against its own pull. Null otherwise. Never an independent confirmation.
+  basis: string | null
   sources: string[]
   checks: CheckRef[]
   reason: string | null
@@ -81,6 +84,19 @@ const VERIFIES_TABLE: Record<string, string[]> = {
 // These checks compare only the trailing window (metrics.default_days up to yesterday), so they vouch for a
 // month only when the month lies inside that window.
 const TRAILING_CHECKS = new Set(['klaviyo_orders', 'ga4_purchases', 'ga4_vs_reference', 'flow_totals'])
+// 0.20.1: the workspace's own source of truth (workspace.reference). A KPI computed only from that source is
+// reportable when the source's completeness check passes (its daily totals match the full pull), the source
+// synced through the end of the month, and the month is over. That is a match with the source's own pull, not
+// an independent confirmation, so it is labelled "matches Stripe" (or Shopify, or HubSpot) in text and JSON.
+// Shopify and HubSpot tables already have such checks above. Stripe gives no total of its own, so its daily
+// completeness check counts only for KPIs built from Stripe alone, in a workspace whose reference is Stripe.
+const REFERENCE_COMPLETE: Record<string, { check: string; tables: string[] }> = {
+  stripe: { check: 'stripe_daily_complete', tables: ['fact_stripe_daily', 'fact_stripe_subscriptions_daily', 'fact_stripe_mrr'] },
+}
+// Point-in-time metrics with a value for a finished month: the last snapshot taken inside the month.
+const AS_OF: Record<string, string> = {
+  stripe_mrr: `SELECT mrr AS value, date::text AS as_of FROM fact_stripe_mrr WHERE date = (SELECT max(date) FROM fact_stripe_mrr WHERE date >= $1 AND date < $2) ORDER BY active_subscriptions DESC, currency LIMIT 1`,
+}
 export const tablesOf = (sql: string) => [...new Set([...sql.matchAll(/FROM (fact_\w+)/g)].map((m) => m[1]!))]
 // Every check that can fail on a source, for holding its KPIs back.
 const VERIFIES: Record<string, string[]> = {
@@ -206,9 +222,9 @@ const ref = (c: Check): CheckRef => ({ name: c.name, status: c.status, detail: c
 
 // The reason a failing count check gives a person, with its numbers: "14 orders missing: 787 against 801".
 function failReason(c: Check) {
-  if (c.expected !== null && c.actual !== null && c.status === 'fail' && /orders|charges|deals|contacts/.test(c.name)) {
+  if (c.expected !== null && c.actual !== null && c.status === 'fail' && /orders|charges|deals|contacts|stripe_daily/.test(c.name)) {
     const gap = Math.abs(c.expected - c.actual)
-    const what = c.name.startsWith('orders') || c.name === 'klaviyo_orders' ? 'orders' : c.name.split('_')[0]
+    const what = c.name.startsWith('orders') || c.name === 'klaviyo_orders' ? 'orders' : c.name === 'stripe_daily_complete' ? 'charges' : c.name.split('_')[0]
     return `${gap} ${what} ${c.actual < c.expected ? 'missing' : 'extra'}: ${c.actual} against ${c.expected} (${c.name}).`
   }
   return `${c.name} failed: ${c.detail}`
@@ -236,7 +252,7 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
   const synced = (await db.query(`SELECT DISTINCT source FROM meta_sync_run`)).map((r) => String(r.source))
   const present = connected ?? synced
   const all = packMetrics(ws.type).filter((m) => m.needs.every((s) => present.includes(s)))
-  const metrics = all.filter(byPeriod)
+  const metrics = all.filter((m) => byPeriod(m) || m.name in AS_OF)
   const sources = [...new Set(metrics.flatMap((m) => m.needs))].sort()
   const cover = new Map<string, SourceCoverage>()
   for (const s of sources) cover.set(s, await coverage(db, s, connected, start, end, t, now))
@@ -262,7 +278,9 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
     // Every table the KPI reads needs its own verifying check, run on a window that includes this month.
     const checkStart = dayBefore(t.today ?? new Date(now).toISOString().slice(0, 10), t.days)
     for (const table of tablesOf(m.sql)) {
-      const names = VERIFIES_TABLE[table]
+      const refCheck = REFERENCE_COMPLETE[ws.reference]
+      const fromReference = Boolean(refCheck?.tables.includes(table)) && m.needs.length === 1 && m.needs[0] === ws.reference
+      const names = VERIFIES_TABLE[table] ?? (fromReference ? [refCheck!.check] : undefined)
       if (!names) {
         reasons.push(`No check verifies ${table} yet, so ${m.title} is not checked.`)
         continue
@@ -280,16 +298,29 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
         if (!ran.length) next.push('cosmic sync, then cosmic reconcile')
       }
     }
-    const status: KpiStatus = reasons.length ? 'withheld' : 'reportable'
+    let status: KpiStatus = reasons.length ? 'withheld' : 'reportable'
     let value: number | null = null
-    if (status === 'reportable') {
+    let asOf: string | null = null
+    if (status === 'reportable' && AS_OF[m.name]) {
+      const r = await one(db, AS_OF[m.name]!, [start, end])
+      if (r.as_of === null || r.as_of === undefined) {
+        status = 'withheld'
+        reasons.push(`${m.title} has no snapshot taken during ${period}: it is recorded only on the days Stripe syncs.`)
+        next.push(`cosmic sync stripe during the month, so ${m.title} has a value for it`)
+      } else {
+        value = r.value === null || r.value === undefined ? null : Number(r.value)
+        asOf = String(r.as_of).slice(0, 10)
+      }
+    } else if (status === 'reportable') {
       const r = await one(db, periodSql(m.sql), [start, end])
       value = r.value === null || r.value === undefined ? null : Number(r.value)
     }
+    // A KPI built only from the workspace's source of truth says what it matches: that source's own pull.
+    const basis = status === 'reportable' && m.needs.length === 1 && m.needs[0] === ws.reference ? `matches ${nameOf(ws.reference)}` : null
     kpis.push({
-      kpi: m.name, title: m.title, unit: m.unit, status, value, sources: m.needs, checks: mine.map(ref),
+      kpi: m.name, title: m.title, unit: m.unit, status, value, basis, sources: m.needs, checks: mine.map(ref),
       // A checked month can still have no value: a ratio with nothing to divide by, such as AOV with no orders.
-      notes: [...(m.notes ?? []), ...(status === 'reportable' && value === null ? ['No value this month: there is nothing to divide by (for example, no orders). The data behind it was checked.'] : [])],
+      notes: [...(m.notes ?? []), ...(asOf ? [`${m.title} at the last sync in the month, ${asOf}.`] : []), ...(status === 'reportable' && value === null ? ['No value this month: there is nothing to divide by (for example, no orders). The data behind it was checked.'] : [])],
       reason: reasons.length ? [...new Set(reasons)].join(' ') : null, next_checks: [...new Set(next)],
     })
   }
@@ -303,7 +334,7 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
     kpis,
     reportable: kpis.filter((k) => k.status === 'reportable').length,
     withheld: kpis.filter((k) => k.status === 'withheld').length,
-    not_by_period: all.filter((m) => !byPeriod(m)).map((m) => m.name),
+    not_by_period: all.filter((m) => !byPeriod(m) && !(m.name in AS_OF)).map((m) => m.name),
     settings_changed: [
       ...(Object.keys(TOLERANCE) as (keyof typeof TOLERANCE)[]).filter((k) => t[k] !== TOLERANCE[k]).map((k) => `${k}: ${t[k]} (default ${TOLERANCE[k]})`),
       ...(t.days !== DEFAULT_DAYS ? [`days: ${t.days} (default ${DEFAULT_DAYS})`] : []),
@@ -318,7 +349,7 @@ export const verdictExit = (v: Verdict) => (v.kpis.length && !v.withheld ? 0 : V
 export function formatVerdict(v: Verdict) {
   const lines = [`${v.workspace}, ${v.period} (${v.period_state === 'complete' ? 'complete month' : v.period_state === 'in_progress' ? 'still running' : 'not started'}): ${v.reportable} reportable, ${v.withheld} withheld.`]
   for (const k of v.kpis) {
-    lines.push(k.status === 'reportable' ? `REPORT ${k.kpi}: ${k.value ?? 'no value'}` : `HOLD   ${k.kpi}: ${k.reason}`)
+    lines.push(k.status === 'reportable' ? `REPORT ${k.kpi}: ${k.value ?? 'no value'}${k.basis ? ` (${k.basis})` : ''}` : `HOLD   ${k.kpi}: ${k.reason}`)
   }
   if (!v.kpis.length) lines.push('No KPIs to report: connect a source first. Next: cosmic doctor')
   if (v.settings_changed.length) lines.push(`Tolerances changed from the defaults: ${v.settings_changed.join(', ')}.`)
