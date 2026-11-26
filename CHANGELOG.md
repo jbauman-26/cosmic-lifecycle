@@ -14,8 +14,13 @@ KPIs built only from a workspace's own source of truth can be reported in `cosmi
   - the month is over.
 - **Stripe:** `stripe_daily_complete` is that check for Stripe KPIs, in a workspace whose reference is Stripe. It still only guards Stripe KPIs anywhere else.
 - **Shopify and HubSpot:** they already had such checks (`orders_complete`, `deals_complete`, `contacts_complete`). If a HubSpot table has no completeness check, its KPIs stay withheld and say why.
-- **The `basis` field:** these KPIs carry `"basis": "matches Stripe"` (or Shopify, or HubSpot) in JSON, and "(matches Stripe)" in text. It is a match with that source's own pull, never an independent confirmation. Every other KPI has `"basis": null`. No existing key was renamed or removed.
-- **`stripe_mrr`** has a value for a finished month: MRR at the last sync inside the month, with that date in its notes. It is withheld if no sync ran during the month. It is no longer listed in `not_by_period`.
+- **The `basis` field:** these KPIs carry `"basis": "matches Stripe"` (or Shopify, or HubSpot) in JSON, and "(matches Stripe)" in text. It is a match with that source's own pull, never an independent confirmation. Every other KPI has `"basis": null`. No existing key was renamed or removed. New: `basis` on every KPI, and `as_of` on point-in-time ones.
+- **Each Stripe table needs its own check.** Charges need `stripe_daily_complete`. Subscriptions and MRR need `subscriptions_balance`, and the latest Stripe sync must have read subscriptions. A key that cannot read them gives no match.
+- **`stripe_mrr`** has a value for a finished month: MRR on the last snapshot inside the month. The snapshot must fall within the freshness limit plus one day of the month's end (the last 3 days by default).
+  - It is withheld when no snapshot exists in that window.
+  - It carries `as_of` (new, only on point-in-time KPIs), a note, and "at DATE" in text.
+  - It moves from `not_by_period` into `kpis`.
+- **A zero-tolerance count check is exact.** A rounded percent used to let 1 in 20,000 through. This also tightens `orders_complete` and every other 0% check.
 
 ### Unchanged
 

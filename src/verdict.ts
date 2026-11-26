@@ -43,6 +43,8 @@ export type KpiVerdict = {
   // 0.20.1: "matches Stripe" (or the workspace's other source of truth) when the KPI is built only from that
   // source and checked against its own pull. Null otherwise. Never an independent confirmation.
   basis: string | null
+  // 0.20.1: for a point-in-time KPI such as MRR, the day its value was recorded.
+  as_of?: string
   sources: string[]
   checks: CheckRef[]
   reason: string | null
@@ -67,7 +69,8 @@ export type Verdict = {
   settings_changed: string[]
 }
 
-// Checks that compare a dataset's own count against something independent, by the table they vouch for.
+// Checks that compare a dataset's own count against a count the source reports itself (Shopify's order count,
+// HubSpot's totals) or against another source, by the table they vouch for.
 // A KPI counts as checked only when, for every table its SQL reads, one of these ran (passed or warned) on a
 // window that includes the month. A check on one table never certifies another (an order count says nothing
 // about flow revenue).
@@ -90,9 +93,13 @@ const TRAILING_CHECKS = new Set(['klaviyo_orders', 'ga4_purchases', 'ga4_vs_refe
 // an independent confirmation, so it is labelled "matches Stripe" (or Shopify, or HubSpot) in text and JSON.
 // Shopify and HubSpot tables already have such checks above. Stripe gives no total of its own, so its daily
 // completeness check counts only for KPIs built from Stripe alone, in a workspace whose reference is Stripe.
-const REFERENCE_COMPLETE: Record<string, { check: string; tables: string[] }> = {
-  stripe: { check: 'stripe_daily_complete', tables: ['fact_stripe_daily', 'fact_stripe_subscriptions_daily', 'fact_stripe_mrr'] },
+// Each reference table's own completeness check. Charges and subscriptions are separate pulls, so each table needs
+// the check that counts it: a charge count says nothing about subscriptions.
+const REFERENCE_COMPLETE: Record<string, Record<string, string>> = {
+  stripe: { fact_stripe_daily: 'stripe_daily_complete', fact_stripe_subscriptions_daily: 'subscriptions_balance', fact_stripe_mrr: 'subscriptions_balance' },
 }
+// Tables built from Stripe subscriptions, which a key may not be able to read: the latest sync must have read them.
+const SUBSCRIPTION_TABLES = new Set(['fact_stripe_subscriptions_daily', 'fact_stripe_mrr'])
 // Point-in-time metrics with a value for a finished month: the last snapshot taken inside the month.
 const AS_OF: Record<string, string> = {
   stripe_mrr: `SELECT mrr AS value, date::text AS as_of FROM fact_stripe_mrr WHERE date = (SELECT max(date) FROM fact_stripe_mrr WHERE date >= $1 AND date < $2) ORDER BY active_subscriptions DESC, currency LIMIT 1`,
@@ -108,7 +115,8 @@ const GUARDS: Record<string, string[]> = {
   orders_vs_cohorts: ['shopify'],
   deals_daily_vs_pulled: ['hubspot'],
   // Both are counted from the same Stripe pull, so a pull that drops pages passes them. Stripe gives no total of
-  // its own to check against, so no Stripe table is verified yet.
+  // its own to check against. They verify only KPIs built from Stripe alone, in a workspace whose source of truth is
+  // Stripe (REFERENCE_COMPLETE, reported as "matches Stripe"); everywhere else they only guard.
   stripe_daily_complete: ['stripe'],
   subscriptions_balance: ['stripe'],
   attributed_share: ['klaviyo'],
@@ -278,12 +286,24 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
     // Every table the KPI reads needs its own verifying check, run on a window that includes this month.
     const checkStart = dayBefore(t.today ?? new Date(now).toISOString().slice(0, 10), t.days)
     for (const table of tablesOf(m.sql)) {
-      const refCheck = REFERENCE_COMPLETE[ws.reference]
-      const fromReference = Boolean(refCheck?.tables.includes(table)) && m.needs.length === 1 && m.needs[0] === ws.reference
-      const names = VERIFIES_TABLE[table] ?? (fromReference ? [refCheck!.check] : undefined)
+      const refCheck = REFERENCE_COMPLETE[ws.reference]?.[table]
+      const fromReference = Boolean(refCheck) && m.needs.length === 1 && m.needs[0] === ws.reference
+      const names = VERIFIES_TABLE[table] ?? (fromReference ? [refCheck!] : undefined)
       if (!names) {
-        reasons.push(`No check verifies ${table} yet, so ${m.title} is not checked.`)
+        const others = m.needs.filter((s) => s !== ws.reference)
+        reasons.push(refCheck && others.length
+          ? `${m.title} combines ${nameOf(ws.reference)} with ${others.map(nameOf).join(' and ')}, so the match with ${nameOf(ws.reference)} does not cover it.`
+          : `No check verifies ${table} yet, so ${m.title} is not checked.`)
         continue
+      }
+      if (fromReference && SUBSCRIPTION_TABLES.has(table)) {
+        // subscriptions_open is written only by a sync that read subscriptions; an older one means the latest did not.
+        const subs = await one(db, `SELECT recorded_at FROM meta_source_total WHERE source = 'stripe' AND metric = 'subscriptions_open'`)
+        const lastRun = await one(db, `SELECT max(started_at) AS at FROM meta_sync_run WHERE source = 'stripe' AND status IN ('ok', 'warning')`)
+        if (!subs.recorded_at || (lastRun.at && Date.parse(String(subs.recorded_at)) < Date.parse(String(lastRun.at)))) {
+          reasons.push(`The latest Stripe sync did not read subscriptions, so ${m.title} is not checked. The key may lack read access to subscriptions.`)
+          continue
+        }
       }
       const verifying = checks.filter((c) => names.includes(c.name))
       // A failed check already gave its reason above; unchecked is for checks that did not vouch for this month.
@@ -303,10 +323,16 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
     let asOf: string | null = null
     if (status === 'reportable' && AS_OF[m.name]) {
       const r = await one(db, AS_OF[m.name]!, [start, end])
+      // The snapshot must be from the last days of the month, within the freshness limit of its end.
+      const latest = dayBefore(end, t.freshnessDays + 1)
       if (r.as_of === null || r.as_of === undefined) {
         status = 'withheld'
         reasons.push(`${m.title} has no snapshot taken during ${period}: it is recorded only on the days Stripe syncs.`)
-        next.push(`cosmic sync stripe during the month, so ${m.title} has a value for it`)
+        next.push(`cosmic sync stripe in the last ${t.freshnessDays + 1} days of the month, so ${m.title} has a value for it`)
+      } else if (String(r.as_of).slice(0, 10) < latest) {
+        status = 'withheld'
+        reasons.push(`${m.title} was last recorded on ${String(r.as_of).slice(0, 10)}, more than ${t.freshnessDays + 1} days before ${period} ended, so it is not the month's MRR.`)
+        next.push(`cosmic sync stripe in the last ${t.freshnessDays + 1} days of the month, so ${m.title} has a value for it`)
       } else {
         value = r.value === null || r.value === undefined ? null : Number(r.value)
         asOf = String(r.as_of).slice(0, 10)
@@ -318,7 +344,7 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
     // A KPI built only from the workspace's source of truth says what it matches: that source's own pull.
     const basis = status === 'reportable' && m.needs.length === 1 && m.needs[0] === ws.reference ? `matches ${nameOf(ws.reference)}` : null
     kpis.push({
-      kpi: m.name, title: m.title, unit: m.unit, status, value, basis, sources: m.needs, checks: mine.map(ref),
+      kpi: m.name, title: m.title, unit: m.unit, status, value, basis, ...(asOf ? { as_of: asOf } : {}), sources: m.needs, checks: mine.map(ref),
       // A checked month can still have no value: a ratio with nothing to divide by, such as AOV with no orders.
       notes: [...(m.notes ?? []), ...(asOf ? [`${m.title} at the last sync in the month, ${asOf}.`] : []), ...(status === 'reportable' && value === null ? ['No value this month: there is nothing to divide by (for example, no orders). The data behind it was checked.'] : [])],
       reason: reasons.length ? [...new Set(reasons)].join(' ') : null, next_checks: [...new Set(next)],
@@ -349,7 +375,7 @@ export const verdictExit = (v: Verdict) => (v.kpis.length && !v.withheld ? 0 : V
 export function formatVerdict(v: Verdict) {
   const lines = [`${v.workspace}, ${v.period} (${v.period_state === 'complete' ? 'complete month' : v.period_state === 'in_progress' ? 'still running' : 'not started'}): ${v.reportable} reportable, ${v.withheld} withheld.`]
   for (const k of v.kpis) {
-    lines.push(k.status === 'reportable' ? `REPORT ${k.kpi}: ${k.value ?? 'no value'}${k.basis ? ` (${k.basis})` : ''}` : `HOLD   ${k.kpi}: ${k.reason}`)
+    lines.push(k.status === 'reportable' ? `REPORT ${k.kpi}: ${k.value ?? 'no value'}${k.as_of ? ` at ${k.as_of}` : ''}${k.basis ? ` (${k.basis})` : ''}` : `HOLD   ${k.kpi}: ${k.reason}`)
   }
   if (!v.kpis.length) lines.push('No KPIs to report: connect a source first. Next: cosmic doctor')
   if (v.settings_changed.length) lines.push(`Tolerances changed from the defaults: ${v.settings_changed.join(', ')}.`)
