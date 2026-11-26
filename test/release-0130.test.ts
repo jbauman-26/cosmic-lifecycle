@@ -245,6 +245,8 @@ describe('login, logout and --cloud, through the real CLI', () => {
     })
     all.push(text)
     expect(text).toMatch(/Logged in to Cosmic Cloud\. Store: Sample store/)
+    expect(text).toContain('Meta Ads needs attention')
+    expect(text).toContain(`${f.url}/tutorial?workspace=sample_store`)
 
     const logout = await run(['logout'])
     expect(logout.json()).toMatchObject({ loggedOut: true, urlRemoved: true, note: expect.stringMatching(/LIFECYCLE_CLOUD_TOKEN is still set/) })

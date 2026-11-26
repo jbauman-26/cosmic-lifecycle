@@ -69,7 +69,8 @@ import { classifyColumn } from './personal.js';
 import { READINESS_LEGEND } from './warehouse-catalog.js';
 import { randomUUID } from 'node:crypto';
 import { NATIVE, chooseSources, disconnectNative, isNative, parseOnly } from './native.js';
-import { CLOUD_TOKEN_ENV, CLOUD_URL_ENV, CloudClient, clean, cloudTokenSource, cloudUrl, isNotBuilt, loggedIn, verifyLogin } from './cloud.js';
+import { cloudNextSteps } from './cloud-start.js';
+import { CLOUD_TOKEN_ENV, CLOUD_URL_ENV, CloudClient, clean, cloudTokenSource, cloudUrl, isNotBuilt, loggedIn, verifiedCloudWorkspace } from './cloud.js';
 import { assertReadOnlySql } from './query.js';
 import { readCosts, setCost, setProductCosts, writeCosts, costsPath, COST_KEYS } from './costs.js';
 import { readFileSync } from 'node:fs';
@@ -168,7 +169,7 @@ program.command('login').description('Sign this machine in to Cosmic Cloud with 
     const token = process.env[opts.tokenEnv];
     if (!token)
         throw new CliError(`${opts.tokenEnv} is empty.`, `export ${opts.tokenEnv}=..., then run cosmic login again. Never paste the token into a chat.`, 'missing_secret');
-    const v = await verifyLogin(opts.url ?? cloudUrl().url, token);
+    const v = await verifiedCloudWorkspace(opts.url ?? cloudUrl().url, token);
     let tokenStorage = 'keychain';
     try {
         setSecret('cloud-token', token);
@@ -180,7 +181,7 @@ program.command('login').description('Sign this machine in to Cosmic Cloud with 
     }
     setSetting('cloud.url', v.url);
     const note = tokenStorage === 'environment' ? `There is no keychain here, so the token was not saved: keep it in ${CLOUD_TOKEN_ENV}.` : null;
-    emit(format(), { loggedIn: true, url: v.url, store: v.store, connections: v.connections, tokenStorage, tokenEnv: tokenStorage === 'environment' ? CLOUD_TOKEN_ENV : null, note }, () => [`Logged in to Cosmic Cloud. Store: ${v.store.name}`, `Address: ${v.url}`, note ?? 'The token is in the keychain.', 'Next: cosmic cloud status'].join('\n'));
+    emit(format(), { loggedIn: true, url: v.url, store: v.store, connections: v.connections.length, tokenStorage, tokenEnv: tokenStorage === 'environment' ? CLOUD_TOKEN_ENV : null, note }, () => [`Logged in to Cosmic Cloud. Store: ${v.store.name}`, `Address: ${v.url}`, note ?? 'The token is in the keychain.', '', ...cloudNextSteps(v.url, v.store.id, v.connections)].join('\n'));
 }));
 program.command('logout').description('Forget the Cosmic Cloud token and address on this machine').action(run(async () => {
     const removed = deleteSecret('cloud-token').removed;
@@ -210,7 +211,8 @@ cloud.command('status').description('Whether this machine is logged in to Cosmic
         emit(format(), { loggedIn: true, reachable: true, url, urlSource, tokenSource, store: { id: r.store.id, name: clean(String(r.store.name), 120) }, contractVersion: r.contract_version ?? null, connections }, () => [
             `Logged in to Cosmic Cloud. Store: ${clean(String(r.store.name), 120)}`,
             `Address: ${url} (${urlSource === 'env' ? CLOUD_URL_ENV : urlSource === 'config' ? 'saved by login' : 'the default'}). Token: from the ${tokenSource === 'env' ? 'environment' : 'keychain'}.`,
-            ...(connections.length ? connections.map((c) => `${String(c.status ?? 'unknown').padEnd(10)} ${c.name}, last good sync ${clock(c.lastSuccessAt)}${c.statusCode ? ` (${c.statusCode})` : ''}`) : ['No sources are connected on Cosmic Cloud yet.']),
+            ...connections.map((c) => `${String(c.status ?? 'unknown').padEnd(10)} ${c.name}, last good sync ${clock(c.lastSuccessAt)}${c.statusCode ? ` (${c.statusCode})` : ''}`),
+            '', ...cloudNextSteps(url, r.store.id, r.connections ?? []),
         ].join('\n'));
     }
     catch (e) {

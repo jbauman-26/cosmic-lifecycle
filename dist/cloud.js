@@ -229,10 +229,15 @@ export class CloudClient {
 // One place that decides whether a failed Cloud call was "not built yet".
 export const isNotBuilt = (e) => e instanceof CliError && e.code === 'not_built';
 // Signs in: checks the token with GET /store before anything is saved.
-export async function verifyLogin(url, token, fetchFn) {
+export async function verifiedCloudWorkspace(url, token, fetchFn) {
     const client = new CloudClient({ url, token, fetch: fetchFn });
     const r = await client.store();
     if (!r?.store || typeof r.store.name !== 'string')
         throw new CliError('That address answered, but not like Cosmic Cloud.', 'Check the address, then run cosmic login again.', 'bad_url');
-    return { url: client.url, store: { id: clean(String(r.store.id ?? ''), 80), name: clean(r.store.name, 120) }, connections: Array.isArray(r.connections) ? r.connections.length : 0 };
+    return { url: client.url, store: { id: clean(String(r.store.id ?? ''), 80), name: clean(r.store.name, 120) }, connections: Array.isArray(r.connections) ? r.connections : [] };
+}
+// Keep the original programmatic login summary for consumers of the Cloud client.
+export async function verifyLogin(url, token, fetchFn) {
+    const workspace = await verifiedCloudWorkspace(url, token, fetchFn);
+    return { ...workspace, connections: workspace.connections.length };
 }
