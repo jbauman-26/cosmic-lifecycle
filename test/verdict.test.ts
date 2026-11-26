@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { migrate, wrapPglite, type Db } from '../src/db.js'
 import { TOLERANCE, type Tolerances } from '../src/reconcile.js'
-import { syncShopify } from '../src/sync.js'
+import { syncGa4, syncShopify, syncStripe } from '../src/sync.js'
 import { parsePeriod, periodSql, verdictExit, verdictFor, type VerdictOptions } from '../src/verdict.js'
 import { CliError } from '../src/errors.js'
 
@@ -117,6 +117,16 @@ describe('verdictFor: what must hold a KPI back', () => {
     expect(orderKpi(v).reason).toContain('last 60 days')
   })
 
+  it('an unkeyed store synced exactly 60 days after the month began is withheld: those 60 days roll by the clock (review finding)', async () => {
+    const syncAt = Date.parse(`${BEFORE}-01T15:00:00Z`) + 60 * 86400000
+    const recent = Array.from({ length: 12 }, (_, i) => ({ ...order(BEFORE, i), processedAt: new Date(Date.parse(`${BEFORE}-01T15:30:00Z`) + i * 86400000).toISOString() }))
+    await syncShopify(db, async () => recent, async () => 12)
+    await db.query(`UPDATE meta_sync_run SET started_at = $1, finished_at = $1`, [new Date(syncAt).toISOString()])
+    const v = await verdictFor(db, BEFORE, opts({ now: syncAt + 3600000, tolerances: T({ freshnessDays: 400 }) }))
+    expect(orderKpi(v).status).toBe('withheld')
+    expect(orderKpi(v).reason).toContain('last 60 days')
+  })
+
   it('a sync that started before the month ended is withheld, even if it finished after (review finding)', async () => {
     await syncShopify(db, async () => orders(BEFORE, 10), async () => 10)
     const end = Date.parse(`${LAST}-01T00:00:00Z`)
@@ -226,17 +236,39 @@ describe('verdictFor: each KPI needs the check for its own data (review findings
     expect(kpi(v, 'klaviyo_placed_orders').reason).toContain('after midnight')
   })
 
-  it('GA4 rows with a gap: a month older than the last sync window is withheld', async () => {
+  it('GA4 is judged by the days its syncs pulled, not by today\'s metrics.default_days (review finding)', async () => {
     await syncShopify(db, async () => orders(LAST, 801), async () => 801)
-    await db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status) VALUES ('g1', 'ga4', now(), now(), 'ok')`)
-    await db.query(`INSERT INTO fact_ga4_daily (date, sessions, purchases, source_synced_at) VALUES (current_date - 240, 100, 1, now()), (current_date - 3, 100, 1, now())`).catch(async () => {
-      // Columns differ by release; fall back to every NOT NULL column the table has.
-      const cols = (await db.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'fact_ga4_daily' AND is_nullable = 'NO'`)).map((r) => String(r.column_name))
-      for (const d of [240, 3]) await db.query(`INSERT INTO fact_ga4_daily (${cols.join(', ')}) VALUES (${cols.map((c) => (c === 'date' ? `current_date - ${d}` : c === 'source_synced_at' ? 'now()' : c.endsWith('channel') || c === 'channel_group' || c === 'source' ? "'x'" : '1')).join(', ')})`)
-    })
-    const v = await verdictFor(db, monthOf(-5), opts({ connected: ['shopify', 'ga4'] }))
-    expect(kpi(v, 'ga4_sessions').status).toBe('withheld')
-    expect(kpi(v, 'ga4_sessions').reason).toContain('syncs only the last')
+    const day = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10)
+    // An old sync pulled one day 240 days ago; the latest pulled the last 30 days. The months between were never pulled.
+    await syncGa4(db, async () => [{ date: day(240), channel: 'x', sessions: 100, purchases: 1, revenue: 1 }], { start: day(240), end: day(240) })
+    await syncGa4(db, async () => [{ date: day(3), channel: 'x', sessions: 100, purchases: 1, revenue: 1 }], { start: day(30), end: day(0) })
+    for (const days of [90, 730]) {
+      const v = await verdictFor(db, monthOf(-5), opts({ connected: ['shopify', 'ga4'], tolerances: T({ days }) }))
+      expect(kpi(v, 'ga4_sessions').status).toBe('withheld')
+      expect(kpi(v, 'ga4_sessions').reason).toContain('does not cover the whole month')
+    }
+  })
+
+  it('GA4 synced before windows were recorded is withheld until it syncs again', async () => {
+    await syncShopify(db, async () => orders(LAST, 801), async () => 801)
+    await syncGa4(db, async () => [{ date: `${BEFORE}-10`, channel: 'x', sessions: 100, purchases: 1, revenue: 1 }])
+    const v = await verdictFor(db, LAST, opts({ connected: ['shopify', 'ga4'] }))
+    expect(kpi(v, 'ga4_sessions').reason).toContain('no recorded sync window')
+  })
+
+  it('Stripe has no independent count to check against, so its KPIs are withheld (review finding)', async () => {
+    const charge = (i: number) => ({ id: `ch${i}`, created: Date.parse(`${LAST}-10T12:00:00Z`) / 1000, amount: 5000, amount_refunded: 0, currency: 'usd', status: 'succeeded', customer: `cus${i}` })
+    await syncStripe(db, { charges: async () => [charge(1), charge(2)], subscriptions: async () => null })
+    const v = await verdictFor(db, LAST, opts({ connected: ['stripe'], workspace: { type: 'saas', reference: 'stripe', referenceSet: true, title: 'SaaS' } }))
+    const k = kpi(v, 'stripe_net_revenue')
+    expect(k.status).toBe('withheld')
+    expect(k.reason).toContain('No check verifies fact_stripe_daily')
+  })
+
+  it('days changed from the default are listed too (review finding)', async () => {
+    await syncShopify(db, async () => orders(LAST, 801), async () => 801)
+    const v = await verdictFor(db, LAST, opts({ tolerances: T({ days: 730 }) }))
+    expect(v.settings_changed).toContain('days: 730 (default 90)')
   })
 
   it('tolerances changed from the defaults are listed in the verdict', async () => {

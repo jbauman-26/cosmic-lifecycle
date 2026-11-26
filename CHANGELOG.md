@@ -8,6 +8,7 @@ The period verdict: for one workspace and one month, which KPIs can go in a clie
 
 ### Added
 
+- GA4 and Meta syncs record the days they pulled in `meta_source_window`.
 - **`cosmic verdict --period YYYY-MM`** (with the global `--workspace NAME` and `--format json`). It runs reconcile, then for each KPI of the workspace whose sources are connected says `reportable` (with its value for the month) or `withheld` (with the reason, such as "14 orders missing: 787 against 801 (orders_complete)", and `next_checks`). The output names the workspace, the month, each KPI's sources and checks, and each source's last sync and how far back its data reaches.
 - Exit codes: 0 when every KPI can be reported, 3 when any is withheld or there is none to report, 1 for bad input such as `--period banana`.
 - `verdictFor(db, period)` in `src/verdict.ts`, the same shape Cosmic Cloud's adapter uses.
@@ -17,15 +18,15 @@ The period verdict: for one workspace and one month, which KPIs can go in a clie
 Everything comes from what this CLI synced and the checks it ran now. Nothing is read from a caller, and a stored check result is never reused. A KPI is withheld when, for any source it needs:
 - the source is not connected, is syncing, or has not finished a sync since it was connected;
 - its data was pulled through a time before the month ended (the sync's start, or Shopify's cursor: a bulk export's cut-off or the newest change an incremental sync saw), or its last sync is past the freshness limit;
-- its data may not reach the 1st: Shopify limited to 60 days (recorded by a keyed sync, or seen as an oldest order inside that window), a Klaviyo window that starts on or after the 1st (it is stored as dates only) or ends early, GA4 and Meta months older than their last sync's window, or daily rows that start mid-month.
+- its data may not reach the 1st: Shopify limited to 60 days, counted by the clock so a month starting exactly 60 days before the sync is withheld (recorded by a keyed sync, or seen as an oldest order inside that window), a Klaviyo window that starts on or after the 1st (it is stored as dates only) or ends early, a GA4 or Meta month outside the days their syncs actually pulled (recorded at sync time from this release, so a GA4 or Meta workspace synced earlier is withheld until it syncs again), or daily rows that start mid-month.
 
 It is also withheld when any check on its sources failed, or when a table its SQL reads has no verifying check that ran on a window including the month. Each table needs its own check: a passing Klaviyo order count does not certify flow revenue. The Klaviyo and GA4 comparison checks cover only the last `metrics.default_days`, so they vouch only for months inside that window.
 
-A month still running, and one that has not started, hold every KPI back. A checked ratio with nothing to divide by (AOV in a month with no orders) is reportable with no value and a note. Each KPI carries its metric's notes, such as the currency a money value is in. Tolerances changed from the defaults are listed in `settings_changed`.
+A month still running, and one that has not started, hold every KPI back. A checked ratio with nothing to divide by (AOV in a month with no orders) is reportable with no value and a note. Each KPI carries its metric's notes, such as the currency a money value is in. Tolerances and `metrics.default_days` changed from the defaults are listed in `settings_changed`.
 
 ### Not covered yet
 
-- Meta, and every table without a verifying check, is always withheld.
+- Meta and Stripe, and every table without a verifying check, are always withheld. Stripe's two checks count from the same pull they check, and Stripe gives no total of its own, so they guard but do not verify.
 - Point-in-time metrics (MRR, open pipeline), metrics counted from the first Meta day, and margin metrics have no monthly value. They are listed in `not_by_period`.
 - Money values are in each metric's main currency, not converted; the notes say so.
 - Tested against built test databases, not yet against a real client account.

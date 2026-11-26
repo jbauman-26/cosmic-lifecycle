@@ -516,7 +516,7 @@ program.command('sync').description('Pull fresh totals from connected sources, t
         const { property, clientId } = config.ga4!
         const start = new Date(Date.now() - defaultDays() * 86400000).toISOString().slice(0, 10)
         const end = new Date().toISOString().slice(0, 10)
-        results.push(await syncGa4(db, async () => fetchGa4Daily(property, await ga4AccessToken(clientId, ga4Secret!, ga4Refresh!), start, end)))
+        results.push(await syncGa4(db, async () => fetchGa4Daily(property, await ga4AccessToken(clientId, ga4Secret!, ga4Refresh!), start, end), { start, end }))
       } else if (source === 'stripe') {
         const stripe = new Stripe(stripeKey!)
         results.push(await syncStripe(db, { charges: () => stripe.charges(), subscriptions: () => stripe.subscriptions() }))

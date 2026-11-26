@@ -1,6 +1,5 @@
 import { CliError } from './errors.js';
 import { reconcile, tolerances, trustLine, TOLERANCE } from './reconcile.js';
-import { settingValue } from './config.js';
 import { packMetrics } from './metrics.js';
 import { readWorkspace } from './workspace.js';
 import { workspaceName } from './paths.js';
@@ -15,9 +14,6 @@ const VERIFIES_TABLE = {
     fact_flow_daily: ['flow_totals'],
     fact_flow_window: ['flow_totals'],
     fact_ga4_daily: ['ga4_purchases', 'ga4_vs_reference'],
-    fact_stripe_daily: ['stripe_daily_complete'],
-    fact_stripe_subscriptions_daily: ['subscriptions_balance'],
-    fact_stripe_mrr: ['subscriptions_balance'],
     fact_crm_deals_daily: ['deals_complete'],
     fact_crm_contacts_daily: ['contacts_complete'],
 };
@@ -28,12 +24,16 @@ export const tablesOf = (sql) => [...new Set([...sql.matchAll(/FROM (fact_\w+)/g
 // Every check that can fail on a source, for holding its KPIs back.
 const VERIFIES = {
     orders_complete: ['shopify'], klaviyo_orders: ['klaviyo'], flow_totals: ['klaviyo'], ga4_purchases: ['ga4'], ga4_vs_reference: ['ga4'],
-    stripe_daily_complete: ['stripe'], subscriptions_balance: ['stripe'], deals_complete: ['hubspot'], contacts_complete: ['hubspot'],
+    deals_complete: ['hubspot'], contacts_complete: ['hubspot'],
 };
 // Plausibility and internal-consistency checks (two tables built from the same pull). They never make a KPI checked, but a failure still holds it back.
 const GUARDS = {
     orders_vs_cohorts: ['shopify'],
     deals_daily_vs_pulled: ['hubspot'],
+    // Both are counted from the same Stripe pull, so a pull that drops pages passes them. Stripe gives no total of
+    // its own to check against, so no Stripe table is verified yet.
+    stripe_daily_complete: ['stripe'],
+    subscriptions_balance: ['stripe'],
     attributed_share: ['klaviyo'],
     ad_claims: ['meta'],
     cost_coverage: ['shopify'],
@@ -74,6 +74,8 @@ const day = (v) => (v === null || v === undefined ? null : new Date(v).toISOStri
 const dayBefore = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') - n * 86400000).toISOString().slice(0, 10);
 // Sources whose sync pulls only a trailing window (metrics.default_days) and keeps older rows: a month older than
 // the last sync's window may have gaps nobody can see. Stripe and HubSpot rebuild their daily tables from full history.
+// The shipped default of metrics.default_days, the window the comparison checks use.
+const DEFAULT_DAYS = 90;
 const TRAILING_SOURCES = new Set(['ga4', 'meta']);
 async function coverage(db, source, connected, start, end, t, now) {
     const out = (o) => ({ source, connected: true, last_synced_at: null, data_from: null, covers_period: false, reason: null, ...o });
@@ -112,7 +114,8 @@ async function coverage(db, source, connected, start, end, t, now) {
         // oldest order inside that window means the history may have been cut.
         const s = await one(db, `SELECT window_limited FROM meta_shopify_sync WHERE id = 1`).catch(() => ({}));
         const limited = s.window_limited === undefined || s.window_limited === null ? !from || from >= dayBefore(syncDay, 61) : Boolean(s.window_limited);
-        if (limited && start < dayBefore(syncDay, 60))
+        // Shopify's 60 days roll by the clock, so a month starting exactly 60 days before the sync day lost its first hours.
+        if (limited && start <= dayBefore(syncDay, 60))
             return out({ last_synced_at: last, data_from: from, reason: `Shopify may have handed over only the last 60 days of orders (oldest synced: ${from ?? 'none'}; no read_all_orders scope), so this month may be incomplete.` });
     }
     else if (source === 'klaviyo') {
@@ -131,9 +134,15 @@ async function coverage(db, source, connected, start, end, t, now) {
             return out({ last_synced_at: last, reason: `${nameOf(source)} has synced no daily rows yet.` });
         if (from > start)
             return out({ last_synced_at: last, data_from: from, reason: `${nameOf(source)} data starts ${from}, after the month began.` });
-        const window = settingValue('metrics.default_days');
-        if (TRAILING_SOURCES.has(source) && start < dayBefore(syncDay, window)) {
-            return out({ last_synced_at: last, data_from: from, reason: `${nameOf(source)} syncs only the last ${window} days, and this month is older than the last sync's window, so it may have gaps.` });
+        if (TRAILING_SOURCES.has(source)) {
+            // The days the syncs actually pulled, recorded at sync time, not today's metrics.default_days setting.
+            const w = await one(db, `SELECT window_start AS s, window_end AS e FROM meta_source_window WHERE source = $1 AND metric = 'daily'`, [source]);
+            const ws = day(w.s);
+            const we = day(w.e);
+            if (!ws || !we)
+                return out({ last_synced_at: last, data_from: from, reason: `${nameOf(source)} has no recorded sync window (synced before 0.20.0). Sync it again: cosmic sync ${source}.` });
+            if (ws > start || we < dayBefore(end, 1))
+                return out({ last_synced_at: last, data_from: from, reason: `${nameOf(source)} was pulled for ${ws} to ${we}, which does not cover the whole month, so it may have gaps.` });
         }
     }
     return out({ last_synced_at: last, data_from: from, covers_period: true });
@@ -237,7 +246,10 @@ export async function verdictFor(db, period, opts = {}) {
         reportable: kpis.filter((k) => k.status === 'reportable').length,
         withheld: kpis.filter((k) => k.status === 'withheld').length,
         not_by_period: all.filter((m) => !byPeriod(m)).map((m) => m.name),
-        settings_changed: Object.keys(TOLERANCE).filter((k) => t[k] !== TOLERANCE[k]).map((k) => `${k}: ${t[k]} (default ${TOLERANCE[k]})`),
+        settings_changed: [
+            ...Object.keys(TOLERANCE).filter((k) => t[k] !== TOLERANCE[k]).map((k) => `${k}: ${t[k]} (default ${TOLERANCE[k]})`),
+            ...(t.days !== DEFAULT_DAYS ? [`days: ${t.days} (default ${DEFAULT_DAYS})`] : []),
+        ],
     };
 }
 // Exit codes for `cosmic verdict`: 0 every KPI reportable, 3 any withheld or none to report, 1 bad input.
