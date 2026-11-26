@@ -13,6 +13,7 @@ import { keyer, newCustomerKey, plan as shopifyPlan, readSyncState, type Keyer }
 import { fetchGa4Daily, ga4AccessToken } from './sources/ga4.js'
 import { reconcile } from './reconcile.js'
 import { verdictFor, verdictExit, formatVerdict, parsePeriod } from './verdict.js'
+import { syncStripeReport } from './stripe-report.js'
 import { Klaviyo } from './sources/klaviyo.js'
 import { Stripe } from './sources/stripe.js'
 import { MetaAds } from './sources/meta.js'
@@ -519,7 +520,13 @@ program.command('sync').description('Pull fresh totals from connected sources, t
         results.push(await syncGa4(db, async () => fetchGa4Daily(property, await ga4AccessToken(clientId, ga4Secret!, ga4Refresh!), start, end), { start, end }))
       } else if (source === 'stripe') {
         const stripe = new Stripe(stripeKey!)
-        results.push(await syncStripe(db, { charges: () => stripe.charges(), subscriptions: () => stripe.subscriptions() }))
+        const r = await syncStripe(db, { charges: () => stripe.charges(), subscriptions: () => stripe.subscriptions() })
+        // 0.20.1: Stripe's own report for the last finished months, which cosmic verdict holds charge KPIs against.
+        if (r.status !== 'failed') {
+          const rep = await syncStripeReport(db, stripe).catch((e) => ({ status: 'pending' as const, detail: `Stripe's own report could not be read this time: ${e instanceof Error ? e.message : e}` }))
+          r.detail = [r.detail, rep.detail].filter(Boolean).join(' ')
+        }
+        results.push(r)
       } else if (source === 'hubspot') {
         const hs = new HubSpot(hubspotToken!)
         results.push(await syncHubspot(db, { deals: () => hs.deals(), contacts: () => hs.contacts(), total: (o) => hs.total(o) }, { currency: config.hubspot!.currency }))

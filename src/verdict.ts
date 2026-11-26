@@ -4,6 +4,7 @@ import { reconcile, tolerances, trustLine, TOLERANCE, type Check, type CheckStat
 import { packMetrics, type Metric } from './metrics.js'
 import { readWorkspace, type Workspace } from './workspace.js'
 import { workspaceName } from './paths.js'
+import { stripeReportCheck, type ReportCheck } from './stripe-report.js'
 
 // 0.20.0: the period verdict. For one workspace and one calendar month, which KPIs can go in a client
 // report and which must be held back, with the reason and what to check next.
@@ -40,6 +41,9 @@ export type KpiVerdict = {
   unit: Metric['unit']
   status: KpiStatus
   value: number | null
+  // 0.20.1: what a reportable KPI was checked against, when that is the source's own report: "matches Stripe's own
+  // report". Null otherwise.
+  basis: string | null
   sources: string[]
   checks: CheckRef[]
   reason: string | null
@@ -47,6 +51,8 @@ export type KpiVerdict = {
   // The metric's own qualifications, such as which currency a money value is in. Carry them into any report.
   notes: string[]
 }
+export type AsOfKpi = { kpi: string; title: string; unit: Metric['unit']; status: KpiStatus; value: number | null; basis: string | null; checks: CheckRef[]; reason: string | null; next_checks: string[]; notes: string[] }
+export type AsOf = { at: string | null; kpis: AsOfKpi[] }
 export type Verdict = {
   workspace: string
   period: string
@@ -60,6 +66,8 @@ export type Verdict = {
   reportable: number
   withheld: number
   not_by_period: string[]
+  // 0.20.1: point-in-time KPIs such as MRR, as of the last sync. Never a month figure.
+  as_of: AsOf | null
   // Tolerances this workspace set away from the defaults, which loosen or tighten what passes.
   settings_changed: string[]
 }
@@ -206,12 +214,55 @@ const ref = (c: Check): CheckRef => ({ name: c.name, status: c.status, detail: c
 
 // The reason a failing count check gives a person, with its numbers: "14 orders missing: 787 against 801".
 function failReason(c: Check) {
-  if (c.expected !== null && c.actual !== null && c.status === 'fail' && /orders|charges|deals|contacts/.test(c.name)) {
+  if (c.expected !== null && c.actual !== null && c.status === 'fail' && /orders|charges|deals|contacts|stripe_daily/.test(c.name)) {
     const gap = Math.abs(c.expected - c.actual)
-    const what = c.name.startsWith('orders') || c.name === 'klaviyo_orders' ? 'orders' : c.name.split('_')[0]
-    return `${gap} ${what} ${c.actual < c.expected ? 'missing' : 'extra'}: ${c.actual} against ${c.expected} (${c.name}).`
+    const what = c.name.startsWith('orders') || c.name === 'klaviyo_orders' ? 'orders' : c.name === 'stripe_daily_complete' ? 'charges' : (c.name.split('_')[0] ?? c.name)
+    return `${gap} ${gap === 1 ? what.replace(/s$/, '') : what} ${c.actual < c.expected ? 'missing' : 'extra'}: ${c.actual} against ${c.expected} (${c.name}).`
   }
   return `${c.name} failed: ${c.detail}`
+}
+
+// 0.20.1: point-in-time KPIs, reported as of the last sync and never as a month figure. MRR is reportable as of a
+// sync when that sync read subscriptions, the subscription count it pulled balances (subscriptions_balance), it is
+// fresh, and the snapshot is from that sync's day.
+const AS_OF_KPIS: Record<string, string> = {
+  stripe_mrr: `SELECT mrr AS value FROM fact_stripe_mrr WHERE date = $1::date ORDER BY active_subscriptions DESC, currency LIMIT 1`,
+}
+
+async function asOfVerdict(db: Tx, metrics: Metric[], checks: Check[], connected: string[] | undefined, t: Tolerances, now: number): Promise<AsOf> {
+  const run = await one(db, `SELECT started_at, finished_at, status FROM meta_sync_run WHERE source = 'stripe' ORDER BY started_at DESC LIMIT 1`)
+  // The time Stripe was read: a sync reads at its start.
+  const good = await one(db, `SELECT started_at FROM meta_sync_run WHERE source = 'stripe' AND status IN ('ok', 'warning') ORDER BY started_at DESC LIMIT 1`)
+  // Written by every Stripe sync from 0.20.1: 1 when that sync read subscriptions, 0 when the key could not.
+  const read = (await db.query(`SELECT value FROM meta_source_total WHERE source = 'stripe' AND metric = 'subscriptions_read'`))[0]
+  const at = iso(good.started_at)
+  const balance = checks.find((c) => c.name === 'subscriptions_balance')
+  const kpis: AsOfKpi[] = []
+  for (const m of metrics) {
+    const reasons: string[] = []
+    const next: string[] = []
+    if (connected && !connected.includes('stripe')) reasons.push('Stripe is not connected.')
+    if (run.status === 'running') reasons.push('Stripe is still syncing.')
+    if (!at) reasons.push('Stripe has not finished a sync.')
+    else if ((now - Date.parse(at)) / 86400000 > t.freshnessDays) reasons.push(`Stripe last synced ${at.slice(0, 10)}, past the ${t.freshnessDays}-day freshness limit.`)
+    if (at && !read) reasons.push('Stripe synced before 0.20.1 recorded whether subscriptions were read. Sync it again.')
+    else if (at && Number(read!.value) !== 1) reasons.push('The latest Stripe sync did not read subscriptions. The key may lack read access to subscriptions.')
+    if (!balance || balance.status !== 'pass') reasons.push(balance ? `subscriptions_balance ${balance.status === 'fail' ? 'failed' : 'did not run'}: ${balance.detail}` : 'subscriptions_balance did not run.')
+    if (reasons.length) next.push('cosmic sync stripe, then cosmic verdict again')
+    let value: number | null = null
+    if (!reasons.length) {
+      const r = await one(db, AS_OF_KPIS[m.name]!, [at!.slice(0, 10)])
+      if (r.value === null || r.value === undefined) reasons.push(`No ${m.title} snapshot from the last sync's day.`)
+      else value = Number(r.value)
+    }
+    const ok = !reasons.length
+    kpis.push({
+      kpi: m.name, title: m.title, unit: m.unit, status: ok ? 'reportable' : 'withheld', value,
+      basis: ok ? `as of ${at}` : null, checks: balance ? [ref(balance)] : [], reason: ok ? null : reasons.join(' '), next_checks: next,
+      notes: [...(m.notes ?? []), `As of ${at ?? 'no sync'}, from Stripe's subscription pull. A point in time, not a figure for any month.`],
+    })
+  }
+  return { at, kpis }
 }
 
 export type VerdictOptions = { now?: number; tolerances?: Tolerances; workspace?: Workspace; connected?: string[]; name?: string }
@@ -242,7 +293,10 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
   for (const s of sources) cover.set(s, await coverage(db, s, connected, start, end, t, now))
 
   const kpis: KpiVerdict[] = []
+  let reportCheck: ReportCheck | undefined
   for (const m of metrics) {
+    const stripeChecks: CheckRef[] = []
+    const notesExtra: string[] = []
     const mine = checks.filter((c) => m.needs.some((s) => touches(c.name, s)))
     const reasons: string[] = []
     const next: string[] = []
@@ -261,7 +315,30 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
     }
     // Every table the KPI reads needs its own verifying check, run on a window that includes this month.
     const checkStart = dayBefore(t.today ?? new Date(now).toISOString().slice(0, 10), t.days)
+    let fromStripeReport = false
     for (const table of tablesOf(m.sql)) {
+      if (table === 'fact_stripe_daily') {
+        // 0.20.1: Stripe charge KPIs are held against Stripe's own report (its balance ledger), never against checks
+        // counted from the same charges pull.
+        const uncovered = [...m.sql.matchAll(/\b(failed_charges|new_customers|returning_charges|guest_charges)\b/g)].map((x) => x[1]!)
+        if (uncovered.length) {
+          reasons.push(`${m.title} uses ${[...new Set(uncovered)].join(', ')}, which Stripe's own report does not cover (it covers charge counts, gross and net), so it is not checked.`)
+          continue
+        }
+        reportCheck ??= await stripeReportCheck(db, period, start, end)
+        stripeChecks.push({ name: 'stripe_own_report', status: reportCheck.status, detail: reportCheck.detail, expected: reportCheck.expected, actual: reportCheck.actual })
+        if (reportCheck.status === 'fail') {
+          reasons.push(reportCheck.detail)
+          next.push('cosmic sync stripe, then compare the charges list with Stripe\'s dashboard for the month')
+        } else if (reportCheck.status === 'skipped') {
+          reasons.push(reportCheck.detail)
+          next.push('add the read permission "Report runs and report types" to the Stripe key, then cosmic sync stripe')
+        } else if (/\bnet\b|\brefunded\b/.test(m.sql.replace(/fact_stripe_daily/g, '')) && !reportCheck.netChecked) {
+          reasons.push(`${m.title} uses net after refunds, and Stripe's own report does not reach the last sync yet, so net is not compared. ${reportCheck.detail}`)
+          next.push('cosmic sync stripe again later, once Stripe\'s report covers the last sync')
+        } else fromStripeReport = true
+        continue
+      }
       const names = VERIFIES_TABLE[table]
       if (!names) {
         reasons.push(`No check verifies ${table} yet, so ${m.title} is not checked.`)
@@ -286,10 +363,11 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
       const r = await one(db, periodSql(m.sql), [start, end])
       value = r.value === null || r.value === undefined ? null : Number(r.value)
     }
+    if (status === 'reportable' && fromStripeReport) notesExtra.push("Matched with Stripe's own report on charge count, gross and refunds. Disputes and fees are not part of that match.")
     kpis.push({
-      kpi: m.name, title: m.title, unit: m.unit, status, value, sources: m.needs, checks: mine.map(ref),
+      kpi: m.name, title: m.title, unit: m.unit, status, value, basis: status === 'reportable' && fromStripeReport ? "matches Stripe's own report" : null, sources: m.needs, checks: [...mine.map(ref), ...stripeChecks],
       // A checked month can still have no value: a ratio with nothing to divide by, such as AOV with no orders.
-      notes: [...(m.notes ?? []), ...(status === 'reportable' && value === null ? ['No value this month: there is nothing to divide by (for example, no orders). The data behind it was checked.'] : [])],
+      notes: [...(m.notes ?? []), ...notesExtra, ...(status === 'reportable' && value === null ? ['No value this month: there is nothing to divide by (for example, no orders). The data behind it was checked.'] : [])],
       reason: reasons.length ? [...new Set(reasons)].join(' ') : null, next_checks: [...new Set(next)],
     })
   }
@@ -304,6 +382,7 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
     reportable: kpis.filter((k) => k.status === 'reportable').length,
     withheld: kpis.filter((k) => k.status === 'withheld').length,
     not_by_period: all.filter((m) => !byPeriod(m)).map((m) => m.name),
+    as_of: all.some((m) => m.name in AS_OF_KPIS) ? await asOfVerdict(db, all.filter((m) => m.name in AS_OF_KPIS), checks, connected, t, now) : null,
     settings_changed: [
       ...(Object.keys(TOLERANCE) as (keyof typeof TOLERANCE)[]).filter((k) => t[k] !== TOLERANCE[k]).map((k) => `${k}: ${t[k]} (default ${TOLERANCE[k]})`),
       ...(t.days !== DEFAULT_DAYS ? [`days: ${t.days} (default ${DEFAULT_DAYS})`] : []),
@@ -318,7 +397,11 @@ export const verdictExit = (v: Verdict) => (v.kpis.length && !v.withheld ? 0 : V
 export function formatVerdict(v: Verdict) {
   const lines = [`${v.workspace}, ${v.period} (${v.period_state === 'complete' ? 'complete month' : v.period_state === 'in_progress' ? 'still running' : 'not started'}): ${v.reportable} reportable, ${v.withheld} withheld.`]
   for (const k of v.kpis) {
-    lines.push(k.status === 'reportable' ? `REPORT ${k.kpi}: ${k.value ?? 'no value'}` : `HOLD   ${k.kpi}: ${k.reason}`)
+    lines.push(k.status === 'reportable' ? `REPORT ${k.kpi}: ${k.value ?? 'no value'}${k.basis ? ` (${k.basis})` : ''}` : `HOLD   ${k.kpi}: ${k.reason}`)
+  }
+  if (v.as_of?.kpis.length) {
+    lines.push('', `Point in time, not for ${v.period}:`)
+    for (const k of v.as_of.kpis) lines.push(k.status === 'reportable' ? `AS OF  ${k.kpi}: ${k.value} (${k.basis})` : `HOLD   ${k.kpi}: ${k.reason}`)
   }
   if (!v.kpis.length) lines.push('No KPIs to report: connect a source first. Next: cosmic doctor')
   if (v.settings_changed.length) lines.push(`Tolerances changed from the defaults: ${v.settings_changed.join(', ')}.`)

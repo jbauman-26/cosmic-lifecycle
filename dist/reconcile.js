@@ -74,10 +74,11 @@ const round = (n) => Math.round(n * 100) / 100;
 const num = (v) => (v === null || v === undefined ? 0 : Number(v));
 export function compare(name, expected, actual, tolerancePct, label) {
     const diffPct = round(pct(expected, actual));
-    const status = diffPct <= tolerancePct ? 'pass' : 'fail';
+    // 0.20.1: a zero tolerance means the counts are equal. A rounded percent would let 1 in 20,000 pass.
+    const status = (tolerancePct === 0 ? expected === actual : diffPct <= tolerancePct) ? 'pass' : 'fail';
     const detail = status === 'pass'
         ? `${label}: ${actual} against ${expected}, within ${tolerancePct}%.`
-        : `${label}: ${actual} against ${expected}, off by ${diffPct}%. Do not trust reports built on this until it is fixed.`;
+        : `${label}: ${actual} against ${expected}, off by ${diffPct ? `${diffPct}%` : Math.abs(expected - actual)}. Do not trust reports built on this until it is fixed.`;
     return { name, status, expected, actual, diffPct, detail };
 }
 const skip = (name, detail) => ({ name, status: 'skipped', expected: null, actual: null, diffPct: null, detail });

@@ -256,13 +256,14 @@ describe('verdictFor: each KPI needs the check for its own data (review findings
     expect(kpi(v, 'ga4_sessions').reason).toContain('no recorded sync window')
   })
 
-  it('Stripe has no independent count to check against, so its KPIs are withheld (review finding)', async () => {
+  it("without Stripe's own report, Stripe KPIs are withheld (review finding)", async () => {
     const charge = (i: number) => ({ id: `ch${i}`, created: Date.parse(`${LAST}-10T12:00:00Z`) / 1000, amount: 5000, amount_refunded: 0, currency: 'usd', status: 'succeeded', customer: `cus${i}` })
     await syncStripe(db, { charges: async () => [charge(1), charge(2)], subscriptions: async () => null })
     const v = await verdictFor(db, LAST, opts({ connected: ['stripe'], workspace: { type: 'saas', reference: 'stripe', referenceSet: true, title: 'SaaS' } }))
     const k = kpi(v, 'stripe_net_revenue')
     expect(k.status).toBe('withheld')
-    expect(k.reason).toContain('No check verifies fact_stripe_daily')
+    // 0.20.1: Stripe charge KPIs need Stripe's own report; same-pull checks are not enough.
+    expect(k.reason).toContain("Stripe's own report for")
   })
 
   it('days changed from the default are listed too (review finding)', async () => {

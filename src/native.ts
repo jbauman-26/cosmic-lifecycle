@@ -34,7 +34,7 @@ export const NATIVE_TABLES: Record<NativeSource, string[]> = {
   shopify: ['fact_orders_daily', 'fact_cohort_monthly'],
   klaviyo: ['dim_flow', 'dim_campaign', 'dim_segment', 'fact_flow_daily', 'fact_flow_window', 'fact_klaviyo_orders_daily'],
   ga4: ['fact_ga4_daily'],
-  stripe: ['fact_stripe_daily', 'fact_stripe_subscriptions_daily', 'fact_stripe_mrr'],
+  stripe: ['fact_stripe_daily', 'fact_stripe_subscriptions_daily', 'fact_stripe_mrr', 'meta_stripe_report_month', 'meta_stripe_report_run'],
   meta: ['fact_meta_ads_daily'],
   hubspot: ['fact_crm_deals_daily', 'fact_crm_pipeline_open', 'fact_crm_contacts_daily'],
   'google-ads': ['fact_google_ads_campaign_daily', 'fact_google_ads_ad_group_daily'],
