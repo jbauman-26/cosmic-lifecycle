@@ -160,7 +160,7 @@ Follow this playbook in order, then stop and report what is live. Do not invent 
 ## What it is
 
 A free CLI that gets the user's marketing data ready for their AI agent, with
-numbers it can trust: for a founder or SaaS team, a marketer or freelancer, a
+numbers checked before it quotes them: for a founder or SaaS team, a marketer or freelancer, a
 creator, an agency client or an online store. The command is cosmic; lifecycle is
 the same command. It syncs totals into a database the user owns, checks them
 against the business's source of truth, and finds what to fix. It never sends a message, stores no
