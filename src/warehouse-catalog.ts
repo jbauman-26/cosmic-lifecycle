@@ -2885,12 +2885,72 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "slug": "uppromote",
     "name": "UpPromote",
     "category": "affiliate",
-    "readiness": "planned",
+    "readiness": "built",
     "why": "#83 of 100 tools Shopify stores use. Ranking position is judgment. No StoreLeads count verified (slug guess 404). Large-install Shopify affiliate app. Source: https://uppromote.com/",
-    "docs": "https://docs.uppromote.com/",
-    "credentials": [],
+    "docs": "https://aff-api.uppromote.com/docs/v2/get-affiliates-21170049e0",
+    "credentials": [
+      {
+        "name": "api_key",
+        "label": "API key",
+        "help": "In UpPromote open Settings, then Integrations, scroll to API Key and choose Get API Key. Paste the whole key, since the connector sends it exactly as UpPromote issues it. This connector only sends GET requests."
+      }
+    ],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "config": {
+      "client": {
+        "base_url": "https://aff-api.uppromote.com/api/v2/",
+        "headers": {
+          "Accept": "application/json"
+        },
+        "auth": {
+          "type": "api_key",
+          "name": "Authorization",
+          "api_key": "{secret:api_key}",
+          "location": "header"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "affiliates",
+          "endpoint": {
+            "path": "affiliates",
+            "params": {
+              "per_page": 100
+            },
+            "data_selector": "data",
+            "paginator": {
+              "type": "page_number",
+              "page_param": "page",
+              "base_page": 1,
+              "total_path": null,
+              "stop_after_empty_page": true
+            }
+          }
+        },
+        {
+          "name": "programs",
+          "endpoint": {
+            "path": "programs",
+            "params": {
+              "per_page": 100
+            },
+            "data_selector": "data",
+            "paginator": {
+              "type": "page_number",
+              "page_param": "page",
+              "base_page": 1,
+              "total_path": null,
+              "stop_after_empty_page": true
+            }
+          }
+        }
+      ]
+    },
+    "notes": "Base https://aff-api.uppromote.com/api/v2/, from the documented path GET /api/v2/affiliates on the public API host. Auth is the Authorization header carrying the API key on its own, with no Bearer prefix, which the overview states plainly as Authorization: <YOUR_API_KEY>. Responses wrap rows in a data array alongside status and message, so the selector is data. Paging is page number based with per_page and page starting at 1; the response exposes no total count, so the pager stops after an empty page. Two resources are built, affiliates and programs. Coupons, customers and payouts are documented and left out because only these two references were read. Affiliates carry first name, last name and email, which the shared rules remove. Fixture values are illustrative, built from the documented response schema."
   },
   {
     "slug": "awin",
