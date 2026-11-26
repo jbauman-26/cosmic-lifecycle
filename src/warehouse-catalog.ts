@@ -3051,12 +3051,68 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "slug": "stay-ai",
     "name": "Stay AI",
     "category": "subscriptions",
-    "readiness": "planned",
+    "readiness": "built",
     "why": "#92 of 100 tools Shopify stores use. Ranking position is judgment. No StoreLeads count checked. Growing Recharge alternative named by Solo Media Group in the core DTC stack. Source: https://solomediagroup.com/blogs/insights/best-shopify-apps-for-dtc-brands",
-    "docs": "https://docs.stay.ai/",
-    "credentials": [],
+    "docs": "https://docs.stay.ai/reference/query-all-subscriptions",
+    "credentials": [
+      {
+        "name": "access_token",
+        "label": "API key",
+        "help": "In the Stay AI Merchant Portal open API Keys and click New API Key, then copy it. Grant only the read scope this connector needs. This connector only sends GET requests."
+      }
+    ],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "config": {
+      "client": {
+        "base_url": "https://api.retextion.com/api/v2/",
+        "headers": {
+          "Accept": "application/json"
+        },
+        "auth": {
+          "type": "api_key",
+          "name": "X-RETEXTION-ACCESS-TOKEN",
+          "api_key": "{secret:access_token}",
+          "location": "header"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "subscriptions",
+          "endpoint": {
+            "path": "subscriptions",
+            "params": {
+              "pageSize": 100
+            },
+            "data_selector": "data",
+            "paginator": {
+              "type": "page_number",
+              "page_param": "page",
+              "total_path": "total"
+            }
+          }
+        },
+        {
+          "name": "customers",
+          "endpoint": {
+            "path": "customers",
+            "params": {
+              "pageSize": 100
+            },
+            "data_selector": "data",
+            "paginator": {
+              "type": "page_number",
+              "page_param": "page",
+              "total_path": "total"
+            }
+          }
+        }
+      ]
+    },
+    "notes": "Base https://api.retextion.com/api/v2/, confirmed in the endpoint reference. Auth is the X-RETEXTION-ACCESS-TOKEN header, and keys are created in the Stay AI Merchant Portal with scopes. Both list endpoints page by number: page starts at 1 and pageSize takes 5 to 100, and the body returns total, page, pageSize and data, so the page number pager stops on total. Two resources are built, subscriptions and customers. The subscription detail and cancel endpoints are single-record or write operations and were left out. Webhook subscription endpoints are configuration, not store data. Fixture values are illustrative, built from documented field names."
   },
   {
     "slug": "smartrr",
