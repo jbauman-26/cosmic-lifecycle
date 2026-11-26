@@ -1,0 +1,76 @@
+{
+  "source": "https://developer.ordergroove.com/reference/rest-rpc-api/subscriptions/list",
+  "note": "Illustrative rows following the documented count, next, previous and results envelope, not vendor sample records.",
+  "resources": {
+    "subscriptions": {
+      "response": {
+        "count": 2,
+        "next": null,
+        "previous": null,
+        "results": [
+          {
+            "public_id": "0ff0f88accc511e8b6c0bc764e106cf4",
+            "customer": "00026001",
+            "product": "0070067689",
+            "subscription_type": "replenishment",
+            "quantity": 4,
+            "components": [],
+            "extra_data": {}
+          },
+          {
+            "public_id": "1aa1f99bddd622f9c7d1cd875f217dg5",
+            "customer": "00026002",
+            "product": "0070067690",
+            "subscription_type": "replenishment",
+            "quantity": 2,
+            "components": [],
+            "extra_data": {}
+          }
+        ]
+      }
+    },
+    "customers": {
+      "response": {
+        "count": 2,
+        "next": null,
+        "previous": null,
+        "results": [
+          {
+            "public_id": "394aee16d61611e88b4abc764e1043b0",
+            "merchant": "ac4f7938383a11e89ecbbc764e1107f2",
+            "email": "priya@natarajan.example",
+            "first_name": "Priya",
+            "last_name": "Natarajan",
+            "phone": "+14155550142",
+            "created": "2026-08-01T09:00:00Z"
+          },
+          {
+            "public_id": "495bff27e72722f99c5bcd875f2154c1",
+            "merchant": "ac4f7938383a11e89ecbbc764e1107f2",
+            "email": "sam.okafor@northfield.example",
+            "first_name": "Sam",
+            "last_name": "Okafor",
+            "phone": "+14155550188",
+            "created": "2026-08-08T09:00:00Z"
+          }
+        ]
+      }
+    }
+  },
+  "personal": [
+    "priya@natarajan.example",
+    "Priya",
+    "Natarajan",
+    "+14155550142",
+    "sam.okafor@northfield.example",
+    "Sam",
+    "Okafor",
+    "+14155550188"
+  ],
+  "kept": [
+    "\"public_id\": \"0ff0f88accc511e8b6c0bc764e106cf4\"",
+    "replenishment",
+    "\"quantity\": 4",
+    "2026-08-01T09:00:00Z"
+  ]
+}

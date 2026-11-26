@@ -3129,12 +3129,67 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "slug": "ordergroove",
     "name": "Ordergroove",
     "category": "subscriptions",
-    "readiness": "planned",
+    "readiness": "built",
     "why": "#94 of 100 tools Shopify stores use. Ranking position is judgment. No count. Enterprise subscription platform with a Shopify app. Source: https://developer.ordergroove.com/",
-    "docs": "https://developer.ordergroove.com/",
-    "credentials": [],
+    "docs": "https://developer.ordergroove.com/reference/rest-rpc-api/subscriptions/list",
+    "credentials": [
+      {
+        "name": "api_key",
+        "label": "API key",
+        "help": "In the Ordergroove merchant portal open the API keys area and copy a key, or create one. Up to ten keys exist per store. For reporting across all customers the key needs the Bulk Operations permission, otherwise it only returns one customer's records. This connector only sends GET requests."
+      }
+    ],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "config": {
+      "client": {
+        "base_url": "https://restapi.ordergroove.com/",
+        "headers": {
+          "Accept": "application/json",
+          "X-OG-API-VERSION": "2"
+        },
+        "auth": {
+          "type": "api_key",
+          "name": "x-api-key",
+          "api_key": "{secret:api_key}",
+          "location": "header"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "public_id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "subscriptions",
+          "endpoint": {
+            "path": "subscriptions/",
+            "params": {
+              "page_size": 100
+            },
+            "data_selector": "results",
+            "paginator": {
+              "type": "json_link",
+              "next_url_path": "next"
+            }
+          }
+        },
+        {
+          "name": "customers",
+          "endpoint": {
+            "path": "customers/",
+            "params": {
+              "page_size": 100
+            },
+            "data_selector": "results",
+            "paginator": {
+              "type": "json_link",
+              "next_url_path": "next"
+            }
+          }
+        }
+      ]
+    },
+    "notes": "Base https://restapi.ordergroove.com/, confirmed in the list references. Auth is the x-api-key header with up to ten keys per store. The docs require X-OG-API-VERSION 2 for current cursor behaviour, so it is sent on every request, and page_size takes up to 100 with a default of 10. The body carries count, next, previous and results, and next is an absolute URL such as https://restapi.ordergroove.com/subscriptions/?page=3, so the json_link pager follows next. The results wrapper is confirmed on the subscriptions reference; the customers reference uses the same list shape and was followed rather than re-read line by line. The Bulk Operations permission is the thing to check before a sync: without it a key returns only one customer's records, which looks like thin data rather than an error. Two resources are built. Items and the order resources are documented and left out because their list references were not read. Fixture values are illustrative, built from documented field names."
   },
   {
     "slug": "narvar",
