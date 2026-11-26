@@ -2,7 +2,7 @@
 
 Your marketing data, ready for your AI agent.
 
-Connect your marketing tools to Claude Code, Cursor or Codex and get numbers you can trust. Cosmic CLI pulls your ads, analytics, payments, email and CRM data into a database you own (on your computer, or your own Postgres), checks the numbers against your source of truth, and puts a trust line on every answer. When two tools disagree, your agent hears it before you repeat the number to anyone.
+Connect your marketing tools to Claude Code, Cursor or Codex. Cosmic CLI pulls your ads, analytics, payments, email and CRM data into a database you own (on your computer, or your own Postgres), checks the numbers against your source of truth, and puts a trust line on every answer. When two tools disagree, your agent hears it before you repeat the number to anyone.
 
 For anyone who markets something: founders and SaaS teams, marketers and freelancers, creators, agencies running many clients, and online stores. Free and MIT licensed, no account. The command is `cosmic`; `lifecycle` is the same command and keeps working. The npm package is `cosmic-lifecycle`.
 
