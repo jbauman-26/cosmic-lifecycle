@@ -3123,7 +3123,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://docs.smartrr.com/",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "No public API reference is published. The documented developer surface is the help center's install guides (https://help.smartrr.com/docs/getting-started/implementation/installing-smartrr-on-a-headless-store), and there is no merchant-facing REST reference to build from. CSV import meanwhile."
   },
   {
     "slug": "ordergroove",
