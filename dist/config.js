@@ -30,6 +30,9 @@ const Config = z
     update: z.object({ check: z.boolean() }).partial().optional(),
     // Where Cosmic Cloud lives. The store token is in the keychain, never here.
     cloud: z.object({ url: z.string() }).partial().optional(),
+    // 0.19.0: Stripe or Shopify read from tables a person's own Fivetran or Airbyte loads. The database URL
+    // stays in the environment variable named here, never in this file.
+    pipeline: z.object({ sources: z.record(z.string(), z.object({ tool: z.enum(['fivetran', 'airbyte']), schema: z.string(), urlEnv: z.string(), connectedAt: z.string() })).default({}) }).optional(),
     // Warehouse sources: settings only. Their keys live in the keychain or the environment.
     warehouse: z
         .object({
@@ -231,6 +234,16 @@ const readRawConfigSafe = () => {
     }
 };
 // Removes a whole top-level section, such as a native source a person disconnected.
+// 0.19.0: forget a pipeline source (Stripe or Shopify read from a person's own Fivetran or Airbyte tables).
+export function removePipelineSource(name) {
+    const raw = readRawConfig();
+    const sources = raw.pipeline?.sources;
+    if (!sources || !(name in sources))
+        return false;
+    delete sources[name];
+    writeRaw(raw);
+    return true;
+}
 export function removeConfigSection(name) {
     const raw = readRawConfig();
     if (!(name in raw))

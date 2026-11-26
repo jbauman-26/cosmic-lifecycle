@@ -30,7 +30,9 @@ export async function doctor() {
     const ws = readWorkspace();
     const store = ws.type === 'shopify' && ws.reference === 'shopify';
     if (!store) {
-        const has = ws.reference === 'none' ? false : ws.reference === 'shopify' ? Boolean(config.shopify) : Boolean(config[ws.reference]);
+        // 0.19.0: a source read from the person's own Fivetran or Airbyte tables counts as connected.
+        const piped = Boolean(config.pipeline?.sources?.[ws.reference]);
+        const has = ws.reference === 'none' ? false : piped || (ws.reference === 'shopify' ? Boolean(config.shopify) : Boolean(config[ws.reference]));
         if (ws.reference === 'none')
             checks.push({ name: 'reference', ok: true, detail: 'No source of truth set, so numbers are not checked against one.', next: 'lifecycle config set workspace.reference stripe (or hubspot, shopify, ga4)' });
         else

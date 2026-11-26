@@ -26,7 +26,8 @@ export function connectedNow() {
         // read that carries no source blocks still checks against what is connected.
         if (Array.isArray(raw.connected))
             return raw.connected.filter((s) => typeof s === 'string');
-        return ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'google-ads', 'hubspot'].filter((s) => raw[s] !== undefined && raw[s] !== null);
+        const piped = Object.keys(raw.pipeline?.sources ?? {});
+        return ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'google-ads', 'hubspot'].filter((s) => (raw[s] !== undefined && raw[s] !== null) || piped.includes(s));
     }
     catch {
         return undefined;

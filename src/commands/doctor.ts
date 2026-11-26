@@ -34,7 +34,9 @@ export async function doctor(): Promise<{ healthy: boolean; checks: Check[] }> {
   const ws = readWorkspace()
   const store = ws.type === 'shopify' && ws.reference === 'shopify'
   if (!store) {
-    const has = ws.reference === 'none' ? false : ws.reference === 'shopify' ? Boolean(config.shopify) : Boolean((config as Record<string, unknown>)[ws.reference])
+    // 0.19.0: a source read from the person's own Fivetran or Airbyte tables counts as connected.
+    const piped = Boolean((config.pipeline?.sources as Record<string, unknown> | undefined)?.[ws.reference])
+    const has = ws.reference === 'none' ? false : piped || (ws.reference === 'shopify' ? Boolean(config.shopify) : Boolean((config as Record<string, unknown>)[ws.reference]))
     if (ws.reference === 'none') checks.push({ name: 'reference', ok: true, detail: 'No source of truth set, so numbers are not checked against one.', next: 'lifecycle config set workspace.reference stripe (or hubspot, shopify, ga4)' })
     else checks.push({ name: 'reference', ok: has, detail: has ? `${REFERENCE_NAME[ws.reference]} is connected as the source of truth.` : `${REFERENCE_NAME[ws.reference]} is this workspace's source of truth and is not connected.`, ...(has ? {} : { next: `lifecycle connect ${ws.reference}` }) })
   }

@@ -163,12 +163,14 @@ export async function sourceStatus(config: Config | null, hasKey: (slug: string)
   // A store sees the 0.13 list until it connects HubSpot.
   const list = readWorkspace().type === 'shopify' && !config?.hubspot ? CATALOG : ALL_NATIVE
   const native = list.map((s) => {
-    const configured = Boolean(config?.[s.slug])
-    const connected = configured && hasKey(s.slug)
+    // 0.19.0: Stripe or Shopify read from the person's own Fivetran or Airbyte tables needs no key of ours.
+    const piped = (config?.pipeline?.sources as Record<string, { tool: string; schema: string }> | undefined)?.[s.slug]
+    const configured = Boolean(config?.[s.slug]) || Boolean(piped)
+    const connected = Boolean(piped) || (configured && hasKey(s.slug))
     const l = last.get(s.slug)
     return {
       slug: s.slug,
-      name: s.name,
+      name: piped ? `${s.name} (through ${piped.tool === 'fivetran' ? 'Fivetran' : 'Airbyte'} tables in ${piped.schema})` : s.name,
       connected,
       lastSync: l?.at ?? null,
       lastStatus: l?.status ?? null,

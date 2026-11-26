@@ -35,7 +35,8 @@ export function connectedNow(): string[] | undefined {
     // A host that hands keys per command (Cosmic Cloud) names the store's connected sources here, so a
     // read that carries no source blocks still checks against what is connected.
     if (Array.isArray(raw.connected)) return raw.connected.filter((s: unknown): s is string => typeof s === 'string')
-    return ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'google-ads', 'hubspot'].filter((s) => raw[s] !== undefined && raw[s] !== null)
+    const piped = Object.keys((raw.pipeline as { sources?: Record<string, unknown> } | undefined)?.sources ?? {})
+    return ['shopify', 'klaviyo', 'ga4', 'stripe', 'meta', 'google-ads', 'hubspot'].filter((s) => (raw[s] !== undefined && raw[s] !== null) || piped.includes(s))
   } catch {
     return undefined
   }

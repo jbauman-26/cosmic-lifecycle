@@ -36,6 +36,9 @@ customer records, and has no account or server of ours in the path.
    Not a Shopify store? Run lifecycle docs workspaces, connect the source of truth
    it names (Stripe or HubSpot), and skip the Klaviyo and Shopify steps below.
    For a SaaS product, lifecycle demo --type saas shows the checks on Stripe data.
+   If the user already loads Stripe or Shopify with Fivetran or Airbyte into their own Postgres,
+   read those tables instead of connecting the API again:
+     lifecycle connect pipeline --tool fivetran --source stripe --schema stripe --url-env PIPELINE_DATABASE_URL
 4. Connect ONE source first, the one the user relies on most. For a store, Klaviyo
    takes about 2 minutes:
      lifecycle sources catalog

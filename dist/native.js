@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readRawConfig, removeConfigSection } from './config.js';
+import { readRawConfig, removeConfigSection, removePipelineSource } from './config.js';
 import { CliError } from './errors.js';
 import { deleteSecret, envName } from './secrets.js';
 import { clearState } from './shopify-state.js';
@@ -77,7 +77,8 @@ export async function disconnectNative(source, opts = {}) {
     const hadConfig = source in readRawConfig();
     const keysRemoved = NATIVE_SECRETS[source].filter((name) => remove(name));
     const stillInEnvironment = NATIVE_SECRETS[source].map(envName).filter((env) => Boolean(process.env[env]));
-    if (!hadConfig && !keysRemoved.length && !stillInEnvironment.length) {
+    const hadPipeline = removePipelineSource(source);
+    if (!hadConfig && !hadPipeline && !keysRemoved.length && !stillInEnvironment.length) {
         throw new CliError(`${source} is not connected.`, 'lifecycle sources list', 'not_connected');
     }
     const configRemoved = removeConfigSection(source);
@@ -108,5 +109,5 @@ export async function disconnectNative(source, opts = {}) {
         opts.deleteData ? `Deleted its data from ${dataDeleted.join(', ')}.` : `Its data is kept in ${NATIVE_TABLES[source].join(', ')}. Add --delete-data to remove it.`,
         stillInEnvironment.length ? `${stillInEnvironment.join(' and ')} ${stillInEnvironment.length === 1 ? 'is' : 'are'} still set in the environment, so sync will keep using ${stillInEnvironment.length === 1 ? 'it' : 'them'}. Unset ${stillInEnvironment.length === 1 ? 'it' : 'them'} too.` : '',
     ].filter(Boolean);
-    return { source, disconnected: true, configRemoved, keysRemoved, stillInEnvironment, dataDeleted, note: notes.join(' ') };
+    return { source, disconnected: true, configRemoved: configRemoved || hadPipeline, keysRemoved, stillInEnvironment, dataDeleted, note: notes.join(' ') };
 }
