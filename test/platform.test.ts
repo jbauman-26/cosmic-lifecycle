@@ -43,7 +43,7 @@ describe('config', () => {
     expect(getSetting('deploy.repo')).toBeUndefined()
     expect(listSettings().map((s) => s.key)).toEqual([
       'registry.uri', 'deploy.repo', 'update.check', 'cloud.url',
-      'reconcile.tolerance.klaviyo_orders', 'reconcile.tolerance.ga4_purchases', 'reconcile.attributed_share_flag', 'reconcile.freshness_days',
+      'reconcile.tolerance.klaviyo_orders', 'reconcile.tolerance.ga4_purchases', 'reconcile.attributed_share_flag', 'reconcile.min_difference', 'reconcile.freshness_days',
       'warehouse.free_text', 'query.row_cap', 'metrics.default_days', 'shopify.bulk_min_orders', 'shopify.export_wait_seconds',
       'shopify.full_check_days', 'shopify.overlap_days',
     ])
