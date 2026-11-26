@@ -3044,12 +3044,55 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "slug": "inventory-planner",
     "name": "Inventory Planner",
     "category": "ops-erp",
-    "readiness": "planned",
+    "readiness": "built",
     "why": "#78 of 100 tools Shopify stores use. Ranking position is judgment. No count. Common demand planning add-on for $1M-$10M Shopify brands. Source: https://www.inventory-planner.com/",
-    "docs": "https://help.inventory-planner.com/en/articles/2565547-public-api",
-    "credentials": [],
+    "docs": "https://help.inventory-planner.com/en/articles/674662-inventory-planner-public-apis",
+    "credentials": [
+      {
+        "name": "api_key",
+        "label": "API key",
+        "help": "In Inventory Planner open Settings, then API, and choose Generate key. The key is sent in the Authorization header exactly as issued, with no Bearer prefix. Create the key with read-only scope where Inventory Planner offers it, so this connection can read your data but never change it. This connector only sends GET requests."
+      }
+    ],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "config": {
+      "client": {
+        "base_url": "https://app.inventory-planner.com/",
+        "headers": {
+          "Accept": "application/json"
+        },
+        "auth": {
+          "type": "api_key",
+          "name": "Authorization",
+          "api_key": "{secret:api_key}",
+          "location": "header"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "variants",
+          "endpoint": {
+            "path": "api/v1/variants",
+            "params": {
+              "limit": 100
+            },
+            "data_selector": "variants",
+            "paginator": {
+              "type": "page_number",
+              "page_param": "page",
+              "base_page": 0,
+              "total_path": null,
+              "stop_after_empty_page": true
+            }
+          }
+        }
+      ]
+    },
+    "notes": "Base https://app.inventory-planner.com/, stated on the public API article. Auth is the Authorization header carrying the account API key on its own, with no Bearer prefix, and the key is generated per user under Settings then API. Collection responses wrap the rows in a meta document and an entity array named after the resource, so variants sit at variants and meta carries name, total, count, limit and page. Paging is limit and page, and page starts at 0, so the page number pager begins at zero and walks until a page comes back empty. One resource is built, variants, which the Reports API article uses as its example with fields, limit and page. The stock orders API is POST only and is not readable here, and the other report collections are documented per endpoint and were not read. Variant rows are product and replenishment data, not consumer personal data, so this fixture carries no personal list. Fixture values are illustrative, built from the documented response example."
   },
   {
     "slug": "a2x",
