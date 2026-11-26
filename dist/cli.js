@@ -12,6 +12,7 @@ import { changedSinceQuery, fetchOrderCount, fetchOrders, shopifyToken } from '.
 import { keyer, newCustomerKey, plan as shopifyPlan, readSyncState } from './shopify-state.js';
 import { fetchGa4Daily, ga4AccessToken } from './sources/ga4.js';
 import { reconcile } from './reconcile.js';
+import { verdictFor, verdictExit, formatVerdict, parsePeriod } from './verdict.js';
 import { Klaviyo } from './sources/klaviyo.js';
 import { Stripe } from './sources/stripe.js';
 import { MetaAds } from './sources/meta.js';
@@ -647,6 +648,22 @@ program.command('reconcile').description('Prove the numbers agree across sources
         emit(format(), r, () => r.checks.map((c) => `${mark[c.status]} ${c.name}: ${c.detail}`).join('\n'));
         if (!r.passed)
             process.exitCode = 1;
+    }
+    finally {
+        await db.close();
+    }
+}));
+program.command('verdict').description('Which KPIs can go in a report for one month, and which are held back and why')
+    .requiredOption('--period <YYYY-MM>', 'The calendar month, such as 2026-10')
+    .addHelpText('after', '\nExit codes: 0 every KPI can be reported, 3 any KPI is held back (or there is none to report), 1 bad input or an error.\nUse the global --workspace NAME for a client workspace.')
+    .action(write('verdict', async (opts) => {
+    parsePeriod(opts.period); // bad input fails before the database is opened
+    const db = await openDb();
+    try {
+        await migrate(db);
+        const v = await verdictFor(db, opts.period);
+        emit(format(), v, () => formatVerdict(v));
+        process.exitCode = verdictExit(v);
     }
     finally {
         await db.close();

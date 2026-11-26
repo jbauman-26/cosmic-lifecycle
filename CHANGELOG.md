@@ -2,6 +2,34 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.20.0 (2026-11-25)
+
+The period verdict: for one workspace and one month, which KPIs can go in a client report and which are held back, with the reason and the next step.
+
+### Added
+
+- **`cosmic verdict --period YYYY-MM`** (with the global `--workspace NAME` and `--format json`). It runs reconcile, then for each KPI of the workspace whose sources are connected says `reportable` (with its value for the month) or `withheld` (with the reason, such as "14 orders missing: 787 against 801 (orders_complete)", and `next_checks`). The output names the workspace, the month, each KPI's sources and checks, and each source's last sync and how far back its data reaches.
+- Exit codes: 0 when every KPI can be reported, 3 when any is withheld or there is none to report, 1 for bad input such as `--period banana`.
+- `verdictFor(db, period)` in `src/verdict.ts`, the same shape Cosmic Cloud's adapter uses.
+
+### How a KPI is decided
+
+Everything comes from what this CLI synced and the checks it ran now. Nothing is read from a caller, and a stored check result is never reused. A KPI is withheld when, for any source it needs:
+- the source is not connected, is syncing, or has not finished a sync since it was connected;
+- its last good sync finished before the month ended, or is past the freshness limit;
+- its data starts after the month began (Shopify without `read_all_orders`, a Klaviyo window that does not cover the month, daily rows that start mid-month);
+- no check that verifies the source's own count ran and passed, or
+- any check on the source failed.
+
+A month still running, and one that has not started, hold every KPI back.
+
+### Not covered yet
+
+- Meta, and every source without a check that verifies its count, is always withheld ("No check verifies Meta's numbers in this workspace yet").
+- Point-in-time metrics (MRR, open pipeline), metrics counted from the first Meta day, and margin metrics have no monthly value. They are listed in `not_by_period`.
+- Comparison checks (Klaviyo and GA4 against Shopify) cover the last 90 days, not the month asked for.
+- Tested against built test databases, not yet against a real client account.
+
 ## 0.19.0 (2026-11-25)
 
 Bring your own pipeline: read Stripe or Shopify from tables your own Fivetran or Airbyte already loads into your Postgres.

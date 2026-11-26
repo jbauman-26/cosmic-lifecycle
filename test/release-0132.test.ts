@@ -838,7 +838,7 @@ describe.skipIf(!uvAvailable())('a local warehouse, end to end', () => {
 describe('docs and release', () => {
   it('is version 0.13.2 everywhere a version is written', () => {
     // 0.14.0: was toBe('0.13.2'); a version bump has to change it. package.json and the lock must still agree.
-    expect(VERSION).toMatch(/^0\.(13\.2|1[4-9]\.\d+)$/)
+    expect(VERSION).toMatch(/^0\.(13\.2|1[4-9]\.\d+|2\d\.\d+)$/)
     expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe(VERSION)
     expect(readFileSync('CHANGELOG.md', 'utf8')).toMatch(/^## 0\.13\.2 \(2026-11-24\)/m)
   })
