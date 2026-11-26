@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
+import { symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
@@ -87,7 +88,7 @@ describe('0.17.0 owner notes', () => {
 describe('0.17.0', () => {
   it('is version 0.17.0 everywhere, with a changelog entry and the metric definitions file', async () => {
     const { VERSION } = await import('../src/version.js')
-    expect(VERSION).toMatch(/^0\.17\.\d+$/)
+    expect(VERSION).toMatch(/^0\.1[78]\.\d+$/)
     expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe(VERSION)
     const log = readFileSync('CHANGELOG.md', 'utf8')
     expect(log).toMatch(/^## 0\.17\.0 \(2026-11-25\)/m)
@@ -137,5 +138,24 @@ describe('0.17.1 contribution margin names ad spend it leaves out', () => {
     const r: any = await computeMargin(db, new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10), 30)
     expect(r.missing.join(' | ')).toMatch(/Google Ads spend: synced but not subtracted yet/)
     expect(r.missing.join(' | ')).not.toMatch(/TikTok/)
+  })
+})
+
+describe('0.18.0 the cosmic command', () => {
+  it('ships cosmic, lifecycle and cosmic-lifecycle as the same binary, and help names the one you typed', () => {
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
+    expect(pkg.bin).toEqual({ cosmic: 'dist/cli.js', lifecycle: 'dist/cli.js', 'cosmic-lifecycle': 'dist/cli.js' })
+    const dir = mkdtempSync(join(tmpdir(), 'lc-0180-bin-'))
+    const env = { ...process.env, LIFECYCLE_HOME: home, LIFECYCLE_NO_KEYCHAIN: '1', LIFECYCLE_NO_UPDATE_CHECK: '1' }
+    for (const name of ['cosmic', 'lifecycle']) {
+      symlinkSync(join(process.cwd(), 'dist/cli.js'), join(dir, name))
+      const r = spawnSync(process.execPath, [join(dir, name), '--help'], { env, encoding: 'utf8' })
+      expect(r.status).toBe(0)
+      expect(r.stdout).toMatch(new RegExp(`^Usage: ${name} `))
+      expect(r.stdout).toMatch(/your marketing data, ready for your AI agent/)
+      const v = spawnSync(process.execPath, [join(dir, name), '--version'], { env, encoding: 'utf8' })
+      expect(v.stdout.trim()).toBe(pkg.version)
+    }
+    rmSync(dir, { recursive: true, force: true })
   })
 })

@@ -77,8 +77,9 @@ import { pickType } from './commands/init.js'
 import { configPath, workspaceName, workspacesDir } from './paths.js'
 import { existsSync, readdirSync } from 'node:fs'
 
-const program = new Command('lifecycle')
-  .description('Cosmic CLI: checked marketing numbers your agent can quote. Syncs your sources into a database you own, checks them against the source of truth, and puts a trust line on every number. For a store, a SaaS product, a B2B pipeline, an agency client or a creator business. Read-only. Nothing sends.')
+// 0.18.0: `cosmic` is the short name; `lifecycle` and `cosmic-lifecycle` keep working. Help shows the name you typed.
+const program = new Command(/(^|[\\/])cosmic(\.js)?$/.test(process.argv[1] ?? '') ? 'cosmic' : 'lifecycle')
+  .description('Cosmic CLI: your marketing data, ready for your AI agent. Connects your ads, analytics, payments, email and CRM tools to a database you own, checks the numbers against your source of truth, and puts a trust line on every one. Works with Claude Code, Cursor and Codex over MCP. For founders, marketers, creators, agencies and stores. Free, no account. Read-only. Nothing sends.')
   .version(VERSION)
   .option('--format <format>', 'text or json', 'text')
   .option('--workspace <name>', 'use a named workspace, such as one per agency client. Same as LIFECYCLE_WORKSPACE')

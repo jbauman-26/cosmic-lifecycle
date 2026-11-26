@@ -150,7 +150,7 @@ Run it every day from your own GitHub:
 `,
   quickstart: `# Cosmic CLI: agent setup playbook
 
-This is the setup guide for any coding or chat agent installing Cosmic CLI (npm package cosmic-lifecycle, command lifecycle).
+This is the setup guide for any coding or chat agent installing Cosmic CLI (npm package cosmic-lifecycle, command cosmic or lifecycle).
 A person with the CLI installed starts it by pasting one line into their agent:
 
   Set up Cosmic CLI by following the output of lifecycle docs quickstart
@@ -159,9 +159,10 @@ Follow this playbook in order, then stop and report what is live. Do not invent 
 
 ## What it is
 
-A free CLI that gives an agent marketing numbers it can trust, for a Shopify
-store, another kind of store, a SaaS product, a B2B pipeline, an agency client or
-a creator business. It syncs totals into a database the user owns, checks them
+A free CLI that gets the user's marketing data ready for their AI agent, with
+numbers it can trust: for a founder or SaaS team, a marketer or freelancer, a
+creator, an agency client or an online store. The command is cosmic; lifecycle is
+the same command. It syncs totals into a database the user owns, checks them
 against the business's source of truth, and finds what to fix. It never sends a message, stores no
 customer records, and has no account or server of ours in the path.
 
@@ -181,9 +182,12 @@ customer records, and has no account or server of ours in the path.
      lifecycle demo
 3. Set up the local database, saying what kind of business this is:
      lifecycle init --type shopify    (or ecommerce, saas, b2b, agency, creator)
+   Ask the user what they market and which tools they already use, then pick the type.
    Not a Shopify store? Run lifecycle docs workspaces, connect the source of truth
    it names (Stripe or HubSpot), and skip the Klaviyo and Shopify steps below.
-4. Connect ONE source first. For a store, Klaviyo takes about 2 minutes:
+   For a SaaS product, lifecycle demo --type saas shows the checks on Stripe data.
+4. Connect ONE source first, the one the user relies on most. For a store, Klaviyo
+   takes about 2 minutes:
      lifecycle sources catalog
      lifecycle docs setup
      lifecycle connect klaviyo --key-env KLAVIYO_READ_KEY

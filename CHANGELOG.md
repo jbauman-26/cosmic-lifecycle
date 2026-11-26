@@ -2,6 +2,23 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.18.0 (2026-11-25)
+
+For anyone who markets something, not only stores, and a shorter command.
+
+### Added
+
+- **`cosmic` command.** The package installs `cosmic`, `lifecycle` and `cosmic-lifecycle`, all the same program. `--help` names the one you typed. Every existing `lifecycle` command, script and MCP setup keeps working.
+
+### Changed
+
+- README, `llms.txt` (the agent playbook) and `--help` are written for anyone who markets: founders and SaaS teams, marketers and freelancers, creators, agencies and stores. The README lists the 14 native sources, says the warehouse catalog has 100 more with readiness shown for each (30 with connector code, 70 planned), and repeats that only Shopify, Klaviyo and Stripe have synced against real accounts.
+- The agent playbook asks what the user markets and which tools they use before picking a workspace type, and points SaaS users at `lifecycle demo --type saas`.
+
+### What is proven and what is not
+
+- Typecheck and the full suite pass, including a test that runs `cosmic --help` and `lifecycle --help` through symlinks the way npm installs them. A clean install from the public release ran `cosmic --version`, `cosmic demo` and `cosmic mcp`.
+
 ## 0.17.1 (2026-11-25)
 
 Fixes found while filming the launch video, and a README a non-developer can follow.
