@@ -64,7 +64,7 @@ export const PERSONAL_RULES = {
     // Whole keys that hold a person, written without separators: ship_to is shipto.
     personKeys: [
         'shipto', 'shipfrom', 'returnto', 'billto', 'soldto', 'sendto', 'deliverto', 'createdby', 'updatedby', 'modifiedby', 'deletedby', 'approvedby',
-        'closedby', 'assignedto', 'assignedby', 'repliedby', 'submittedby', 'postedby', 'writtenby', 'reportedby', 'requestedby', 'ownedby',
+        'closedby', 'assignedto', 'assignedby', 'assignee', 'repliedby', 'submittedby', 'postedby', 'writtenby', 'reportedby', 'requestedby', 'ownedby',
     ],
     peopleTables: [
         'user', 'customer', 'contact', 'member', 'subscriber', 'profile', 'people', 'person', 'recipient', 'agent', 'operator', 'reviewer',

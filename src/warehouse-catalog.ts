@@ -2699,12 +2699,55 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "slug": "richpanel",
     "name": "Richpanel",
     "category": "helpdesk",
-    "readiness": "planned",
+    "readiness": "built",
     "why": "#67 of 100 tools Shopify stores use. Ranking position is judgment. No StoreLeads count checked. DTC-focused Gorgias alternative. Source: https://www.richpanel.com/",
-    "docs": "https://developer.richpanel.com/",
-    "credentials": [],
+    "docs": "https://developer.richpanel.com/reference/list-tasks",
+    "credentials": [
+      {
+        "name": "api_key",
+        "label": "Helpdesk API key",
+        "help": "In Richpanel open Settings, then API, and generate a helpdesk API key. It goes in the x-richpanel-key header. A Returns API key is a different credential and will not work here. Create the key with read-only scope where Richpanel offers it, so this connection can read your data but never change it."
+      }
+    ],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "config": {
+      "client": {
+        "base_url": "https://api.richpanel.com/v1/",
+        "headers": {
+          "Accept": "application/json"
+        },
+        "auth": {
+          "type": "api_key",
+          "name": "x-richpanel-key",
+          "api_key": "{secret:api_key}",
+          "location": "header"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "task_id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "tasks",
+          "endpoint": {
+            "path": "tasks",
+            "params": {
+              "limit": 100
+            },
+            "data_selector": "tasks",
+            "paginator": {
+              "type": "page_number",
+              "page_param": "page",
+              "base_page": 1,
+              "total_path": null,
+              "stop_after_empty_page": true
+            }
+          }
+        }
+      ]
+    },
+    "notes": "Base https://api.richpanel.com/v1, from the servers block in the OpenAPI definition on the reference pages. Auth is the x-richpanel-key header carrying a helpdesk API key, which the authentication page states. The Returns API is a separate product with its own key and is GraphQL only, so it is not part of this connector. Tasks list at GET /tasks, take page, limit, sort_by and sort_order, and return the rows in a tasks array with the page number beside it, so the page number pager walks forward until a page comes back empty. One resource is built, tasks. Metrics, teams, macros and scenarios are documented and left out because only the tasks reference was read in full. A task carries an assignee, which is a member of staff, and staff names are stripped the same way customer names are. Fixture values are illustrative, built from the documented response example."
   },
   {
     "slug": "kustomer",

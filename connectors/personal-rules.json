@@ -135,6 +135,7 @@
     "closedby",
     "assignedto",
     "assignedby",
+    "assignee",
     "repliedby",
     "submittedby",
     "postedby",
