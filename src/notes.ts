@@ -42,6 +42,8 @@ export function addNote(text: string, metric?: string | null): Note {
   const m = metric?.trim() || null
   if (m && !/^[a-z][a-z0-9_]{2,63}$/.test(m)) throw new CliError(`Not a metric name: ${m}`, 'lifecycle metrics list', 'bad_value')
   const notes = readNotes()
+  const same = notes.find((n) => n.text.toLowerCase() === t.toLowerCase() && n.metric === m)
+  if (same) throw new CliError(`That note is already saved as ${same.id}.`, 'lifecycle notes list', 'duplicate')
   if (notes.length >= MAX_NOTES) throw new CliError(`This workspace already has ${MAX_NOTES} notes.`, 'lifecycle notes remove <id>', 'bad_value')
   const note: Note = { id: randomBytes(3).toString('hex'), text: t, metric: m, added: new Date().toISOString() }
   writeNotes([...notes, note])

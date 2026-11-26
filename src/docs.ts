@@ -281,7 +281,7 @@ any other type it names the source of truth:
 - unreferenced: the numbers were not checked against a source of truth, because
   none is set or it has not synced, or the only one is GA4. The line says which,
   in plain words. This is not a failure: each number is still its tool's own count.
-- unchecked: reconcile has not run.
+- unchecked: reconcile has not run, or every check was skipped because no source has synced.
 
 Change the source of truth with:
   lifecycle config set workspace.reference stripe   (or hubspot, shopify, ga4, none)

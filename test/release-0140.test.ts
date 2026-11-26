@@ -120,7 +120,8 @@ describe('the trust gate for each workspace type', () => {
       const b = await reconcile(db, tolerances(), ws('shopify'))
       expect(b.checks.map((c) => c.name)).toEqual(a.map((c) => c.name))
       expect(b.checks.map((c) => c.name)).not.toContain('reference')
-      expect((await trustLine(db)).line).toBe('Numbers passed reconciliation, with 7 checks skipped.')
+    // 0.17.1: every check skipped is unchecked, never passed.
+      expect((await trustLine(db)).line).toBe('Nothing checked yet: all 7 checks were skipped because their sources have not synced. Treat these numbers as unchecked.')
     } finally {
       await db.close()
     }

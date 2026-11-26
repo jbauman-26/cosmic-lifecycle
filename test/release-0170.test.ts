@@ -10,6 +10,9 @@ import { migrate, wrapPglite, type Db } from '../src/db.js'
 import { buildMcpServer } from '../src/mcp.js'
 import { addNote, notesFor, notesPath, readNotes, removeNote, withNotes } from '../src/notes.js'
 import { METRICS } from '../src/metrics.js'
+import { trustLine } from '../src/reconcile.js'
+import { setCost } from '../src/costs.js'
+import { computeMargin } from '../src/margin.js'
 
 let home: string
 let db: Db
@@ -43,6 +46,8 @@ describe('0.17.0 owner notes', () => {
     expect(() => addNote('')).toThrow(/needs some text/)
     expect(() => addNote('x'.repeat(501))).toThrow(/at most 500/)
     expect(() => addNote('ok', 'Bad Name')).toThrow(/Not a metric name/)
+    expect(() => addNote('black friday 2025 is a one-off SPIKE', 'shopify_net_revenue')).toThrow(/already saved/)
+    expect(addNote('Black Friday 2025 is a one-off spike').metric).toBeNull()
     const tables = await db.query(`SELECT table_name FROM information_schema.tables WHERE table_name LIKE '%note%'`)
     expect(tables).toEqual([])
   })
@@ -82,8 +87,8 @@ describe('0.17.0 owner notes', () => {
 describe('0.17.0', () => {
   it('is version 0.17.0 everywhere, with a changelog entry and the metric definitions file', async () => {
     const { VERSION } = await import('../src/version.js')
-    expect(VERSION).toBe('0.17.0')
-    expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe('0.17.0')
+    expect(VERSION).toMatch(/^0\.17\.\d+$/)
+    expect(JSON.parse(readFileSync('package-lock.json', 'utf8')).version).toBe(VERSION)
     const log = readFileSync('CHANGELOG.md', 'utf8')
     expect(log).toMatch(/^## 0\.17\.0 \(2026-11-25\)/m)
     expect(log).not.toMatch(/[–—]/)
@@ -112,4 +117,25 @@ describe('0.17.0 MCP on a fresh install', () => {
     expect(names).toEqual(expect.arrayContaining(['metric', 'reconcile', 'owner_notes', 'query']))
     expect(existsSync(join(fresh, 'config.json'))).toBe(false)
   }, 20000)
+})
+
+describe('0.17.1 trust line', () => {
+  it('never says passed when every check was skipped', async () => {
+    const put = (name: string, status: string) => db.query(`INSERT INTO meta_reconcile_result VALUES ($1,$2,NULL,NULL,NULL,'x',now())`, [name, status])
+    await put('a', 'skipped'); await put('b', 'skipped')
+    expect(await trustLine(db)).toEqual({ status: 'unchecked', line: 'Nothing checked yet: all 2 checks were skipped because their sources have not synced. Treat these numbers as unchecked.' })
+    await put('c', 'pass')
+    expect(await trustLine(db)).toMatchObject({ status: 'passed', line: 'Numbers passed reconciliation, with 2 checks skipped.' })
+  })
+})
+
+describe('0.17.1 contribution margin names ad spend it leaves out', () => {
+  it('lists Google Ads spend as not subtracted when it synced in the window', async () => {
+    setCost('currency', 'USD')
+    const day = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10)
+    await db.query(`INSERT INTO fact_google_ads_campaign_daily VALUES ($1,'a','c','camp',120,1000,10,1,50,'USD',now())`, [day])
+    const r: any = await computeMargin(db, new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10), 30)
+    expect(r.missing.join(' | ')).toMatch(/Google Ads spend: synced but not subtracted yet/)
+    expect(r.missing.join(' | ')).not.toMatch(/TikTok/)
+  })
 })
