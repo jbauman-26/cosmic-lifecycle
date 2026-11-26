@@ -8,6 +8,7 @@ Run: python3 scripts/gen-warehouse-catalog.py
 """
 import json
 import pathlib
+import re
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 research = json.loads((ROOT / "connectors/research-2026-11-07.json").read_text())
@@ -42,7 +43,7 @@ SKIPPED = {
     "goaffpro": "Its public documentation deployment is misconfigured: every spec path returns the Swagger UI page, and the bundled initializer points at the petstore example schema, so no readable contract for auth or response bodies exists (https://api.goaffpro.com/docs/admin/). The merchant access token is created under Settings, Developer, Access Tokens.",
     "shiphero": "Shiphero exposes a GraphQL API only, at developer.shiphero.com. This runner builds dlt REST specs, so a GraphQL query surface needs runner work first (https://developer.shiphero.com/).",
     "nosto": "Nosto exposes a GraphQL API for its product and session data, not a REST list surface, so it needs runner work first (https://docs.nosto.com/).",
-    "appstle": "The only public surface is a Swagger UI for subscription-admin endpoints that look internal to Appstle's own partner integrations, with no documented merchant API key flow (https://subscription-admin.appstle.com/).",
+    "appstle-subscriptions": "The only public surface is a Swagger UI for subscription-admin endpoints that look internal to Appstle's own partner integrations, with no documented merchant API key flow (https://subscription-admin.appstle.com/).",
     "klarna": "The Order Management read endpoint is real: GET https://api.klarna.com/ordermanagement/v1/orders answers 401 with a Basic challenge rather than 404. But Klarna publishes no readable contract for its list parameters or response bodies in the current docs index, so no fixture could be verified against a source (https://docs.klarna.com/api/).",
     "afterpay": "Afterpay is a checkout and settlement rail. Its merchant API drives payment sessions and settlements behind Afterpay or Cash App onboarding review, and no documented read list of a merchant's own orders is published for self serve access (https://developers.cash.app/afterpay).",
     "junip": "No official API documentation exists. Searches return only third party scrapers of the Junip widget, and Junip publishes no developer reference (https://junip.co/).",
@@ -96,7 +97,7 @@ EXTRA = [
     },
     {
         "slug": "customer-io", "name": "Customer.io", "category": "email-sms",
-        "why": "Added in 0.14.0 for SaaS workspaces, as the lifecycle email tool many of them use instead of Klaviyo. No usage count on file.",
+        "why": "Added in 0.14.0 for SaaS workspaces, as the cosmic email tool many of them use instead of Klaviyo. No usage count on file.",
         "docs": "https://docs.customer.io/api/app/",
     },
     {
@@ -105,7 +106,7 @@ EXTRA = [
         "docs": "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/",
         "notes": "Planned. Salesforce needs an OAuth connected app and SOQL queries, not a REST list spec, so it waits for the sign-in flow in the Cosmic AI app. CSV import of daily pipeline totals meanwhile.",
     },
-    # LinkedIn Ads (added here in 0.14.0) is now a built-in source: lifecycle connect linkedin-ads.
+    # LinkedIn Ads (added here in 0.14.0) is now a built-in source: cosmic connect linkedin-ads.
     {
         "slug": "posthog", "name": "PostHog", "category": "product-analytics",
         "why": "Added in 0.14.0 for SaaS workspaces that track signups in product analytics. No usage count on file.",
@@ -195,13 +196,13 @@ for r in research:
             e["stripFields"] = spec["strip_fields"]
     else:
         if r["api"] == "no":
-            note = "No public data API. Bring daily totals in with lifecycle sources import."
+            note = "No public data API. Bring daily totals in with cosmic sources import."
         elif r["api"] == "partner":
             note = "API is partner-only or needs vendor approval. CSV import meanwhile."
         elif "oauth" in r["auth"].lower() and "key" not in r["auth"].lower():
             note = "Needs an OAuth sign-in flow, not built yet. CSV import meanwhile."
         else:
-            note = "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+            note = "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
         note = SKIPPED.get(slug, note)
         e = {
             "slug": slug, "name": r["name"], "category": CATEGORY[r["category"]], "readiness": "planned",
@@ -227,6 +228,13 @@ for x in EXTRA:
         }
     entries.append(e)
 
+# Research notes still say "lifecycle <command>" in places. The product is Cosmic,
+# and a shipped hint reading lifecycle sends people to a command that no longer exists.
+for e in entries:
+    for key in ("why", "notes"):
+        if e.get(key):
+            e[key] = re.sub(r"\blifecycle (sources|warehouse|email|connect)\b", r"cosmic \1", e[key])
+
 if specs:
     raise SystemExit(f"Specs with no research row: {sorted(specs)}")
 
@@ -236,7 +244,7 @@ out = f"""// Generated by scripts/gen-warehouse-catalog.py from connectors/resea
 import type {{ WarehouseSource }} from './warehouse.js'
 
 export const READINESS_LEGEND =
-  'Readiness: native = built in with reconcile checks. tested = warehouse connector run on a real account. built = connector written from the vendor API docs, not yet run on a real account. planned = no connector yet; use lifecycle sources import meanwhile.'
+  'Readiness: native = built in with reconcile checks. tested = warehouse connector run on a real account. built = connector written from the vendor API docs, not yet run on a real account. planned = no connector yet; use cosmic sources import meanwhile.'
 
 export const WAREHOUSE_CATALOG: WarehouseSource[] = {body}
 """

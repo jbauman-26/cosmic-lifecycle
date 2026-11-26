@@ -3,7 +3,7 @@
 import type { WarehouseSource } from './warehouse.js'
 
 export const READINESS_LEGEND =
-  'Readiness: native = built in with reconcile checks. tested = warehouse connector run on a real account. built = connector written from the vendor API docs, not yet run on a real account. planned = no connector yet; use lifecycle sources import meanwhile.'
+  'Readiness: native = built in with reconcile checks. tested = warehouse connector run on a real account. built = connector written from the vendor API docs, not yet run on a real account. planned = no connector yet; use cosmic sources import meanwhile.'
 
 export const WAREHOUSE_CATALOG: WarehouseSource[] = [
   {
@@ -1846,7 +1846,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "",
     "credentials": [],
     "params": [],
-    "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+    "notes": "No public data API. Bring daily totals in with cosmic sources import."
   },
   {
     "slug": "tidio",
@@ -1930,7 +1930,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://developers.appstle.com/",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "The only public surface is a Swagger UI for subscription-admin endpoints that look internal to Appstle's own partner integrations, with no documented merchant API key flow (https://subscription-admin.appstle.com/)."
   },
   {
     "slug": "seal-subscriptions",
@@ -2186,7 +2186,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://www.refersion.dev/",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
   },
   {
     "slug": "goaffpro",
@@ -2331,7 +2331,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "",
     "credentials": [],
     "params": [],
-    "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+    "notes": "No public data API. Bring daily totals in with cosmic sources import."
   },
   {
     "slug": "searchspring",
@@ -2342,7 +2342,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://docs.searchspring.com/",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
   },
   {
     "slug": "nosto",
@@ -2426,7 +2426,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://developer.avalara.com/api-reference/avatax/rest/v2/",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
   },
   {
     "slug": "amazon-ads",
@@ -2448,7 +2448,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "",
     "credentials": [],
     "params": [],
-    "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+    "notes": "No public data API. Bring daily totals in with cosmic sources import."
   },
   {
     "slug": "reconvert",
@@ -2459,7 +2459,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "",
     "credentials": [],
     "params": [],
-    "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+    "notes": "No public data API. Bring daily totals in with cosmic sources import."
   },
   {
     "slug": "zipify-ocu",
@@ -2470,7 +2470,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "",
     "credentials": [],
     "params": [],
-    "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+    "notes": "No public data API. Bring daily totals in with cosmic sources import."
   },
   {
     "slug": "loyaltylion",
@@ -3103,7 +3103,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "",
     "credentials": [],
     "params": [],
-    "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+    "notes": "No public data API. Bring daily totals in with cosmic sources import."
   },
   {
     "slug": "taxjar",
@@ -3125,7 +3125,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://integrations.impact.com/impact-brand/reference",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
   },
   {
     "slug": "social-snowball",
@@ -3240,7 +3240,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "",
     "credentials": [],
     "params": [],
-    "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+    "notes": "No public data API. Bring daily totals in with cosmic sources import."
   },
   {
     "slug": "gempages",
@@ -3251,7 +3251,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "",
     "credentials": [],
     "params": [],
-    "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+    "notes": "No public data API. Bring daily totals in with cosmic sources import."
   },
   {
     "slug": "shogun",
@@ -3262,7 +3262,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "",
     "credentials": [],
     "params": [],
-    "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+    "notes": "No public data API. Bring daily totals in with cosmic sources import."
   },
   {
     "slug": "printful",
@@ -3637,7 +3637,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "",
     "credentials": [],
     "params": [],
-    "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+    "notes": "No public data API. Bring daily totals in with cosmic sources import."
   },
   {
     "slug": "replo",
@@ -3648,7 +3648,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "",
     "credentials": [],
     "params": [],
-    "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+    "notes": "No public data API. Bring daily totals in with cosmic sources import."
   },
   {
     "slug": "tapcart",
@@ -3670,7 +3670,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://docs.wonderment.com/",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
   },
   {
     "slug": "littledata",
@@ -3681,7 +3681,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "",
     "credentials": [],
     "params": [],
-    "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+    "notes": "No public data API. Bring daily totals in with cosmic sources import."
   },
   {
     "slug": "brevo",
@@ -3907,7 +3907,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
         }
       ]
     },
-    "notes": "One row per deal and per contact with its HubSpot id, stage, original source, dates and amount. HubSpot returns only the properties named in the request, so no name, email, phone or company is ever asked for. hs_analytics_source_data_1 is HubSpot's source detail, such as a campaign or referring site; on some portals it holds a page URL. Full refresh merged on id every run. The built-in hubspot source (lifecycle connect hubspot) keeps daily counts with reconcile checks; use this one when you want row-level pipeline analysis in SQL.",
+    "notes": "One row per deal and per contact with its HubSpot id, stage, original source, dates and amount. HubSpot returns only the properties named in the request, so no name, email, phone or company is ever asked for. hs_analytics_source_data_1 is HubSpot's source detail, such as a campaign or referring site; on some portals it holds a page URL. Full refresh merged on id every run. The built-in hubspot source (cosmic connect hubspot) keeps daily counts with reconcile checks; use this one when you want row-level pipeline analysis in SQL.",
     "stripFields": [
       "dealname",
       "company",
@@ -4160,7 +4160,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "name": "Customer.io",
     "category": "email-sms",
     "readiness": "built",
-    "why": "Added in 0.14.0 for SaaS workspaces, as the lifecycle email tool many of them use instead of Klaviyo. No usage count on file.",
+    "why": "Added in 0.14.0 for SaaS workspaces, as the cosmic email tool many of them use instead of Klaviyo. No usage count on file.",
     "docs": "https://docs.customer.io/api/app/",
     "credentials": [
       {

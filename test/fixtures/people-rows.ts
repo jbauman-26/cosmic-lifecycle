@@ -261,4 +261,79 @@ export const PEOPLE_FIXTURES: Record<string, Record<string, PeopleFixture>> = {
       kept: ['FX-801', 'Fulfilled', 'FX-SKU'],
     },
   },
+  'yotpo-loyalty': {
+    recent_customers: {
+      row: {"yotpo_customer_id": 123456789, "email": "priya@natarajan.example", "first_name": "Priya", "last_name": "Natarajan", "phone_number": "+14155550142", "third_party_id": "3698392793225", "points_balance": 420, "referral_code": "PR-77", "points_expire_at": "2027-10-25T08:23:33.000Z", "joined_at": "2026-01-05T08:00:00.000Z"},
+      gone: ["priya@natarajan.example", "Priya", "Natarajan", "+14155550142"],
+      kept: ["123456789"],
+    },
+  },
+  'tidio': {
+    contacts: {
+      row: {"id": "a1b4ca4c-1108-4432-b256-1e4cf2bf6f9e", "name": "Priya Natarajan", "email": "priya@natarajan.example", "phone": "+14155550142", "country_code": "US", "city": "Austin", "created_at": "2026-09-01T10:00:00Z", "updated_at": "2026-09-02T10:00:00Z", "tags": ["vip"], "distinct_id": "d-1001"},
+      gone: ["Priya Natarajan", "priya@natarajan.example", "+14155550142"],
+      kept: ["a1b4ca4c-1108-4432-b256-1e4cf2bf6f9e", "2026-09-01T10:00:00Z"],
+    },
+    operators: {
+      row: {"id": "op-1", "name": "Dana Reyes", "email": "dana@natarajan.example", "role": "admin", "created_at": "2026-01-05T08:00:00Z"},
+      gone: ["Dana Reyes", "dana@natarajan.example"],
+      kept: ["op-1", "2026-01-05T08:00:00Z"],
+    },
+  },
+  'cin7': {
+    contacts: {
+      row: {"id": "c-1", "name": "Priya Natarajan", "email": "priya@natarajan.example", "phone": "+14155550142", "company": "Cedarline Goods", "type": "Customer", "createdDate": "2026-08-01T09:00:00Z"},
+      gone: ["Priya Natarajan", "priya@natarajan.example", "+14155550142"],
+      kept: ["c-1"],
+    },
+  },
+  'stay-ai': {
+    customers: {
+      row: {"id": 4401, "email": "priya@natarajan.example", "first_name": "Priya", "last_name": "Natarajan", "created_at": "2026-08-04T10:00:00Z", "subscription_count": 1},
+      gone: ["priya@natarajan.example", "Priya", "Natarajan"],
+      kept: ["4401", "2026-08-04T10:00:00Z"],
+    },
+  },
+  'ordergroove': {
+    customers: {
+      row: {"public_id": "394aee16d61611e88b4abc764e1043b0", "merchant": "ac4f7938383a11e89ecbbc764e1107f2", "email": "priya@natarajan.example", "first_name": "Priya", "last_name": "Natarajan", "phone": "+14155550142", "created": "2026-08-01T09:00:00Z"},
+      gone: ["priya@natarajan.example", "Priya", "Natarajan", "+14155550142"],
+      kept: ["2026-08-01T09:00:00Z"],
+    },
+  },
+  'activecampaign': {
+    contacts: {
+      row: {"id": "12", "email": "priya@natarajan.example", "first_name": "Priya", "last_name": "Natarajan", "phone": "+14155550142", "cdate": "2026-11-01T09:12:44-05:00", "udate": "2026-11-20T11:02:10-05:00", "orgid": "3", "deleted": "0"},
+      gone: ["priya@natarajan.example", "Priya", "Natarajan", "+14155550142"],
+      kept: ["12"],
+    },
+  },
+  'kit': {
+    subscribers: {
+      row: {"id": 9101, "first_name": "Priya", "email_address": "priya@natarajan.example", "state": "active", "created_at": "2026-10-02T09:14:00Z", "tagged_at": "2026-11-01T09:00:00Z", "fields": {"last_name": "Natarajan"}},
+      gone: ["priya@natarajan.example", "Priya", "Natarajan"],
+      kept: ["9101", "2026-10-02T09:14:00Z"],
+    },
+  },
+  'avalara-avatax': {
+    contacts: {
+      row: {"id": 5501, "companyId": 91001, "contactType": "Billing", "firstName": "Priya", "lastName": "Natarajan", "email": "priya@natarajan.example", "phone": "+14155550142", "city": "Austin", "region": "TX", "country": "US", "createdDate": "2026-03-01T09:00:00Z"},
+      gone: ["Priya", "Natarajan", "priya@natarajan.example", "+14155550142"],
+      kept: ["5501"],
+    },
+  },
+  'paddle': {
+    customers: {
+      row: {"id": "ctm_01h8", "email": "priya@natarajan.example", "name": "Priya Natarajan", "locale": "en", "status": "active", "created_at": "2026-08-01T09:00:00Z"},
+      gone: ["priya@natarajan.example", "Priya Natarajan"],
+      kept: ["ctm_01h8", "active", "2026-08-01T09:00:00Z"],
+    },
+  },
+  'intercom': {
+    contacts: {
+      row: {"type": "contact", "id": "63f1a2b4c5d6e7f8a9b0c1d2", "workspace_id": "w1", "external_id": "ext-11", "role": "user", "email": "priya@natarajan.example", "phone": "+14155550142", "name": "Priya Natarajan", "avatar": "https://static.intercomassets.com/avatars/p.jpg", "location": {"type": "location", "city": "Austin", "region": "Texas", "country": "United States"}, "created_at": 1793000000, "updated_at": 1793100000, "signed_up_at": 1793000000, "last_seen_at": 1793100000},
+      gone: ["priya@natarajan.example", "Priya Natarajan", "+14155550142"],
+      kept: ["63f1a2b4c5d6e7f8a9b0c1d2", "1793000000"],
+    },
+  },
 }
