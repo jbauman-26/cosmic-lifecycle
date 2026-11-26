@@ -10,7 +10,7 @@ Stripe charge KPIs can be reported in `cosmic verdict`, held against Stripe's ow
 
 - **A Stripe charge KPI** (net revenue, average charge, charges) is reportable for a finished month only when the month's Stripe totals here match **Stripe's own report** for that month. The report is Stripe's itemized balance activity from its Reports API, built from Stripe's ledger and not from the charges list the sync reads. The usual coverage rules also apply: the source synced through the month's end, the sync is fresh, and the month is over.
   - **What is matched, exactly:** the charge count, gross, and net (gross minus refunds against those charges), per currency, in each charge's own currency and amount (not the settlement currency), summed in cents.
-  - **What counts as a charge, on both sides:** a bank debit that fails after posting is no sale, and an authorization that was never captured is not counted (here it was counted before). Gross uses the captured amount.
+  - **What counts as a charge, on both sides:** a bank debit that fails after posting is no sale, and an authorization that was never captured is not counted (here it was counted before). A partial capture does not match, so its month is withheld.
   - **Not in the match:** disputes and fees. The KPI's notes say so.
   - **When net waits:** Stripe's report always ends a little before the sync that read it. A lower net here can be refunds made in between, so net waits for a later report, and KPIs that use net wait too. A higher net here fails.
   - **The label:** `"basis": "matches Stripe's own report"` in JSON, and "(matches Stripe's own report)" in text.
@@ -28,8 +28,8 @@ Stripe charge KPIs can be reported in `cosmic verdict`, held against Stripe's ow
 
 - **`cosmic sync` reads Stripe's own report** for the last 3 finished months: `balance_change_from_activity.itemized.3`, with only `reporting_category`, `customer_facing_currency`, `customer_facing_amount`, `charge_created_utc` and `created_utc`, never a customer, card or address column. Only totals are kept, in `meta_stripe_report_month`.
   - **When it reads:** at most once a day. The interval ends a second before Stripe's data does, and a month that starts before Stripe's data is left out.
-  - **Runs that take time:** Stripe prepares the report in the background, and a report that is not ready is read by the next sync. A run that cannot be read is dropped and asked for again.
-  - **A row with no charge date** withholds that month rather than shrinking it.
+  - **Runs that take time:** Stripe prepares the report in the background, and a report that is not ready is read by a later sync within a week. A run Stripe refuses is dropped and asked for again; a network failure keeps it.
+  - **A row with no charge date** withholds the months in that report rather than shrinking them.
   - **Errors:** a refused request is reported with Stripe's own error. Only a refused key is reported as the missing permission.
 - **Key permission:** a restricted key needs one more read permission, "Report runs and report types" (`report_runs_and_report_types_read`). The sync line says so when it is missing.
 - **Test keys:** Stripe runs reports only for live keys, so for a test key the check is skipped and Stripe charge KPIs stay withheld.

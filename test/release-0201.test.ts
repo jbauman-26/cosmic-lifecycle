@@ -115,10 +115,14 @@ describe('Stripe\'s own report: the sync step', () => {
   })
 
   it('leaves out a month that starts before Stripe\'s data does (review finding)', async () => {
-    const c = client({ activityAvailability: async () => ({ start: Date.parse(`${LAST}-01T00:00:00Z`) / 1000, end: avail().end }) })
+    const c = client({ activityAvailability: async () => ({ start: Date.parse(`${LAST}-01T00:00:00Z`) / 1000 - 1, end: avail().end }) })
     const r = await syncStripeReport(db, c, { maxWaitMs: 0 })
     expect(r.months).toEqual([LAST])
     expect(c.intervals[0]![0]).toBe(Date.parse(`${LAST}-01T00:00:00Z`) / 1000)
+    // A month starting exactly at Stripe's data start is left out: Stripe wants the start strictly after it.
+    const exact = client({ activityAvailability: async () => ({ start: Date.parse(`${LAST}-01T00:00:00Z`) / 1000, end: avail().end }) })
+    const r2 = await syncStripeReport(db, exact, { maxWaitMs: 0 })
+    expect(r2.months ?? []).not.toContain(LAST)
   })
 
   it('a refused request is reported with Stripe\'s own error, not as a missing permission (review finding)', async () => {
@@ -129,9 +133,25 @@ describe('Stripe\'s own report: the sync step', () => {
 
   it('a stored run that cannot be read is dropped, so the next sync starts fresh (review finding)', async () => {
     await syncStripeReport(db, client({ runs: [{ id: 'frr_9', status: 'pending', url: null }] }), { maxWaitMs: 0 })
-    const broken = client({ reportRun: async () => { throw new Error('file gone') } })
-    await expect(syncStripeReport(db, broken, { maxWaitMs: 0 })).rejects.toThrow('file gone')
+    const { HttpError } = await import('../src/http.js')
+    const broken = client({ reportRun: async () => { throw new HttpError('Stripe report run status request', 404, 'no such run') } })
+    await expect(syncStripeReport(db, broken, { maxWaitMs: 0 })).rejects.toThrow()
     expect(await db.query(`SELECT * FROM meta_stripe_report_run`)).toEqual([])
+  })
+
+  it('a network blip keeps a healthy pending run for the next sync (review finding)', async () => {
+    await syncStripeReport(db, client({ runs: [{ id: 'frr_8', status: 'pending', url: null }] }), { maxWaitMs: 0 })
+    const flaky = client({ reportRun: async () => { throw new Error('fetch failed') } })
+    await expect(syncStripeReport(db, flaky, { maxWaitMs: 0 })).rejects.toThrow('fetch failed')
+    expect((await db.query(`SELECT run_id FROM meta_stripe_report_run`))[0]).toMatchObject({ run_id: 'frr_8' })
+  })
+
+  it('a daily sync picks up a run started the day before (review finding)', async () => {
+    await syncStripeReport(db, client({ runs: [{ id: 'frr_7', status: 'pending', url: null }] }), { maxWaitMs: 0 })
+    await db.query(`UPDATE meta_stripe_report_run SET started_at = now() - interval '25 hours'`)
+    const next = client({ runs: [{ id: 'frr_7', status: 'succeeded', url: 'https://files.stripe.com/v1/files/file_7/contents' }] })
+    expect((await syncStripeReport(db, next, { maxWaitMs: 0 })).status).toBe('ok')
+    expect(next.started).toBe(0)
   })
 
   it('reads the report once a day at most (review finding)', async () => {

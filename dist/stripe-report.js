@@ -25,9 +25,9 @@ export async function syncStripeReport(db, s, opts = {}) {
         return { status: 'unavailable', detail: NO_PERMISSION };
     const now = opts.now ?? Date.now();
     // Stripe accepts an interval inside its data range: after data_available_start, and ending at least a second
-    // before data_available_end. A month that starts before Stripe's data does is left out rather than half read.
+    // before data_available_end. A month that does not start after Stripe's data does is left out rather than half read.
     const end = avail.end - 1;
-    const months = finishedMonths(now).filter((m) => m.end <= end && m.start >= avail.start);
+    const months = finishedMonths(now).filter((m) => m.end <= end && m.start > avail.start);
     if (!months.length)
         return { status: 'pending', detail: `Stripe's own report has data only to ${new Date(avail.end * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC, so last month is not in it yet.` };
     const names = months.map((m) => m.month);
@@ -38,8 +38,9 @@ export async function syncStripeReport(db, s, opts = {}) {
     }
     const start = months[0].start;
     const pending = (await db.query(`SELECT run_id, interval_start, interval_end, started_at FROM meta_stripe_report_run ORDER BY started_at DESC LIMIT 1`))[0];
-    // A stored run older than a day, or for other months, is dropped and asked for again.
-    const resumed = Boolean(pending && Number(pending.interval_start) === start && now - Date.parse(new Date(pending.started_at).toISOString()) < 86400000);
+    // A stored run for other months, or older than a week, is dropped and asked for again. A week, so a workspace
+    // that syncs once a day still picks up a run Stripe took a few minutes to prepare.
+    const resumed = Boolean(pending && Number(pending.interval_start) === start && now - Date.parse(new Date(pending.started_at).toISOString()) < 7 * 86400000);
     const through = new Date((resumed ? Number(pending.interval_end) : end) * 1000).toISOString();
     const drop = () => db.query(`DELETE FROM meta_stripe_report_run`);
     try {
@@ -81,8 +82,11 @@ export async function syncStripeReport(db, s, opts = {}) {
         return { status: 'ok', detail: `Read Stripe's own report for ${names.join(', ')}.`, months: names };
     }
     catch (e) {
-        // A run that cannot be read is dropped, so the next sync starts a fresh one instead of retrying it forever.
-        await drop();
+        // A run Stripe refuses or cannot serve (a 4xx, or a file it cannot parse) is dropped, so the next sync starts a
+        // fresh one instead of retrying it forever. A network failure keeps the run for the next sync.
+        const status = e.status;
+        if ((typeof status === 'number' && status >= 400 && status < 500) || e.code === 'stripe_report_columns')
+            await drop();
         throw e;
     }
 }

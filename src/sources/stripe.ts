@@ -15,8 +15,8 @@ export type RawCharge = {
   currency: string
   status: string
   customer: string | null
-  // 0.20.1: an authorization that was never captured took no money, and a partial capture took only part.
-  // Missing (older recordings, pipeline tables) means captured in full.
+  // 0.20.1: an authorization that was never captured took no money. Missing (older recordings, pipeline tables)
+  // means captured.
   captured?: boolean
   amount_captured?: number
 }
@@ -245,7 +245,10 @@ export function aggregateCharges(charges: RawCharge[]): StripeDaily[] {
     if (c.status === 'failed') {
       d.failed++
     } else {
-      const gross = toMajor(c.amount_captured ?? c.amount, currency)
+      // Gross stays the charge amount, as in 0.20.0: on API versions before 2025-03-31.basil Stripe records the
+      // uncaptured part of a partial capture as a refund, so subtracting amount_refunded from a captured gross would
+      // remove it twice. A partial capture then does not match Stripe's report, and its month is withheld.
+      const gross = toMajor(c.amount, currency)
       const refunded = toMajor(c.amount_refunded, currency)
       d.charges++
       d.gross = money(d.gross + gross)
