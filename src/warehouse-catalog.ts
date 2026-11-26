@@ -1788,12 +1788,54 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "slug": "yotpo-loyalty",
     "name": "Yotpo Loyalty",
     "category": "loyalty",
-    "readiness": "planned",
+    "readiness": "built",
     "why": "#36 of 100 tools Shopify stores use. StoreLeads: Shopify app installed on 11,688 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/shopify/app/swell",
-    "docs": "https://loyaltyapi.yotpo.com/reference",
-    "credentials": [],
+    "docs": "https://docs.yotpo.com/reference/fetch-all-recently-updated-customers",
+    "credentials": [
+      {
+        "name": "api_key",
+        "label": "Loyalty API key",
+        "help": "In the Yotpo Loyalty admin open Settings and copy the account API key. It is sent as the X-API-KEY header. Use a key scoped for read access where Yotpo offers it, so this connection can read your data but never change it."
+      },
+      {
+        "name": "guid",
+        "label": "Account GUID",
+        "help": "The Globally Unique Identifier shown in the same Yotpo Loyalty admin Settings section. It is sent as the X-GUID header alongside the API key. This connector only sends GET requests."
+      }
+    ],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "config": {
+      "client": {
+        "base_url": "https://loyalty.yotpo.com",
+        "headers": {
+          "Accept": "application/json",
+          "X-API-KEY": "{secret:api_key}",
+          "X-GUID": "{secret:guid}"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "yotpo_customer_id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "recent_customers",
+          "endpoint": {
+            "path": "api/v2/customers/recent",
+            "params": {
+              "per_page": 500
+            },
+            "data_selector": "customers",
+            "paginator": {
+              "type": "cursor",
+              "cursor_path": "pagination.page_info",
+              "cursor_param": "page_info"
+            }
+          }
+        }
+      ]
+    },
+    "notes": "Base https://loyalty.yotpo.com, from the servers block of the OpenAPI definition published on the reference page. Auth is the pair of headers X-API-KEY and X-GUID, both defined there as header api keys; the key and the account GUID come from the Settings section of the Yotpo Loyalty admin. The list endpoint is GET /api/v2/customers/recent, which returns the customers updated in the last seven days, most recent first, wrapped in a customers array with a pagination object beside it. Paging is the token in pagination.page_info, passed back as page_info, and it is null on the last page, so the cursor pager stops there; per_page takes up to 500. One resource is built, recent_customers. The reference also has single-customer fetches, notices and widget routes, and they are left out. Customer rows carry email, first name, last name and phone, which the shared rules remove. Fixture values are illustrative, built from the documented schema examples."
   },
   {
     "slug": "elevar",
