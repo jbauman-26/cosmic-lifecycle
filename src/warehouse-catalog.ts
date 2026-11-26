@@ -2889,12 +2889,59 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "slug": "printful",
     "name": "Printful",
     "category": "shipping",
-    "readiness": "planned",
+    "readiness": "built",
     "why": "#89 of 100 tools Shopify stores use. StoreLeads: Shopify app installed on 145,754 Shopify stores (Oct 30 2026 snapshot). Source: https://storeleads.app/reports/shopify/app/printful",
-    "docs": "https://developers.printful.com/docs/",
-    "credentials": [],
+    "docs": "https://developers.printful.com/docs/#tag/Order-API",
+    "credentials": [
+      {
+        "name": "api_token",
+        "label": "API token (private token)",
+        "help": "In Printful open Settings, then Developers, then API tokens, and add a token. Choose the store it applies to and copy it. This connector only sends GET requests."
+      }
+    ],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "config": {
+      "client": {
+        "base_url": "https://api.printful.com/",
+        "headers": {
+          "Accept": "application/json"
+        },
+        "auth": {
+          "type": "bearer",
+          "token": "{secret:api_token}"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "orders",
+          "endpoint": {
+            "path": "orders",
+            "params": {
+              "limit": 100
+            },
+            "data_selector": "result",
+            "paginator": {
+              "type": "offset",
+              "limit": 100,
+              "offset": 0,
+              "total_path": "paging.total"
+            }
+          }
+        },
+        {
+          "name": "products",
+          "endpoint": {
+            "path": "products",
+            "data_selector": "result"
+          }
+        }
+      ]
+    },
+    "notes": "Base https://api.printful.com/, confirmed by the example requests. Auth is the Authorization Bearer header, which the docs show on their own example calls. Responses wrap their payload in result, and the paged endpoints add paging with total, offset and limit, so the offset pager stops on paging.total. The orders endpoint takes offset and limit. Two resources are built, orders and products. Products is a single call with no paging. The store and shipping-rate endpoints are documented and left out. Orders carry a recipient name, email, phone and address, which the shared rules remove; the order id, status, totals and timestamps stay. Fixture values are illustrative, built from documented field names."
   },
   {
     "slug": "feedonomics",
