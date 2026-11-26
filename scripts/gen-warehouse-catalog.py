@@ -137,6 +137,11 @@ EXTRA = [
         "notes": "Planned. Event data leaves through the Export API: a date range is requested and the response is one file with a 6 GB cap, and the data lands up to two hours after upload. That needs a file export runner, not a REST list spec. CSV import of daily counts meanwhile.",
     },
     {
+        "slug": "paddle", "name": "Paddle", "category": "billing",
+        "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+        "docs": "https://developer.paddle.com/api-reference/transactions/list-transactions",
+    },
+    {
         "slug": "intercom", "name": "Intercom", "category": "support",
         "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
         "docs": "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/contacts/listcontacts",

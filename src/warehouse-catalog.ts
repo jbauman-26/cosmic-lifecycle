@@ -4066,6 +4066,69 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "notes": "Planned. Event data leaves through the Export API: a date range is requested and the response is one file with a 6 GB cap, and the data lands up to two hours after upload. That needs a file export runner, not a REST list spec. CSV import of daily counts meanwhile."
   },
   {
+    "slug": "paddle",
+    "name": "Paddle",
+    "category": "billing",
+    "readiness": "built",
+    "why": "Not in the 100-tool research. Added on 2026-11-26 at Jake's request, for marketers outside Shopify. No usage count is on file.",
+    "docs": "https://developer.paddle.com/api-reference/transactions/list-transactions",
+    "credentials": [
+      {
+        "name": "api_key",
+        "label": "API key",
+        "help": "In Paddle open My account, then Settings, then Authentication, and create an API key. Create a read-only key, and test with the sandbox key before using the live one. This connector only sends GET requests."
+      }
+    ],
+    "params": [],
+    "config": {
+      "client": {
+        "base_url": "https://api.paddle.com/",
+        "headers": {
+          "Accept": "application/json"
+        },
+        "auth": {
+          "type": "bearer",
+          "token": "{secret:api_key}"
+        }
+      },
+      "resource_defaults": {
+        "primary_key": "id",
+        "write_disposition": "merge"
+      },
+      "resources": [
+        {
+          "name": "transactions",
+          "endpoint": {
+            "path": "transactions",
+            "params": {
+              "per_page": 200
+            },
+            "data_selector": "data",
+            "paginator": {
+              "type": "json_link",
+              "next_url_path": "meta.pagination.next"
+            }
+          }
+        },
+        {
+          "name": "customers",
+          "endpoint": {
+            "path": "customers",
+            "params": {
+              "per_page": 200
+            },
+            "data_selector": "data",
+            "paginator": {
+              "type": "json_link",
+              "next_url_path": "meta.pagination.next"
+            }
+          }
+        }
+      ]
+    },
+    "notes": "Base https://api.paddle.com/, confirmed by the absolute next URLs in the list response. Auth is the Authorization Bearer header with an API key created under Developer tools then Authentication. List endpoints take after and per_page, the body returns data plus meta.pagination, and next is a full URL such as https://api.paddle.com/transactions?after=..., so the json_link pager follows it. Paddle also serves a sandbox host; it was not confirmed on the pages read, so the host is fixed here rather than exposed as a setting. Two resources are built, transactions and customers. Subscriptions and products are documented and left out because their references were not read. Customer rows carry email and name, which the shared rules remove. Fixture values are illustrative, built from documented field names."
+  },
+  {
     "slug": "intercom",
     "name": "Intercom",
     "category": "support",
