@@ -20,7 +20,8 @@ const lastMonth = () => {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString().slice(0, 7)
 }
 
-describe('first run, from the UX-99 audit', () => {
+// Every case starts real CLI processes, which are slow when the full suite runs in parallel.
+describe('first run, from the UX-99 audit', { timeout: 60_000 }, () => {
   it('init with no type says it set up a store, how to change that, and points at Shopify, not Klaviyo', () => {
     const r = cosmic(fresh(), 'init')
     expect(r.out).toContain('Ready. This workspace is set up as a Shopify store, the default.')
@@ -124,5 +125,18 @@ describe('first run, from the UX-99 audit', () => {
     expect(r.out).toContain('workspace token')
     expect(r.out).not.toMatch(/store token/)
     expect(r.out).toMatch(/^Usage: cosmic/)
+  })
+
+  it('0.21.2: the demo ends with the step into setup, by its type', () => {
+    for (const type of ['saas', 'b2b', 'shopify']) {
+      const r = cosmic(fresh(), 'demo', '--type', type)
+      expect(r.out).toContain(`Now run it on your own numbers:\n  cosmic init --type ${type}\n`)
+      expect(r.out).not.toContain('Next: cosmic docs')
+    }
+    // A type shown with another type's sample is suggested as itself (review finding).
+    for (const type of ['ecommerce', 'agency', 'creator']) expect(cosmic(fresh(), 'demo', '--type', type).out).toContain(`  cosmic init --type ${type}\n`)
+    const home = fresh()
+    cosmic(home, 'init', '--type', 'saas')
+    expect(cosmic(home, 'demo').out.trimEnd().endsWith('Next, on your own numbers: cosmic verdict')).toBe(true)
   })
 })

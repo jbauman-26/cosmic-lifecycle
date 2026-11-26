@@ -77,7 +77,7 @@ import { readCosts, setCost, setProductCosts, writeCosts, costsPath, COST_KEYS }
 import { readFileSync } from 'node:fs'
 import { fetchCostOrders } from './sources/shopify-costs.js'
 import { rollupMetric } from './rollup.js'
-import { assertReference, assertType, readWorkspace, REFERENCE_NAME, TYPES, WORKSPACE_TYPES, noun, type WorkspaceType } from './workspace.js'
+import { assertReference, assertType, isWorkspaceType, readWorkspace, REFERENCE_NAME, TYPES, WORKSPACE_TYPES, noun, type WorkspaceType } from './workspace.js'
 import { pickType } from './commands/init.js'
 import { configPath, workspaceName, workspacesDir } from './paths.js'
 import { existsSync, readdirSync } from 'node:fs'
@@ -115,6 +115,11 @@ const firstConnect = (type: WorkspaceType) => {
   const slug = connectable(TYPES[type].sources)[0]
   return (slug && ALL_NATIVE.find((s) => s.slug === slug)?.connect) ?? (slug ? `cosmic warehouse show ${slug}` : 'cosmic sources catalog')
 }
+// 0.21.2: the demo ends with the step that carries it into setup: set up this type of workspace on a fresh
+// install, or see your own month in one that is already set up.
+const demoNext = (kind: string) => existsSync(configPath())
+  ? ['Next, on your own numbers: cosmic verdict']
+  : ['Now run it on your own numbers:', `  cosmic init --type ${kind}`, EASY_SETUP]
 const format = () => (program.opts().format === 'json' ? 'json' : 'text') as Format
 const run = (fn: (...a: any[]) => Promise<void>) => async (...a: any[]) => {
   try {
@@ -1717,7 +1722,8 @@ program.command('demo').description('See it work on invented sample data. No key
         `3. ${kind === 'saas' ? 'SaaS' : 'B2B'} metrics, last 90 days. ${d.trust.line}`,
         ...d.metrics.map((m) => `   ${m.title}: ${formatValue(m.unit, m.value)}`), '',
         ...(d.bySource.length ? ['4. Pipeline created by original source:', ...d.bySource.map((r) => `   ${r.source}: ${r.deals} deals, ${formatValue('usd', r.pipeline)}`), ''] : []),
-        'Next: cosmic docs workspaces',
+        // The type asked for, so ecommerce, agency or creator are suggested as themselves, not as the sample shown.
+        ...demoNext(opts.type && isWorkspaceType(opts.type) ? opts.type : kind),
       ].join('\n')
     })
     return
@@ -1735,7 +1741,7 @@ program.command('demo').description('See it work on invented sample data. No key
       ...d.revenue.flows.map((f) => `   ${f.name}: $${f.revenuePerRecipient.toFixed(2)} per recipient`), '',
       `4. Flow audit found ${d.audit.findings.length} things to fix. The top three:`,
       ...d.audit.findings.slice(0, 3).map((f) => `   [${f.severity}] ${f.title}`), '',
-      'Next: cosmic docs setup',
+      ...demoNext(opts.type && isWorkspaceType(opts.type) ? opts.type : 'shopify'),
     ].join('\n')
   })
 }))
