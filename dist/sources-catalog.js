@@ -169,8 +169,8 @@ export async function sourceStatus(config, hasKey, db) {
         .map(([schema, p]) => ({ slug: `pipeline:${schema}`, name: `${schema} (${p.tool === 'fivetran' ? 'Fivetran' : 'Airbyte'} tables read in place, ${p.tables.length} tables, freshness checked only)`, connected: true, lastSync: null, lastStatus: null, next: null }));
     // 0.21.0: the sources this workspace type usually connects come first, in that order, so a SaaS workspace
     // does not open with Klaviyo and Shopify. The rest keep their catalog order.
-    // A Shopify store keeps the order it has always had.
-    const usual = readWorkspace().type === 'shopify' ? [] : TYPES[readWorkspace().type].sources;
+    // 0.21.1: a store too leads with its source of truth, Shopify, then the rest in its usual order.
+    const usual = TYPES[readWorkspace().type].sources;
     const rank = (slug) => (usual.includes(slug) ? usual.indexOf(slug) : usual.length);
     const ordered = native.map((s, i) => ({ s, i })).sort((a, b) => rank(a.s.slug) - rank(b.s.slug) || a.i - b.i).map((x) => x.s);
     return [...ordered, ...piped, ...custom];

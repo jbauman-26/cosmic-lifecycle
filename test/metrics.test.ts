@@ -112,9 +112,10 @@ describe('source catalog and setup prompts', () => {
   it('reports connected sources and the next step for the rest', async () => {
     await db.query(`INSERT INTO meta_sync_run (run_id, source, started_at, finished_at, status) VALUES ('r1', 'klaviyo', now(), now(), 'ok')`)
     const r = await sourceStatus({ database: { kind: 'local' }, klaviyo: { connected: true } }, (s) => s === 'klaviyo', db)
-    expect(r[0]).toMatchObject({ slug: 'klaviyo', connected: true, lastStatus: 'ok', next: null })
-    expect(r[1]).toMatchObject({ slug: 'shopify', connected: false })
-    expect(r[1]!.next).toMatch(/connect shopify/)
+    // 0.21.1: a store lists Shopify, its source of truth, first; then Klaviyo.
+    expect(r[0]).toMatchObject({ slug: 'shopify', connected: false })
+    expect(r[0]!.next).toMatch(/connect shopify/)
+    expect(r[1]).toMatchObject({ slug: 'klaviyo', connected: true, lastStatus: 'ok', next: null })
     expect((await sourceStatus(null, () => false, null))[0]!.next).toBe('cosmic init')
   })
 

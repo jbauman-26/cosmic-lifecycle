@@ -394,8 +394,14 @@ export async function verdictFor(db: Db, period: string, opts: VerdictOptions = 
 export const VERDICT_WITHHELD_EXIT = 3
 export const verdictExit = (v: Verdict) => (v.kpis.length && !v.withheld ? 0 : VERDICT_WITHHELD_EXIT)
 
-export function formatVerdict(v: Verdict) {
-  const lines = [`${v.workspace}, ${v.period} (${v.period_state === 'complete' ? 'complete month' : v.period_state === 'in_progress' ? 'still running' : 'not started'}): ${v.reportable} reportable, ${v.withheld} withheld.`]
+// 0.21.1: `defaulted` says the month was picked for the person; `connect` is the first source to connect, for an
+// empty workspace. The unnamed workspace is not labelled "default".
+export function formatVerdict(v: Verdict, opts: { defaulted?: boolean; connect?: string } = {}) {
+  const state = v.period_state === 'complete' ? (opts.defaulted ? 'the last finished month' : 'complete month') : v.period_state === 'in_progress' ? 'still running' : 'not started'
+  if (!v.kpis.length) {
+    return [`Nothing to report for ${v.period}${opts.defaulted ? ' (the last finished month)' : ''} yet: no source with monthly KPIs has synced.`, ...(opts.connect ? ['Next: connect a source, then sync:', `  ${opts.connect}`, '  cosmic sync'] : ['Next: cosmic doctor'])].join('\n')
+  }
+  const lines = [`${v.workspace === 'default' ? '' : `${v.workspace}, `}${v.period} (${state}): ${v.reportable} reportable, ${v.withheld} withheld.`]
   for (const k of v.kpis) {
     lines.push(k.status === 'reportable' ? `REPORT ${k.kpi}: ${k.value ?? 'no value'}${k.basis ? ` (${k.basis})` : ''}` : `HOLD   ${k.kpi}: ${k.reason}`)
   }
@@ -403,10 +409,10 @@ export function formatVerdict(v: Verdict) {
     lines.push('', `Point in time, not for ${v.period}:`)
     for (const k of v.as_of.kpis) lines.push(k.status === 'reportable' ? `AS OF  ${k.kpi}: ${k.value} (${k.basis})` : `HOLD   ${k.kpi}: ${k.reason}`)
   }
-  if (!v.kpis.length) lines.push('No KPIs to report: connect a source first. Next: cosmic doctor')
   if (v.settings_changed.length) lines.push(`Tolerances changed from the defaults: ${v.settings_changed.join(', ')}.`)
   const next = [...new Set(v.kpis.flatMap((k) => k.next_checks))]
   if (next.length) lines.push('', 'Next:', ...next.map((n) => `  ${n}`))
-  lines.push('', ...v.sources.map((s) => `${nameOf(s.source)}: ${s.covers_period ? `covers the month, last synced ${s.last_synced_at}` : s.reason}`))
+  if (v.sources.length) lines.push('', ...v.sources.map((s) => `${nameOf(s.source)}: ${s.covers_period ? `covers the month, last synced ${s.last_synced_at}` : s.reason}`))
+  if (opts.defaulted) lines.push('', 'Another month: cosmic verdict --period YYYY-MM')
   return lines.join('\n')
 }

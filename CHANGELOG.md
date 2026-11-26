@@ -2,6 +2,31 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.21.1 (2026-11-25)
+
+The first run, cleaned up from the UX-99 audit.
+
+### Changed
+
+- **`init` points at the workspace's own source of truth.** A store goes to Shopify (not Klaviyo), a SaaS workspace to Stripe, B2B to HubSpot.
+  - A new workspace set up with no `--type` and no terminal to ask says so ("set up as a Shopify store, the default") and how to change it.
+  - The paste-into-your-agent line comes first, then "Or by hand:" with the connect command.
+  - "Database: local" is no longer printed; your own Postgres still is.
+  - `init`'s JSON is unchanged.
+- **`reconcile` on a new workspace** (no source has finished a sync) prints one block with the next step instead of a SKIP line for every check. An agency workspace also says how to set its source of truth.
+  - Once anything has synced, every check is listed as before. Only checks skipped because their source is not connected are counted on one line, and the source-of-truth line is never folded.
+  - `--format json` always lists every check.
+- **`verdict` without `--period` uses the last finished month** and says so.
+  - With nothing to report, it says no source with monthly KPIs has synced, and names the source to connect.
+  - The unnamed workspace is no longer labelled "default" in the text.
+- **`cosmic sources`** with no subcommand lists the sources. A mistyped subcommand names the real ones.
+  - A store lists Shopify first, matching `init`.
+- **"Store token" is now "workspace token"** in `--help`, errors and docs.
+- **Smaller fixes:**
+  - "Source of truth: not set" for an agency workspace (it used to say "nothing");
+  - copy-pasteable `cosmic init --type saas (or ...)` and `cosmic config set workspace.reference stripe (or ...)` hints;
+  - `cosmic workspace show` lists only sources that can be connected today.
+
 ## 0.21.0 (2026-11-25)
 
 Any table Fivetran or Airbyte loads into your own Postgres, for any connector, read in place with a freshness check.

@@ -17,7 +17,7 @@ export const REFERENCES = ['shopify', 'stripe', 'hubspot', 'ga4', 'none'];
 export const TYPES = {
     shopify: {
         type: 'shopify', title: 'Shopify store', forWhom: 'A brand selling through a Shopify store.',
-        reference: 'shopify', referenceWhy: 'Shopify orders are the record of what sold. Klaviyo, GA4 and Meta are checked against them.',
+        reference: 'shopify', referenceWhy: 'They are the record of what sold. Klaviyo, GA4 and Meta are checked against them.',
         sources: ['shopify', 'klaviyo', 'ga4', 'meta', 'stripe'],
     },
     ecommerce: {
@@ -37,7 +37,7 @@ export const TYPES = {
     },
     agency: {
         type: 'agency', title: 'Agency client', forWhom: 'An agency keeping one workspace per client, each with that client\'s own source of truth.',
-        reference: 'none', referenceWhy: 'Every client keeps its truth somewhere different. Set it per client with cosmic config set workspace.reference stripe, hubspot, shopify or ga4. Until then numbers carry a line saying they are unchecked.',
+        reference: 'none', referenceWhy: 'Every client keeps its truth somewhere different. Set this client\'s with: cosmic config set workspace.reference stripe (or hubspot, shopify, ga4). Until then every number is marked unchecked.',
         sources: ['ga4', 'meta', 'stripe', 'hubspot', 'shopify'],
     },
     creator: {

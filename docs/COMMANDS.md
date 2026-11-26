@@ -4,7 +4,7 @@ What each job is called in Cosmic Lifecycle, with how it works and why. Everythi
 
 | Job | Command | Notes |
 |---|---|---|
-| Sign in and see the account | `login`, `logout`, `cloud status`, `status` | Since 0.13.0, `login --token-env VAR` signs a machine in to the store's Cosmic Cloud account with a store token, and `--cloud` on `query`, `schema`, `metrics list/run`, `sources list`, `sync` and `logs` asks Cloud. Logging in is optional: everything else runs on this machine. `status` is still the first check. |
+| Sign in and see the account | `login`, `logout`, `cloud status`, `status` | Since 0.13.0, `login --token-env VAR` signs a machine in to the workspace's Cosmic Cloud account with a workspace token, and `--cloud` on `query`, `schema`, `metrics list/run`, `sources list`, `sync` and `logs` asks Cloud. Logging in is optional: everything else runs on this machine. `status` is still the first check. |
 | Settings | `config set/get/list/unset` | `registry.uri`, `deploy.repo`, `update.check`, and since 0.11.0 the owner's choices: `reconcile.tolerance.klaviyo_orders` (3), `reconcile.tolerance.ga4_purchases` (15), `reconcile.attributed_share_flag` (60), `reconcile.freshness_days` (2), `query.row_cap` (1000) and `metrics.default_days` (90). Each defaults to the value the CLI always used. `get` and `list` show the default when a key is not set. |
 | Set up the database | `init` | A local database, or your own Postgres with `--database-url-env`. |
 | Get the sync project files | `deploy --write DIR` | Writes the sync project files locally. Clone an existing sync repo with `gh repo clone`. |

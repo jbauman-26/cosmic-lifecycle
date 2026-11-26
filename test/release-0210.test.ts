@@ -252,7 +252,8 @@ describe('clean install fixes', () => {
     const { findSource } = await import('../src/warehouse.js')
     expect(TYPES.saas.sources).toContain('posthog')
     expect(findSource('posthog').readiness).toBe('planned')
-    expect(readFileSync('src/cli.ts', 'utf8')).toMatch(/connectable\(t\.sources\)\.join/)
+    // workspace show lists only connectable sources (0.21.1: also its text line); init no longer lists them.
+    expect(readFileSync('src/cli.ts', 'utf8')).toMatch(/Usual sources: \$\{connectable\(t\.sources\)\.join/)
   })
   it('sources list puts the workspace type\'s usual sources first, and lists pipeline schemas', async () => {
     const { sourceStatus, EASY_SETUP } = await import('../src/sources-catalog.js')
