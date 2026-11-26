@@ -15,7 +15,8 @@ export function toMajor(amount, currency) {
 export const stripeMode = (key) => (/^(sk|rk)_test_/.test(key) ? 'test' : 'live');
 export const isRestrictedKey = (key) => key.startsWith('rk_');
 export const ACTIVITY_REPORT = 'balance_change_from_activity.itemized.3';
-export const ACTIVITY_COLUMNS = ['reporting_category', 'currency', 'gross', 'charge_created_utc'];
+// customer_facing_* are the charge's own currency and amount (what the sync stores), not the settlement currency.
+export const ACTIVITY_COLUMNS = ['reporting_category', 'customer_facing_currency', 'customer_facing_amount', 'charge_created_utc', 'created_utc'];
 // Splits one CSV line, quotes and commas inside quotes included.
 function csvLine(line) {
     const out = [];
@@ -52,29 +53,51 @@ export function parseActivityCsv(csv) {
     const idx = ACTIVITY_COLUMNS.map((c) => head.indexOf(c));
     if (idx.some((i) => i < 0))
         throw new CliError('Stripe\'s activity report did not have the expected columns.', 'cosmic feedback "stripe activity report columns"', 'stripe_report_columns');
-    const [cat, cur, gross, created] = idx;
+    const [cat, cur, gross, created, own] = idx;
     return lines.slice(1).map((l) => {
         const f = csvLine(l);
-        return { reportingCategory: f[cat], currency: f[cur].toLowerCase(), gross: Number(f[gross]), chargeCreated: f[created] ? f[created] : null };
+        const category = f[cat];
+        // A charge row's own time is its charge time when Stripe leaves charge_created_utc empty.
+        const chargeCreated = f[created] ? f[created] : category === 'charge' && f[own] ? f[own] : null;
+        return { reportingCategory: category, currency: (f[cur] ?? '').toLowerCase(), gross: Number(f[gross]), chargeCreated };
     });
 }
+// Summed in minor units, so an exact comparison is not thrown off by floating point.
+const cents = (n) => Math.round(n * 100);
 export function monthTotals(rows) {
     const by = new Map();
+    const get = (month, currency) => {
+        const key = `${month}\0${currency}`;
+        const m = by.get(key) ?? { month, currency, charges: 0, gross: 0, refunds: 0, unplaced: 0 };
+        by.set(key, m);
+        return m;
+    };
     for (const r of rows) {
-        if (!r.chargeCreated)
+        const counted = ['charge', 'charge_failure', 'refund', 'refund_failure'].includes(r.reportingCategory);
+        if (!counted)
             continue;
-        const month = r.chargeCreated.slice(0, 7);
-        const key = `${month}\0${r.currency}`;
-        const m = by.get(key) ?? { month, currency: r.currency, charges: 0, gross: 0, refunds: 0 };
+        // A row that cannot be placed in a month makes that currency's totals unknown, never silently smaller.
+        if (!r.chargeCreated) {
+            get('?', r.currency).unplaced++;
+            continue;
+        }
+        const m = get(r.chargeCreated.slice(0, 7), r.currency);
+        const amount = Math.abs(cents(r.gross));
+        // A bank debit that fails after posting is a charge row followed by a charge_failure row: no sale.
         if (r.reportingCategory === 'charge') {
             m.charges += 1;
-            m.gross += r.gross;
+            m.gross += amount;
         }
-        else if (r.reportingCategory === 'refund' || r.reportingCategory === 'refund_failure')
-            m.refunds += r.gross;
-        by.set(key, m);
+        else if (r.reportingCategory === 'charge_failure') {
+            m.charges -= 1;
+            m.gross -= amount;
+        }
+        else if (r.reportingCategory === 'refund')
+            m.refunds -= amount;
+        else
+            m.refunds += amount;
     }
-    return [...by.values()].map((m) => ({ ...m, gross: Math.round(m.gross * 100) / 100, refunds: Math.round(m.refunds * 100) / 100 }));
+    return [...by.values()].map((m) => ({ ...m, gross: m.gross / 100, refunds: m.refunds / 100 }));
 }
 const fetchText = async (url, init, label) => {
     const res = await fetch(url, init);
@@ -98,19 +121,19 @@ export class Stripe {
     post(path, form, label) {
         return this.fetcher(`${apiBase('stripe', API)}${path}`, { method: 'POST', headers: { authorization: `Bearer ${this.key}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(form).toString() }, label);
     }
-    /** The last moment Stripe's activity report has data for, in epoch seconds. Null when the key cannot run reports. */
-    async activityAvailableEnd() {
+    /** The range Stripe's activity report has data for, in epoch seconds. Null when the key lacks the permission. */
+    async activityAvailability() {
         try {
             const t = await this.get(`/reporting/report_types/${ACTIVITY_REPORT}`, {}, 'Stripe report type request');
-            return typeof t.data_available_end === 'number' ? t.data_available_end : null;
+            return typeof t.data_available_end === 'number' ? { start: Number(t.data_available_start ?? 0), end: t.data_available_end } : null;
         }
         catch (e) {
-            if (e instanceof HttpError && (e.status === 403 || e.status === 400 || e.status === 404))
+            if (e instanceof HttpError && (e.status === 401 || e.status === 403))
                 return null;
             throw e;
         }
     }
-    /** Starts a run of the activity summary for [start, end) in UTC. Null when the key cannot run reports. */
+    /** Starts a run of the itemized activity report for [start, end) in UTC. Null when the key lacks the permission. */
     async startActivityRun(start, end) {
         try {
             const cols = Object.fromEntries(ACTIVITY_COLUMNS.map((c, i) => [`parameters[columns][${i}]`, c]));
@@ -118,7 +141,8 @@ export class Stripe {
             return { id: String(r.id), status: r.status, url: r.result?.url ?? null };
         }
         catch (e) {
-            if (e instanceof HttpError && (e.status === 403 || e.status === 400))
+            // Only a refused key means a missing permission. Any other refusal is reported with Stripe's own message.
+            if (e instanceof HttpError && (e.status === 401 || e.status === 403))
                 return null;
             throw e;
         }
@@ -195,6 +219,9 @@ export function aggregateCharges(charges) {
     for (const c of [...charges].sort((a, b) => a.created - b.created)) {
         if (c.status !== 'succeeded' && c.status !== 'failed')
             continue;
+        // An authorization never captured is not a sale, and Stripe's ledger has no row for it.
+        if (c.status === 'succeeded' && c.captured === false)
+            continue;
         const date = day(c.created);
         const currency = c.currency.toLowerCase();
         const id = `${date}|${currency}`;
@@ -203,7 +230,7 @@ export function aggregateCharges(charges) {
             d.failed++;
         }
         else {
-            const gross = toMajor(c.amount, currency);
+            const gross = toMajor(c.amount_captured ?? c.amount, currency);
             const refunded = toMajor(c.amount_refunded, currency);
             d.charges++;
             d.gross = money(d.gross + gross);

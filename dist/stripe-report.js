@@ -20,71 +20,86 @@ export function finishedMonths(now, n = REPORT_MONTHS) {
 export async function syncStripeReport(db, s, opts = {}) {
     if (s.mode === 'test')
         return { status: 'unavailable', detail: TEST_MODE };
-    const avail = await s.activityAvailableEnd();
+    const avail = await s.activityAvailability();
     if (avail === null)
         return { status: 'unavailable', detail: NO_PERMISSION };
     const now = opts.now ?? Date.now();
-    const months = finishedMonths(now).filter((m) => m.end <= avail);
+    // Stripe accepts an interval inside its data range: after data_available_start, and ending at least a second
+    // before data_available_end. A month that starts before Stripe's data does is left out rather than half read.
+    const end = avail.end - 1;
+    const months = finishedMonths(now).filter((m) => m.end <= end && m.start >= avail.start);
     if (!months.length)
-        return { status: 'pending', detail: `Stripe's own report has data only to ${new Date(avail * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC, so last month is not in it yet.` };
-    const start = months[0].start;
-    // Refunds against those charges up to the end of Stripe's data.
-    const end = avail;
-    const pending = (await db.query(`SELECT run_id, interval_start, interval_end FROM meta_stripe_report_run ORDER BY started_at DESC LIMIT 1`))[0];
-    let run;
-    const resumed = Boolean(pending && Number(pending.interval_start) === start);
-    if (resumed)
-        run = await s.reportRun(String(pending.run_id));
-    else {
-        run = await s.startActivityRun(start, end);
-        if (!run)
-            return { status: 'unavailable', detail: NO_PERMISSION };
-        await db.transaction(async (tx) => {
-            await tx.query(`DELETE FROM meta_stripe_report_run`);
-            await tx.query(`INSERT INTO meta_stripe_report_run VALUES ($1, $2, $3, now())`, [run.id, start, end]);
-        });
-    }
-    const wait = opts.wait ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
-    const until = Date.now() + (opts.maxWaitMs ?? 20000);
-    while (run.status === 'pending' && Date.now() < until) {
-        await wait(opts.pollMs ?? 3000);
-        run = await s.reportRun(run.id);
-    }
-    if (run.status === 'failed') {
-        await db.query(`DELETE FROM meta_stripe_report_run`);
-        return { status: 'pending', detail: 'Stripe could not prepare its own report this time; the next sync asks again.' };
-    }
-    if (run.status !== 'succeeded' || !run.url)
-        return { status: 'pending', detail: 'Stripe is still preparing its own report; the next sync reads it.' };
-    const totals = monthTotals(await s.reportRows(run.url));
+        return { status: 'pending', detail: `Stripe's own report has data only to ${new Date(avail.end * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC, so last month is not in it yet.` };
     const names = months.map((m) => m.month);
-    // The report holds refunds up to the end of the interval it was run for.
+    // Read once a day at most: a stored report for every month, taken within a day of Stripe's latest data, is enough.
+    const stored = await db.query(`SELECT month, max(through_at) AS through FROM meta_stripe_report_month WHERE month = ANY($1) AND currency = '*' GROUP BY month`, [names]);
+    if (stored.length === names.length && stored.every((r) => Date.parse(String(new Date(r.through).toISOString())) / 1000 >= end - 86400)) {
+        return { status: 'ok', detail: `Stripe's own report for ${names.join(', ')} is already read.`, months: names };
+    }
+    const start = months[0].start;
+    const pending = (await db.query(`SELECT run_id, interval_start, interval_end, started_at FROM meta_stripe_report_run ORDER BY started_at DESC LIMIT 1`))[0];
+    // A stored run older than a day, or for other months, is dropped and asked for again.
+    const resumed = Boolean(pending && Number(pending.interval_start) === start && now - Date.parse(new Date(pending.started_at).toISOString()) < 86400000);
     const through = new Date((resumed ? Number(pending.interval_end) : end) * 1000).toISOString();
-    await db.transaction(async (tx) => {
-        await tx.query(`DELETE FROM meta_stripe_report_month WHERE month = ANY($1)`, [names]);
-        for (const t of totals.filter((x) => names.includes(x.month))) {
-            await tx.query(`INSERT INTO meta_stripe_report_month VALUES ($1, $2, $3, $4, $5, $6, now())`, [t.month, t.currency, t.charges, t.gross, t.refunds, through]);
+    const drop = () => db.query(`DELETE FROM meta_stripe_report_run`);
+    try {
+        let run;
+        if (resumed)
+            run = await s.reportRun(String(pending.run_id));
+        else {
+            await drop();
+            run = await s.startActivityRun(start, end);
+            if (!run)
+                return { status: 'unavailable', detail: NO_PERMISSION };
+            await db.query(`INSERT INTO meta_stripe_report_run VALUES ($1, $2, $3, now())`, [run.id, start, end]);
         }
-        // A month Stripe has no charges for is still a month its report covered: a marker row says so.
-        for (const m of names)
-            await tx.query(`INSERT INTO meta_stripe_report_month VALUES ($1, '*', 0, 0, 0, $2, now()) ON CONFLICT DO NOTHING`, [m, through]);
-        await tx.query(`DELETE FROM meta_stripe_report_run`);
-    });
-    return { status: 'ok', detail: `Read Stripe's own report for ${names.join(', ')}.`, months: names };
+        const wait = opts.wait ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+        const until = Date.now() + (opts.maxWaitMs ?? 20000);
+        while (run.status === 'pending' && Date.now() < until) {
+            await wait(opts.pollMs ?? 3000);
+            run = await s.reportRun(run.id);
+        }
+        if (run.status === 'failed') {
+            await drop();
+            return { status: 'pending', detail: 'Stripe could not prepare its own report this time; the next sync asks again.' };
+        }
+        if (run.status !== 'succeeded' || !run.url)
+            return { status: 'pending', detail: 'Stripe is still preparing its own report; the next sync reads it.' };
+        const totals = monthTotals(await s.reportRows(run.url));
+        const unplaced = totals.filter((t) => t.month === '?').reduce((n, t) => n + t.unplaced, 0);
+        await db.transaction(async (tx) => {
+            await tx.query(`DELETE FROM meta_stripe_report_month WHERE month = ANY($1)`, [names]);
+            for (const t of totals.filter((x) => names.includes(x.month))) {
+                await tx.query(`INSERT INTO meta_stripe_report_month (month, currency, charges, gross, refunds, through_at, fetched_at, unplaced) VALUES ($1, $2, $3, $4, $5, $6, now(), 0)`, [t.month, t.currency, t.charges, t.gross, t.refunds, through]);
+            }
+            // A month Stripe has no charges for is still a month its report covered: a marker row says so, and carries
+            // any rows the report could not place in a month.
+            for (const m of names)
+                await tx.query(`INSERT INTO meta_stripe_report_month (month, currency, charges, gross, refunds, through_at, fetched_at, unplaced) VALUES ($1, '*', 0, 0, 0, $2, now(), $3) ON CONFLICT DO NOTHING`, [m, through, unplaced]);
+            await tx.query(`DELETE FROM meta_stripe_report_run`);
+        });
+        return { status: 'ok', detail: `Read Stripe's own report for ${names.join(', ')}.`, months: names };
+    }
+    catch (e) {
+        // A run that cannot be read is dropped, so the next sync starts a fresh one instead of retrying it forever.
+        await drop();
+        throw e;
+    }
 }
 /**
  * The month's Stripe totals in this database against Stripe's own report: charge count and gross exactly, and net
  * (gross minus refunds against those charges) exactly when the report reaches the last sync.
  */
 export async function stripeReportCheck(db, month, start, end) {
-    const report = await db.query(`SELECT currency, charges, gross, refunds, through_at FROM meta_stripe_report_month WHERE month = $1`, [month]);
+    const report = await db.query(`SELECT currency, charges, gross, refunds, through_at, unplaced FROM meta_stripe_report_month WHERE month = $1`, [month]);
     if (!report.length)
         return { status: 'skipped', detail: `Stripe's own report for ${month} has not been read yet. It needs a live key with the read permission "Report runs and report types", and a sync after the month ends.`, expected: null, actual: null, netChecked: false };
     const mine = await db.query(`SELECT currency, sum(charges) AS charges, sum(gross) AS gross, sum(net) AS net FROM fact_stripe_daily WHERE date >= $1 AND date < $2 GROUP BY currency`, [start, end]);
     const cents = (v) => Math.round(Number(v ?? 0) * 100);
-    const through = new Date(String(report.find((r) => r.through_at)?.through_at)).toISOString();
-    const lastSync = (await db.query(`SELECT max(started_at) AS at FROM meta_sync_run WHERE source = 'stripe' AND status IN ('ok', 'warning')`))[0]?.at;
-    const reportCoversSync = lastSync ? Date.parse(through) >= Date.parse(String(lastSync)) : false;
+    const through = new Date(report.find((r) => r.through_at).through_at).toISOString();
+    const unplaced = report.reduce((n, r) => n + Number(r.unplaced ?? 0), 0);
+    if (unplaced)
+        return { status: 'fail', detail: `Stripe's own report has ${unplaced} charge or refund row${unplaced === 1 ? '' : 's'} with no charge date, so ${month} cannot be matched.`, expected: null, actual: null, netChecked: false };
     const currencies = [...new Set([...report.map((r) => String(r.currency)), ...mine.map((r) => String(r.currency))])].filter((c) => c !== '*');
     let netChecked = true;
     for (const c of currencies) {
@@ -99,8 +114,9 @@ export async function stripeReportCheck(db, month, start, end) {
         if (theirs.gross !== ours.gross)
             return { status: 'fail', detail: `Gross ${c.toUpperCase()} ${(ours.gross / 100).toFixed(2)} against ${(theirs.gross / 100).toFixed(2)} in Stripe's own report for ${month}.`, expected: theirs.gross / 100, actual: ours.gross / 100, netChecked: false };
         if (theirs.net !== ours.net) {
-            // Refunds after the report's end are in our numbers but not in the report yet. That is a timing gap, not a fault.
-            if (!reportCoversSync && ours.net < theirs.net)
+            // Our net is as of the last sync; Stripe's report holds refunds only to its own end, which is always earlier.
+            // Lower here can be refunds made in between, so net waits for a later report. Higher here cannot be timing.
+            if (ours.net < theirs.net)
                 netChecked = false;
             else
                 return { status: 'fail', detail: `Net ${c.toUpperCase()} ${(ours.net / 100).toFixed(2)} against ${(theirs.net / 100).toFixed(2)} in Stripe's own report for ${month} (gross minus refunds against those charges).`, expected: theirs.net / 100, actual: ours.net / 100, netChecked: false };

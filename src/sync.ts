@@ -444,7 +444,7 @@ export async function syncStripe(db: Db, load: { charges: () => Promise<RawCharg
     await setTotal(db, 'stripe', 'charges_pulled', charges.length)
     // 0.14.0: what the daily rows must add up to, and how many subscriptions are open right now,
     // so the trust gate can check Stripe's daily tables against the pull itself.
-    await setTotal(db, 'stripe', 'charges_counted', charges.filter((c) => c.status === 'succeeded' || c.status === 'failed').length)
+    await setTotal(db, 'stripe', 'charges_counted', charges.filter((c) => (c.status === 'succeeded' && c.captured !== false) || c.status === 'failed').length)
     if (subs) await setTotal(db, 'stripe', 'subscriptions_pulled', subs.length)
     if (subs) await setTotal(db, 'stripe', 'subscriptions_open', subs.filter((x) => x.status !== 'incomplete_expired' && !x.ended_at).length)
     // 0.20.1: whether this sync read subscriptions, so an as-of MRR never rests on an older pull.

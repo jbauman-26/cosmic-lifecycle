@@ -371,7 +371,7 @@ export async function syncStripe(db, load, opts = {}) {
         await setTotal(db, 'stripe', 'charges_pulled', charges.length);
         // 0.14.0: what the daily rows must add up to, and how many subscriptions are open right now,
         // so the trust gate can check Stripe's daily tables against the pull itself.
-        await setTotal(db, 'stripe', 'charges_counted', charges.filter((c) => c.status === 'succeeded' || c.status === 'failed').length);
+        await setTotal(db, 'stripe', 'charges_counted', charges.filter((c) => (c.status === 'succeeded' && c.captured !== false) || c.status === 'failed').length);
         if (subs)
             await setTotal(db, 'stripe', 'subscriptions_pulled', subs.length);
         if (subs)

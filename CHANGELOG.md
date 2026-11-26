@@ -9,8 +9,10 @@ Stripe charge KPIs can be reported in `cosmic verdict`, held against Stripe's ow
 ### The rule for Stripe
 
 - **A Stripe charge KPI** (net revenue, average charge, charges) is reportable for a finished month only when the month's Stripe totals here match **Stripe's own report** for that month. The report is Stripe's itemized balance activity from its Reports API, built from Stripe's ledger and not from the charges list the sync reads. The usual coverage rules also apply: the source synced through the month's end, the sync is fresh, and the month is over.
-  - **What is matched, exactly:** the charge count, gross, and net (gross minus refunds against those charges), per currency.
-  - **When net waits:** if Stripe's report ends before the last sync, net is not compared until it catches up, and KPIs that use net wait too.
+  - **What is matched, exactly:** the charge count, gross, and net (gross minus refunds against those charges), per currency, in each charge's own currency and amount (not the settlement currency), summed in cents.
+  - **What counts as a charge, on both sides:** a bank debit that fails after posting is no sale, and an authorization that was never captured is not counted (here it was counted before). Gross uses the captured amount.
+  - **Not in the match:** disputes and fees. The KPI's notes say so.
+  - **When net waits:** Stripe's report always ends a little before the sync that read it. A lower net here can be refunds made in between, so net waits for a later report, and KPIs that use net wait too. A higher net here fails.
   - **The label:** `"basis": "matches Stripe's own report"` in JSON, and "(matches Stripe's own report)" in text.
 - **Checks counted from the same pull never make a Stripe KPI reportable.** `stripe_daily_complete` and `subscriptions_balance` only hold KPIs back when they fail.
 - **Not covered by the report:** KPIs built on new customers, repeat, guest or failed charges stay withheld, and say which column the report does not cover.
@@ -20,15 +22,20 @@ Stripe charge KPIs can be reported in `cosmic verdict`, held against Stripe's ow
   - the sync is within the freshness limit;
   - a snapshot exists from that sync's day.
 
-  It is labelled "as of TIME" and never appears among a month's KPIs. It stays in `not_by_period`.
+  It is labelled "as of TIME" (when that sync read Stripe), and never appears among a month's KPIs. It stays in `not_by_period`. Its completeness rests on `subscriptions_balance`, which counts the same pull, so MRR's own label says it is from Stripe's subscription pull.
 
 ### Added
 
-- **`cosmic sync` reads Stripe's own report** for the last 3 finished months: `balance_change_from_activity.itemized.3`, with only `reporting_category`, `currency`, `gross` and `charge_created_utc`, never a customer, card or address column. Only totals are kept, in `meta_stripe_report_month`. Stripe prepares the report in the background, and a report that is not ready is read by the next sync.
+- **`cosmic sync` reads Stripe's own report** for the last 3 finished months: `balance_change_from_activity.itemized.3`, with only `reporting_category`, `customer_facing_currency`, `customer_facing_amount`, `charge_created_utc` and `created_utc`, never a customer, card or address column. Only totals are kept, in `meta_stripe_report_month`.
+  - **When it reads:** at most once a day. The interval ends a second before Stripe's data does, and a month that starts before Stripe's data is left out.
+  - **Runs that take time:** Stripe prepares the report in the background, and a report that is not ready is read by the next sync. A run that cannot be read is dropped and asked for again.
+  - **A row with no charge date** withholds that month rather than shrinking it.
+  - **Errors:** a refused request is reported with Stripe's own error. Only a refused key is reported as the missing permission.
 - **Key permission:** a restricted key needs one more read permission, "Report runs and report types" (`report_runs_and_report_types_read`). The sync line says so when it is missing.
 - **Test keys:** Stripe runs reports only for live keys, so for a test key the check is skipped and Stripe charge KPIs stay withheld.
 - **New JSON keys:** `kpis[].basis`, and `as_of` (`at` plus its own `kpis`). No key was renamed or removed.
 - Each Stripe sync records whether it read subscriptions (`subscriptions_read`).
+- `cosmic disconnect stripe --delete-data` also deletes Stripe's report totals.
 
 ### Changed
 
@@ -64,7 +71,7 @@ A month still running, and one that has not started, hold every KPI back. A chec
 
 ### Not covered yet
 
-- Meta, and every table without a verifying check, are always withheld. Stripe's two checks count from the same pull they check, and Stripe gives no total of its own, so they guard but do not verify. (0.20.1: in a workspace whose source of truth is Stripe, Stripe-only KPIs are reportable as "matches Stripe".)
+- Meta, and every table without a verifying check, are always withheld. Stripe's two checks count from the same pull they check, so they guard but do not verify. (0.20.1: Stripe charge KPIs can be reported when they match Stripe's own report.)
 - Point-in-time metrics (MRR, open pipeline), metrics counted from the first Meta day, and margin metrics have no monthly value. They are listed in `not_by_period`.
 - Money values are in each metric's main currency, not converted; the notes say so.
 - Tested against built test databases, not yet against a real client account.

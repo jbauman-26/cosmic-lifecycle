@@ -166,10 +166,11 @@ const AS_OF_KPIS = {
 };
 async function asOfVerdict(db, metrics, checks, connected, t, now) {
     const run = await one(db, `SELECT started_at, finished_at, status FROM meta_sync_run WHERE source = 'stripe' ORDER BY started_at DESC LIMIT 1`);
-    const good = await one(db, `SELECT finished_at FROM meta_sync_run WHERE source = 'stripe' AND status IN ('ok', 'warning') ORDER BY started_at DESC LIMIT 1`);
+    // The time Stripe was read: a sync reads at its start.
+    const good = await one(db, `SELECT started_at FROM meta_sync_run WHERE source = 'stripe' AND status IN ('ok', 'warning') ORDER BY started_at DESC LIMIT 1`);
     // Written by every Stripe sync from 0.20.1: 1 when that sync read subscriptions, 0 when the key could not.
     const read = (await db.query(`SELECT value FROM meta_source_total WHERE source = 'stripe' AND metric = 'subscriptions_read'`))[0];
-    const at = iso(good.finished_at);
+    const at = iso(good.started_at);
     const balance = checks.find((c) => c.name === 'subscriptions_balance');
     const kpis = [];
     for (const m of metrics) {
@@ -235,6 +236,7 @@ export async function verdictFor(db, period, opts = {}) {
     let reportCheck;
     for (const m of metrics) {
         const stripeChecks = [];
+        const notesExtra = [];
         const mine = checks.filter((c) => m.needs.some((s) => touches(c.name, s)));
         const reasons = [];
         const next = [];
@@ -309,10 +311,12 @@ export async function verdictFor(db, period, opts = {}) {
             const r = await one(db, periodSql(m.sql), [start, end]);
             value = r.value === null || r.value === undefined ? null : Number(r.value);
         }
+        if (status === 'reportable' && fromStripeReport)
+            notesExtra.push("Matched with Stripe's own report on charge count, gross and refunds. Disputes and fees are not part of that match.");
         kpis.push({
             kpi: m.name, title: m.title, unit: m.unit, status, value, basis: status === 'reportable' && fromStripeReport ? "matches Stripe's own report" : null, sources: m.needs, checks: [...mine.map(ref), ...stripeChecks],
             // A checked month can still have no value: a ratio with nothing to divide by, such as AOV with no orders.
-            notes: [...(m.notes ?? []), ...(status === 'reportable' && value === null ? ['No value this month: there is nothing to divide by (for example, no orders). The data behind it was checked.'] : [])],
+            notes: [...(m.notes ?? []), ...notesExtra, ...(status === 'reportable' && value === null ? ['No value this month: there is nothing to divide by (for example, no orders). The data behind it was checked.'] : [])],
             reason: reasons.length ? [...new Set(reasons)].join(' ') : null, next_checks: [...new Set(next)],
         });
     }
