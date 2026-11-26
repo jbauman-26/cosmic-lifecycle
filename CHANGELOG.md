@@ -4,35 +4,41 @@ Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described
 
 ## 0.20.1 (2026-11-25)
 
-KPIs built only from a workspace's own source of truth can be reported in `cosmic verdict`.
+Stripe charge KPIs can be reported in `cosmic verdict`, held against Stripe's own report. MRR is reported as of the last sync, never as a month figure.
+
+### The rule for Stripe
+
+- **A Stripe charge KPI** (net revenue, average charge, charges) is reportable for a finished month only when the month's Stripe totals here match **Stripe's own report** for that month. The report is Stripe's itemized balance activity from its Reports API, built from Stripe's ledger and not from the charges list the sync reads. The usual coverage rules also apply: the source synced through the month's end, the sync is fresh, and the month is over.
+  - **What is matched, exactly:** the charge count, gross, and net (gross minus refunds against those charges), per currency.
+  - **When net waits:** if Stripe's report ends before the last sync, net is not compared until it catches up, and KPIs that use net wait too.
+  - **The label:** `"basis": "matches Stripe's own report"` in JSON, and "(matches Stripe's own report)" in text.
+- **Checks counted from the same pull never make a Stripe KPI reportable.** `stripe_daily_complete` and `subscriptions_balance` only hold KPIs back when they fail.
+- **Not covered by the report:** KPIs built on new customers, repeat, guest or failed charges stay withheld, and say which column the report does not cover.
+- **MRR, as of a sync.** `stripe_mrr` is reported in a new `as_of` section, as of the last Stripe sync, when all four hold:
+  - that sync read subscriptions;
+  - `subscriptions_balance` passes;
+  - the sync is within the freshness limit;
+  - a snapshot exists from that sync's day.
+
+  It is labelled "as of TIME" and never appears among a month's KPIs. It stays in `not_by_period`.
+
+### Added
+
+- **`cosmic sync` reads Stripe's own report** for the last 3 finished months: `balance_change_from_activity.itemized.3`, with only `reporting_category`, `currency`, `gross` and `charge_created_utc`, never a customer, card or address column. Only totals are kept, in `meta_stripe_report_month`. Stripe prepares the report in the background, and a report that is not ready is read by the next sync.
+- **Key permission:** a restricted key needs one more read permission, "Report runs and report types" (`report_runs_and_report_types_read`). The sync line says so when it is missing.
+- **Test keys:** Stripe runs reports only for live keys, so for a test key the check is skipped and Stripe charge KPIs stay withheld.
+- **New JSON keys:** `kpis[].basis`, and `as_of` (`at` plus its own `kpis`). No key was renamed or removed.
+- Each Stripe sync records whether it read subscriptions (`subscriptions_read`).
 
 ### Changed
 
-- **A KPI built only from the workspace's source of truth** (`workspace.reference`: Stripe for SaaS, Shopify for a store, HubSpot for a pipeline) is reportable when all three hold:
-  - its completeness check passes: the daily totals match the full pull from that source;
-  - the source synced through the end of the month;
-  - the month is over.
-- **Stripe:** `stripe_daily_complete` is that check for Stripe KPIs, in a workspace whose reference is Stripe. It still only guards Stripe KPIs anywhere else.
-- **Shopify and HubSpot:** they already had such checks (`orders_complete`, `deals_complete`, `contacts_complete`). If a HubSpot table has no completeness check, its KPIs stay withheld and say why.
-- **The `basis` field:** these KPIs carry `"basis": "matches Stripe"` (or Shopify, or HubSpot) in JSON, and "(matches Stripe)" in text. It is a match with that source's own pull, never an independent confirmation. Every other KPI has `"basis": null`. No existing key was renamed or removed. New: `basis` on every KPI, and `as_of` on point-in-time ones.
-- **Each Stripe table needs its own check.** Charges need `stripe_daily_complete`. Subscriptions and MRR need `subscriptions_balance`, and the latest Stripe sync must have read subscriptions. A key that cannot read them gives no match.
-- **`stripe_mrr`** has a value for a finished month: MRR on the last snapshot inside the month. The snapshot must fall within the freshness limit plus one day of the month's end (the last 3 days by default).
-  - It is withheld when no snapshot exists in that window.
-  - It carries `as_of` (new, only on point-in-time KPIs), a note, and "at DATE" in text.
-  - It moves from `not_by_period` into `kpis`.
-- **A zero-tolerance count check is exact.** A rounded percent used to let 1 in 20,000 through. This also tightens `orders_complete` and every other 0% check.
-
-### Unchanged
-
-- KPIs from other sources follow the 0.20.0 rules.
-- Meta and other ad-platform numbers stay withheld: they are the platform's own claims.
-- A KPI that mixes the source of truth with another source (for example, visit to paid rate needs GA4) gets no source-of-truth pass.
+- **A zero-tolerance count check is exact.** A rounded percent used to let 1 in 20,000 through. This also tightens `orders_complete`.
 
 ### Not covered yet
 
-- MRR for a month with no sync inside it.
-- Other point-in-time metrics (ARPA, open pipeline).
-- Any check of Stripe against a total Stripe computes itself, such as its Reports API.
+- **Never run against a live account.** Stripe's Reports API works only with live keys, and Cosmic's Stripe account is in test mode, so this release is tested on recorded report files and a mocked client. The first live run may show a column or timing case not covered here.
+- Only the last 3 finished months are checked against Stripe's report.
+- Subscriptions started and ended for a month have no independent check, so they stay withheld.
 
 ## 0.20.0 (2026-11-25)
 

@@ -14,12 +14,123 @@ export function toMajor(amount, currency) {
 }
 export const stripeMode = (key) => (/^(sk|rk)_test_/.test(key) ? 'test' : 'live');
 export const isRestrictedKey = (key) => key.startsWith('rk_');
+export const ACTIVITY_REPORT = 'balance_change_from_activity.itemized.3';
+export const ACTIVITY_COLUMNS = ['reporting_category', 'currency', 'gross', 'charge_created_utc'];
+// Splits one CSV line, quotes and commas inside quotes included.
+function csvLine(line) {
+    const out = [];
+    let cell = '', quoted = false;
+    for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (quoted) {
+            if (c === '"' && line[i + 1] === '"') {
+                cell += '"';
+                i++;
+            }
+            else if (c === '"')
+                quoted = false;
+            else
+                cell += c;
+        }
+        else if (c === '"')
+            quoted = true;
+        else if (c === ',') {
+            out.push(cell);
+            cell = '';
+        }
+        else
+            cell += c;
+    }
+    out.push(cell);
+    return out.map((x) => x.trim());
+}
+export function parseActivityCsv(csv) {
+    const lines = csv.trim().split(/\r?\n/).filter(Boolean);
+    if (!lines.length)
+        return [];
+    const head = csvLine(lines[0]);
+    const idx = ACTIVITY_COLUMNS.map((c) => head.indexOf(c));
+    if (idx.some((i) => i < 0))
+        throw new CliError('Stripe\'s activity report did not have the expected columns.', 'cosmic feedback "stripe activity report columns"', 'stripe_report_columns');
+    const [cat, cur, gross, created] = idx;
+    return lines.slice(1).map((l) => {
+        const f = csvLine(l);
+        return { reportingCategory: f[cat], currency: f[cur].toLowerCase(), gross: Number(f[gross]), chargeCreated: f[created] ? f[created] : null };
+    });
+}
+export function monthTotals(rows) {
+    const by = new Map();
+    for (const r of rows) {
+        if (!r.chargeCreated)
+            continue;
+        const month = r.chargeCreated.slice(0, 7);
+        const key = `${month}\0${r.currency}`;
+        const m = by.get(key) ?? { month, currency: r.currency, charges: 0, gross: 0, refunds: 0 };
+        if (r.reportingCategory === 'charge') {
+            m.charges += 1;
+            m.gross += r.gross;
+        }
+        else if (r.reportingCategory === 'refund' || r.reportingCategory === 'refund_failure')
+            m.refunds += r.gross;
+        by.set(key, m);
+    }
+    return [...by.values()].map((m) => ({ ...m, gross: Math.round(m.gross * 100) / 100, refunds: Math.round(m.refunds * 100) / 100 }));
+}
+const fetchText = async (url, init, label) => {
+    const res = await fetch(url, init);
+    const text = await res.text();
+    if (!res.ok)
+        throw new HttpError(label, res.status, text.slice(0, 400));
+    return text;
+};
 export class Stripe {
     key;
     fetcher;
-    constructor(key, fetcher = fetchJson) {
+    textFetcher;
+    constructor(key, fetcher = fetchJson, textFetcher = fetchText) {
         this.key = key;
         this.fetcher = fetcher;
+        this.textFetcher = textFetcher;
+    }
+    get mode() {
+        return stripeMode(this.key);
+    }
+    post(path, form, label) {
+        return this.fetcher(`${apiBase('stripe', API)}${path}`, { method: 'POST', headers: { authorization: `Bearer ${this.key}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(form).toString() }, label);
+    }
+    /** The last moment Stripe's activity report has data for, in epoch seconds. Null when the key cannot run reports. */
+    async activityAvailableEnd() {
+        try {
+            const t = await this.get(`/reporting/report_types/${ACTIVITY_REPORT}`, {}, 'Stripe report type request');
+            return typeof t.data_available_end === 'number' ? t.data_available_end : null;
+        }
+        catch (e) {
+            if (e instanceof HttpError && (e.status === 403 || e.status === 400 || e.status === 404))
+                return null;
+            throw e;
+        }
+    }
+    /** Starts a run of the activity summary for [start, end) in UTC. Null when the key cannot run reports. */
+    async startActivityRun(start, end) {
+        try {
+            const cols = Object.fromEntries(ACTIVITY_COLUMNS.map((c, i) => [`parameters[columns][${i}]`, c]));
+            const r = await this.post('/reporting/report_runs', { report_type: ACTIVITY_REPORT, 'parameters[interval_start]': String(start), 'parameters[interval_end]': String(end), 'parameters[timezone]': 'Etc/UTC', ...cols }, 'Stripe report run request');
+            return { id: String(r.id), status: r.status, url: r.result?.url ?? null };
+        }
+        catch (e) {
+            if (e instanceof HttpError && (e.status === 403 || e.status === 400))
+                return null;
+            throw e;
+        }
+    }
+    async reportRun(id) {
+        const r = await this.get(`/reporting/report_runs/${encodeURIComponent(id)}`, {}, 'Stripe report run status request');
+        return { id: String(r.id), status: r.status, url: r.result?.url ?? null };
+    }
+    async reportRows(url) {
+        if (!/^https:\/\/files\.stripe\.com\//.test(url))
+            throw new CliError('Stripe gave a report file address that is not on files.stripe.com.', 'cosmic feedback "stripe report url"', 'stripe_report_url');
+        return parseActivityCsv(await this.textFetcher(url, { headers: { authorization: `Bearer ${this.key}` } }, 'Stripe report file request'));
     }
     async get(path, params, label) {
         const qs = new URLSearchParams(params).toString();

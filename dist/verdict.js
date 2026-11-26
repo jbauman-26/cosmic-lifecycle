@@ -3,8 +3,8 @@ import { reconcile, tolerances, trustLine, TOLERANCE } from './reconcile.js';
 import { packMetrics } from './metrics.js';
 import { readWorkspace } from './workspace.js';
 import { workspaceName } from './paths.js';
-// Checks that compare a dataset's own count against a count the source reports itself (Shopify's order count,
-// HubSpot's totals) or against another source, by the table they vouch for.
+import { stripeReportCheck } from './stripe-report.js';
+// Checks that compare a dataset's own count against something independent, by the table they vouch for.
 // A KPI counts as checked only when, for every table its SQL reads, one of these ran (passed or warned) on a
 // window that includes the month. A check on one table never certifies another (an order count says nothing
 // about flow revenue).
@@ -21,23 +21,6 @@ const VERIFIES_TABLE = {
 // These checks compare only the trailing window (metrics.default_days up to yesterday), so they vouch for a
 // month only when the month lies inside that window.
 const TRAILING_CHECKS = new Set(['klaviyo_orders', 'ga4_purchases', 'ga4_vs_reference', 'flow_totals']);
-// 0.20.1: the workspace's own source of truth (workspace.reference). A KPI computed only from that source is
-// reportable when the source's completeness check passes (its daily totals match the full pull), the source
-// synced through the end of the month, and the month is over. That is a match with the source's own pull, not
-// an independent confirmation, so it is labelled "matches Stripe" (or Shopify, or HubSpot) in text and JSON.
-// Shopify and HubSpot tables already have such checks above. Stripe gives no total of its own, so its daily
-// completeness check counts only for KPIs built from Stripe alone, in a workspace whose reference is Stripe.
-// Each reference table's own completeness check. Charges and subscriptions are separate pulls, so each table needs
-// the check that counts it: a charge count says nothing about subscriptions.
-const REFERENCE_COMPLETE = {
-    stripe: { fact_stripe_daily: 'stripe_daily_complete', fact_stripe_subscriptions_daily: 'subscriptions_balance', fact_stripe_mrr: 'subscriptions_balance' },
-};
-// Tables built from Stripe subscriptions, which a key may not be able to read: the latest sync must have read them.
-const SUBSCRIPTION_TABLES = new Set(['fact_stripe_subscriptions_daily', 'fact_stripe_mrr']);
-// Point-in-time metrics with a value for a finished month: the last snapshot taken inside the month.
-const AS_OF = {
-    stripe_mrr: `SELECT mrr AS value, date::text AS as_of FROM fact_stripe_mrr WHERE date = (SELECT max(date) FROM fact_stripe_mrr WHERE date >= $1 AND date < $2) ORDER BY active_subscriptions DESC, currency LIMIT 1`,
-};
 export const tablesOf = (sql) => [...new Set([...sql.matchAll(/FROM (fact_\w+)/g)].map((m) => m[1]))];
 // Every check that can fail on a source, for holding its KPIs back.
 const VERIFIES = {
@@ -49,8 +32,7 @@ const GUARDS = {
     orders_vs_cohorts: ['shopify'],
     deals_daily_vs_pulled: ['hubspot'],
     // Both are counted from the same Stripe pull, so a pull that drops pages passes them. Stripe gives no total of
-    // its own to check against. They verify only KPIs built from Stripe alone, in a workspace whose source of truth is
-    // Stripe (REFERENCE_COMPLETE, reported as "matches Stripe"); everywhere else they only guard.
+    // its own to check against, so no Stripe table is verified yet.
     stripe_daily_complete: ['stripe'],
     subscriptions_balance: ['stripe'],
     attributed_share: ['klaviyo'],
@@ -171,10 +153,60 @@ const ref = (c) => ({ name: c.name, status: c.status, detail: c.detail, expected
 function failReason(c) {
     if (c.expected !== null && c.actual !== null && c.status === 'fail' && /orders|charges|deals|contacts|stripe_daily/.test(c.name)) {
         const gap = Math.abs(c.expected - c.actual);
-        const what = c.name.startsWith('orders') || c.name === 'klaviyo_orders' ? 'orders' : c.name === 'stripe_daily_complete' ? 'charges' : c.name.split('_')[0];
-        return `${gap} ${what} ${c.actual < c.expected ? 'missing' : 'extra'}: ${c.actual} against ${c.expected} (${c.name}).`;
+        const what = c.name.startsWith('orders') || c.name === 'klaviyo_orders' ? 'orders' : c.name === 'stripe_daily_complete' ? 'charges' : (c.name.split('_')[0] ?? c.name);
+        return `${gap} ${gap === 1 ? what.replace(/s$/, '') : what} ${c.actual < c.expected ? 'missing' : 'extra'}: ${c.actual} against ${c.expected} (${c.name}).`;
     }
     return `${c.name} failed: ${c.detail}`;
+}
+// 0.20.1: point-in-time KPIs, reported as of the last sync and never as a month figure. MRR is reportable as of a
+// sync when that sync read subscriptions, the subscription count it pulled balances (subscriptions_balance), it is
+// fresh, and the snapshot is from that sync's day.
+const AS_OF_KPIS = {
+    stripe_mrr: `SELECT mrr AS value FROM fact_stripe_mrr WHERE date = $1::date ORDER BY active_subscriptions DESC, currency LIMIT 1`,
+};
+async function asOfVerdict(db, metrics, checks, connected, t, now) {
+    const run = await one(db, `SELECT started_at, finished_at, status FROM meta_sync_run WHERE source = 'stripe' ORDER BY started_at DESC LIMIT 1`);
+    const good = await one(db, `SELECT finished_at FROM meta_sync_run WHERE source = 'stripe' AND status IN ('ok', 'warning') ORDER BY started_at DESC LIMIT 1`);
+    // Written by every Stripe sync from 0.20.1: 1 when that sync read subscriptions, 0 when the key could not.
+    const read = (await db.query(`SELECT value FROM meta_source_total WHERE source = 'stripe' AND metric = 'subscriptions_read'`))[0];
+    const at = iso(good.finished_at);
+    const balance = checks.find((c) => c.name === 'subscriptions_balance');
+    const kpis = [];
+    for (const m of metrics) {
+        const reasons = [];
+        const next = [];
+        if (connected && !connected.includes('stripe'))
+            reasons.push('Stripe is not connected.');
+        if (run.status === 'running')
+            reasons.push('Stripe is still syncing.');
+        if (!at)
+            reasons.push('Stripe has not finished a sync.');
+        else if ((now - Date.parse(at)) / 86400000 > t.freshnessDays)
+            reasons.push(`Stripe last synced ${at.slice(0, 10)}, past the ${t.freshnessDays}-day freshness limit.`);
+        if (at && !read)
+            reasons.push('Stripe synced before 0.20.1 recorded whether subscriptions were read. Sync it again.');
+        else if (at && Number(read.value) !== 1)
+            reasons.push('The latest Stripe sync did not read subscriptions. The key may lack read access to subscriptions.');
+        if (!balance || balance.status !== 'pass')
+            reasons.push(balance ? `subscriptions_balance ${balance.status === 'fail' ? 'failed' : 'did not run'}: ${balance.detail}` : 'subscriptions_balance did not run.');
+        if (reasons.length)
+            next.push('cosmic sync stripe, then cosmic verdict again');
+        let value = null;
+        if (!reasons.length) {
+            const r = await one(db, AS_OF_KPIS[m.name], [at.slice(0, 10)]);
+            if (r.value === null || r.value === undefined)
+                reasons.push(`No ${m.title} snapshot from the last sync's day.`);
+            else
+                value = Number(r.value);
+        }
+        const ok = !reasons.length;
+        kpis.push({
+            kpi: m.name, title: m.title, unit: m.unit, status: ok ? 'reportable' : 'withheld', value,
+            basis: ok ? `as of ${at}` : null, checks: balance ? [ref(balance)] : [], reason: ok ? null : reasons.join(' '), next_checks: next,
+            notes: [...(m.notes ?? []), `As of ${at ?? 'no sync'}, from Stripe's subscription pull. A point in time, not a figure for any month.`],
+        });
+    }
+    return { at, kpis };
 }
 /**
  * The verdict for one workspace and one month. The workspace is the one this process has open (the
@@ -194,13 +226,15 @@ export async function verdictFor(db, period, opts = {}) {
     const synced = (await db.query(`SELECT DISTINCT source FROM meta_sync_run`)).map((r) => String(r.source));
     const present = connected ?? synced;
     const all = packMetrics(ws.type).filter((m) => m.needs.every((s) => present.includes(s)));
-    const metrics = all.filter((m) => byPeriod(m) || m.name in AS_OF);
+    const metrics = all.filter(byPeriod);
     const sources = [...new Set(metrics.flatMap((m) => m.needs))].sort();
     const cover = new Map();
     for (const s of sources)
         cover.set(s, await coverage(db, s, connected, start, end, t, now));
     const kpis = [];
+    let reportCheck;
     for (const m of metrics) {
+        const stripeChecks = [];
         const mine = checks.filter((c) => m.needs.some((s) => touches(c.name, s)));
         const reasons = [];
         const next = [];
@@ -221,25 +255,38 @@ export async function verdictFor(db, period, opts = {}) {
         }
         // Every table the KPI reads needs its own verifying check, run on a window that includes this month.
         const checkStart = dayBefore(t.today ?? new Date(now).toISOString().slice(0, 10), t.days);
+        let fromStripeReport = false;
         for (const table of tablesOf(m.sql)) {
-            const refCheck = REFERENCE_COMPLETE[ws.reference]?.[table];
-            const fromReference = Boolean(refCheck) && m.needs.length === 1 && m.needs[0] === ws.reference;
-            const names = VERIFIES_TABLE[table] ?? (fromReference ? [refCheck] : undefined);
-            if (!names) {
-                const others = m.needs.filter((s) => s !== ws.reference);
-                reasons.push(refCheck && others.length
-                    ? `${m.title} combines ${nameOf(ws.reference)} with ${others.map(nameOf).join(' and ')}, so the match with ${nameOf(ws.reference)} does not cover it.`
-                    : `No check verifies ${table} yet, so ${m.title} is not checked.`);
-                continue;
-            }
-            if (fromReference && SUBSCRIPTION_TABLES.has(table)) {
-                // subscriptions_open is written only by a sync that read subscriptions; an older one means the latest did not.
-                const subs = await one(db, `SELECT recorded_at FROM meta_source_total WHERE source = 'stripe' AND metric = 'subscriptions_open'`);
-                const lastRun = await one(db, `SELECT max(started_at) AS at FROM meta_sync_run WHERE source = 'stripe' AND status IN ('ok', 'warning')`);
-                if (!subs.recorded_at || (lastRun.at && Date.parse(String(subs.recorded_at)) < Date.parse(String(lastRun.at)))) {
-                    reasons.push(`The latest Stripe sync did not read subscriptions, so ${m.title} is not checked. The key may lack read access to subscriptions.`);
+            if (table === 'fact_stripe_daily') {
+                // 0.20.1: Stripe charge KPIs are held against Stripe's own report (its balance ledger), never against checks
+                // counted from the same charges pull.
+                const uncovered = [...m.sql.matchAll(/\b(failed_charges|new_customers|returning_charges|guest_charges)\b/g)].map((x) => x[1]);
+                if (uncovered.length) {
+                    reasons.push(`${m.title} uses ${[...new Set(uncovered)].join(', ')}, which Stripe's own report does not cover (it covers charge counts, gross and net), so it is not checked.`);
                     continue;
                 }
+                reportCheck ??= await stripeReportCheck(db, period, start, end);
+                stripeChecks.push({ name: 'stripe_own_report', status: reportCheck.status, detail: reportCheck.detail, expected: reportCheck.expected, actual: reportCheck.actual });
+                if (reportCheck.status === 'fail') {
+                    reasons.push(reportCheck.detail);
+                    next.push('cosmic sync stripe, then compare the charges list with Stripe\'s dashboard for the month');
+                }
+                else if (reportCheck.status === 'skipped') {
+                    reasons.push(reportCheck.detail);
+                    next.push('add the read permission "Report runs and report types" to the Stripe key, then cosmic sync stripe');
+                }
+                else if (/\bnet\b|\brefunded\b/.test(m.sql.replace(/fact_stripe_daily/g, '')) && !reportCheck.netChecked) {
+                    reasons.push(`${m.title} uses net after refunds, and Stripe's own report does not reach the last sync yet, so net is not compared. ${reportCheck.detail}`);
+                    next.push('cosmic sync stripe again later, once Stripe\'s report covers the last sync');
+                }
+                else
+                    fromStripeReport = true;
+                continue;
+            }
+            const names = VERIFIES_TABLE[table];
+            if (!names) {
+                reasons.push(`No check verifies ${table} yet, so ${m.title} is not checked.`);
+                continue;
             }
             const verifying = checks.filter((c) => names.includes(c.name));
             // A failed check already gave its reason above; unchecked is for checks that did not vouch for this month.
@@ -256,38 +303,16 @@ export async function verdictFor(db, period, opts = {}) {
                     next.push('cosmic sync, then cosmic reconcile');
             }
         }
-        let status = reasons.length ? 'withheld' : 'reportable';
+        const status = reasons.length ? 'withheld' : 'reportable';
         let value = null;
-        let asOf = null;
-        if (status === 'reportable' && AS_OF[m.name]) {
-            const r = await one(db, AS_OF[m.name], [start, end]);
-            // The snapshot must be from the last days of the month, within the freshness limit of its end.
-            const latest = dayBefore(end, t.freshnessDays + 1);
-            if (r.as_of === null || r.as_of === undefined) {
-                status = 'withheld';
-                reasons.push(`${m.title} has no snapshot taken during ${period}: it is recorded only on the days Stripe syncs.`);
-                next.push(`cosmic sync stripe in the last ${t.freshnessDays + 1} days of the month, so ${m.title} has a value for it`);
-            }
-            else if (String(r.as_of).slice(0, 10) < latest) {
-                status = 'withheld';
-                reasons.push(`${m.title} was last recorded on ${String(r.as_of).slice(0, 10)}, more than ${t.freshnessDays + 1} days before ${period} ended, so it is not the month's MRR.`);
-                next.push(`cosmic sync stripe in the last ${t.freshnessDays + 1} days of the month, so ${m.title} has a value for it`);
-            }
-            else {
-                value = r.value === null || r.value === undefined ? null : Number(r.value);
-                asOf = String(r.as_of).slice(0, 10);
-            }
-        }
-        else if (status === 'reportable') {
+        if (status === 'reportable') {
             const r = await one(db, periodSql(m.sql), [start, end]);
             value = r.value === null || r.value === undefined ? null : Number(r.value);
         }
-        // A KPI built only from the workspace's source of truth says what it matches: that source's own pull.
-        const basis = status === 'reportable' && m.needs.length === 1 && m.needs[0] === ws.reference ? `matches ${nameOf(ws.reference)}` : null;
         kpis.push({
-            kpi: m.name, title: m.title, unit: m.unit, status, value, basis, ...(asOf ? { as_of: asOf } : {}), sources: m.needs, checks: mine.map(ref),
+            kpi: m.name, title: m.title, unit: m.unit, status, value, basis: status === 'reportable' && fromStripeReport ? "matches Stripe's own report" : null, sources: m.needs, checks: [...mine.map(ref), ...stripeChecks],
             // A checked month can still have no value: a ratio with nothing to divide by, such as AOV with no orders.
-            notes: [...(m.notes ?? []), ...(asOf ? [`${m.title} at the last sync in the month, ${asOf}.`] : []), ...(status === 'reportable' && value === null ? ['No value this month: there is nothing to divide by (for example, no orders). The data behind it was checked.'] : [])],
+            notes: [...(m.notes ?? []), ...(status === 'reportable' && value === null ? ['No value this month: there is nothing to divide by (for example, no orders). The data behind it was checked.'] : [])],
             reason: reasons.length ? [...new Set(reasons)].join(' ') : null, next_checks: [...new Set(next)],
         });
     }
@@ -300,7 +325,8 @@ export async function verdictFor(db, period, opts = {}) {
         kpis,
         reportable: kpis.filter((k) => k.status === 'reportable').length,
         withheld: kpis.filter((k) => k.status === 'withheld').length,
-        not_by_period: all.filter((m) => !byPeriod(m) && !(m.name in AS_OF)).map((m) => m.name),
+        not_by_period: all.filter((m) => !byPeriod(m)).map((m) => m.name),
+        as_of: all.some((m) => m.name in AS_OF_KPIS) ? await asOfVerdict(db, all.filter((m) => m.name in AS_OF_KPIS), checks, connected, t, now) : null,
         settings_changed: [
             ...Object.keys(TOLERANCE).filter((k) => t[k] !== TOLERANCE[k]).map((k) => `${k}: ${t[k]} (default ${TOLERANCE[k]})`),
             ...(t.days !== DEFAULT_DAYS ? [`days: ${t.days} (default ${DEFAULT_DAYS})`] : []),
@@ -313,7 +339,12 @@ export const verdictExit = (v) => (v.kpis.length && !v.withheld ? 0 : VERDICT_WI
 export function formatVerdict(v) {
     const lines = [`${v.workspace}, ${v.period} (${v.period_state === 'complete' ? 'complete month' : v.period_state === 'in_progress' ? 'still running' : 'not started'}): ${v.reportable} reportable, ${v.withheld} withheld.`];
     for (const k of v.kpis) {
-        lines.push(k.status === 'reportable' ? `REPORT ${k.kpi}: ${k.value ?? 'no value'}${k.as_of ? ` at ${k.as_of}` : ''}${k.basis ? ` (${k.basis})` : ''}` : `HOLD   ${k.kpi}: ${k.reason}`);
+        lines.push(k.status === 'reportable' ? `REPORT ${k.kpi}: ${k.value ?? 'no value'}${k.basis ? ` (${k.basis})` : ''}` : `HOLD   ${k.kpi}: ${k.reason}`);
+    }
+    if (v.as_of?.kpis.length) {
+        lines.push('', `Point in time, not for ${v.period}:`);
+        for (const k of v.as_of.kpis)
+            lines.push(k.status === 'reportable' ? `AS OF  ${k.kpi}: ${k.value} (${k.basis})` : `HOLD   ${k.kpi}: ${k.reason}`);
     }
     if (!v.kpis.length)
         lines.push('No KPIs to report: connect a source first. Next: cosmic doctor');

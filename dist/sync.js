@@ -376,6 +376,8 @@ export async function syncStripe(db, load, opts = {}) {
             await setTotal(db, 'stripe', 'subscriptions_pulled', subs.length);
         if (subs)
             await setTotal(db, 'stripe', 'subscriptions_open', subs.filter((x) => x.status !== 'incomplete_expired' && !x.ended_at).length);
+        // 0.20.1: whether this sync read subscriptions, so an as-of MRR never rests on an older pull.
+        await setTotal(db, 'stripe', 'subscriptions_read', subs ? 1 : 0);
         const notes = [
             subs ? null : opts.via ? `${opts.via} Subscriptions are not read in pipeline mode yet, so MRR and churn are skipped.` : 'This key cannot read subscriptions, so MRR and churn were skipped.',
             unpriced ? `${unpriced} subscription items use tiered or metered prices and are left out of MRR.` : null,

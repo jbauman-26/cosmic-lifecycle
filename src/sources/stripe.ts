@@ -45,8 +45,111 @@ export function toMajor(amount: number, currency: string) {
 export const stripeMode = (key: string) => (/^(sk|rk)_test_/.test(key) ? ('test' as const) : ('live' as const))
 export const isRestrictedKey = (key: string) => key.startsWith('rk_')
 
+// 0.20.1: Stripe's own record of each charge and refund, from the Reports API (itemized balance activity). Stripe
+// builds it from its balance ledger, not from the charges list the sync reads, so its totals are an independent
+// check. Only four columns are asked for: never a customer, card, address or description column.
+// A restricted key needs the read permission report_runs_and_report_types_read. Live mode only: Stripe does not run
+// reports for test keys or sandboxes.
+export type ActivityRow = { reportingCategory: string; currency: string; gross: number; chargeCreated: string | null }
+export type ReportRun = { id: string; status: 'pending' | 'succeeded' | 'failed'; url: string | null }
+export const ACTIVITY_REPORT = 'balance_change_from_activity.itemized.3'
+export const ACTIVITY_COLUMNS = ['reporting_category', 'currency', 'gross', 'charge_created_utc']
+
+// Splits one CSV line, quotes and commas inside quotes included.
+function csvLine(line: string) {
+  const out: string[] = []
+  let cell = '', quoted = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]!
+    if (quoted) {
+      if (c === '"' && line[i + 1] === '"') { cell += '"'; i++ } else if (c === '"') quoted = false
+      else cell += c
+    } else if (c === '"') quoted = true
+    else if (c === ',') { out.push(cell); cell = '' } else cell += c
+  }
+  out.push(cell)
+  return out.map((x) => x.trim())
+}
+
+export function parseActivityCsv(csv: string): ActivityRow[] {
+  const lines = csv.trim().split(/\r?\n/).filter(Boolean)
+  if (!lines.length) return []
+  const head = csvLine(lines[0]!)
+  const idx = ACTIVITY_COLUMNS.map((c) => head.indexOf(c))
+  if (idx.some((i) => i < 0)) throw new CliError('Stripe\'s activity report did not have the expected columns.', 'cosmic feedback "stripe activity report columns"', 'stripe_report_columns')
+  const [cat, cur, gross, created] = idx as [number, number, number, number]
+  return lines.slice(1).map((l) => {
+    const f = csvLine(l)
+    return { reportingCategory: f[cat]!, currency: f[cur]!.toLowerCase(), gross: Number(f[gross]), chargeCreated: f[created] ? f[created]! : null }
+  })
+}
+
+// Per month of charge creation: Stripe's charge count, gross, and the refunds against those charges (negative).
+export type ReportMonth = { month: string; currency: string; charges: number; gross: number; refunds: number }
+export function monthTotals(rows: ActivityRow[]): ReportMonth[] {
+  const by = new Map<string, ReportMonth>()
+  for (const r of rows) {
+    if (!r.chargeCreated) continue
+    const month = r.chargeCreated.slice(0, 7)
+    const key = `${month}\0${r.currency}`
+    const m = by.get(key) ?? { month, currency: r.currency, charges: 0, gross: 0, refunds: 0 }
+    if (r.reportingCategory === 'charge') { m.charges += 1; m.gross += r.gross } else if (r.reportingCategory === 'refund' || r.reportingCategory === 'refund_failure') m.refunds += r.gross
+    by.set(key, m)
+  }
+  return [...by.values()].map((m) => ({ ...m, gross: Math.round(m.gross * 100) / 100, refunds: Math.round(m.refunds * 100) / 100 }))
+}
+
+const fetchText = async (url: string, init: RequestInit, label: string) => {
+  const res = await fetch(url, init)
+  const text = await res.text()
+  if (!res.ok) throw new HttpError(label, res.status, text.slice(0, 400))
+  return text
+}
+
 export class Stripe {
-  constructor(private key: string, private fetcher = fetchJson) {}
+  constructor(private key: string, private fetcher = fetchJson, private textFetcher = fetchText) {}
+
+  get mode() {
+    return stripeMode(this.key)
+  }
+
+  private post(path: string, form: Record<string, string>, label: string) {
+    return this.fetcher(`${apiBase('stripe', API)}${path}`, { method: 'POST', headers: { authorization: `Bearer ${this.key}`, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(form).toString() }, label)
+  }
+
+  /** The last moment Stripe's activity report has data for, in epoch seconds. Null when the key cannot run reports. */
+  async activityAvailableEnd(): Promise<number | null> {
+    try {
+      const t = await this.get(`/reporting/report_types/${ACTIVITY_REPORT}`, {}, 'Stripe report type request')
+      return typeof t.data_available_end === 'number' ? t.data_available_end : null
+    } catch (e) {
+      if (e instanceof HttpError && (e.status === 403 || e.status === 400 || e.status === 404)) return null
+      throw e
+    }
+  }
+
+  /** Starts a run of the activity summary for [start, end) in UTC. Null when the key cannot run reports. */
+  async startActivityRun(start: number, end: number): Promise<ReportRun | null> {
+    try {
+      const cols = Object.fromEntries(ACTIVITY_COLUMNS.map((c, i) => [`parameters[columns][${i}]`, c]))
+      const r = await this.post('/reporting/report_runs', { report_type: ACTIVITY_REPORT, 'parameters[interval_start]': String(start), 'parameters[interval_end]': String(end), 'parameters[timezone]': 'Etc/UTC', ...cols }, 'Stripe report run request')
+      return { id: String(r.id), status: r.status, url: r.result?.url ?? null }
+    } catch (e) {
+      if (e instanceof HttpError && (e.status === 403 || e.status === 400)) return null
+      throw e
+    }
+  }
+
+  async reportRun(id: string): Promise<ReportRun> {
+    const r = await this.get(`/reporting/report_runs/${encodeURIComponent(id)}`, {}, 'Stripe report run status request')
+    return { id: String(r.id), status: r.status, url: r.result?.url ?? null }
+  }
+
+  async reportRows(url: string): Promise<ActivityRow[]> {
+    if (!/^https:\/\/files\.stripe\.com\//.test(url)) throw new CliError('Stripe gave a report file address that is not on files.stripe.com.', 'cosmic feedback "stripe report url"', 'stripe_report_url')
+    return parseActivityCsv(await this.textFetcher(url, { headers: { authorization: `Bearer ${this.key}` } }, 'Stripe report file request'))
+  }
+
 
   private async get(path: string, params: Record<string, string>, label: string) {
     const qs = new URLSearchParams(params).toString()
