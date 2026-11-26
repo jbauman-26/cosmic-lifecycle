@@ -125,4 +125,15 @@ describe('first run, from the UX-99 audit', () => {
     expect(r.out).not.toMatch(/store token/)
     expect(r.out).toMatch(/^Usage: cosmic/)
   })
+
+  it('0.21.2: the demo ends with the step into setup, by its type', () => {
+    for (const type of ['saas', 'b2b', 'shopify']) {
+      const r = cosmic(fresh(), 'demo', '--type', type)
+      expect(r.out).toContain(`Set it up on your own numbers:\n  cosmic init --type ${type}\n`)
+      expect(r.out).not.toContain('Next: cosmic docs')
+    }
+    const home = fresh()
+    cosmic(home, 'init', '--type', 'saas')
+    expect(cosmic(home, 'demo').out.trimEnd().endsWith('Next, on your own numbers: cosmic verdict')).toBe(true)
+  }, 60_000) // four demo runs; slow under a full parallel suite
 })

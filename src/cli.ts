@@ -115,6 +115,11 @@ const firstConnect = (type: WorkspaceType) => {
   const slug = connectable(TYPES[type].sources)[0]
   return (slug && ALL_NATIVE.find((s) => s.slug === slug)?.connect) ?? (slug ? `cosmic warehouse show ${slug}` : 'cosmic sources catalog')
 }
+// 0.21.2: the demo ends with the step that carries it into setup: set up this type of workspace on a fresh
+// install, or see your own month in one that is already set up.
+const demoNext = (kind: string) => existsSync(configPath())
+  ? ['Next, on your own numbers: cosmic verdict']
+  : ['Set it up on your own numbers:', `  cosmic init --type ${kind}`, EASY_SETUP]
 const format = () => (program.opts().format === 'json' ? 'json' : 'text') as Format
 const run = (fn: (...a: any[]) => Promise<void>) => async (...a: any[]) => {
   try {
@@ -1717,7 +1722,7 @@ program.command('demo').description('See it work on invented sample data. No key
         `3. ${kind === 'saas' ? 'SaaS' : 'B2B'} metrics, last 90 days. ${d.trust.line}`,
         ...d.metrics.map((m) => `   ${m.title}: ${formatValue(m.unit, m.value)}`), '',
         ...(d.bySource.length ? ['4. Pipeline created by original source:', ...d.bySource.map((r) => `   ${r.source}: ${r.deals} deals, ${formatValue('usd', r.pipeline)}`), ''] : []),
-        'Next: cosmic docs workspaces',
+        ...demoNext(kind),
       ].join('\n')
     })
     return
@@ -1735,7 +1740,7 @@ program.command('demo').description('See it work on invented sample data. No key
       ...d.revenue.flows.map((f) => `   ${f.name}: $${f.revenuePerRecipient.toFixed(2)} per recipient`), '',
       `4. Flow audit found ${d.audit.findings.length} things to fix. The top three:`,
       ...d.audit.findings.slice(0, 3).map((f) => `   [${f.severity}] ${f.title}`), '',
-      'Next: cosmic docs setup',
+      ...demoNext('shopify'),
     ].join('\n')
   })
 }))
