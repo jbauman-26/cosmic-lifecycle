@@ -247,7 +247,7 @@ workspaceCmd.command('show').description('Type, source of truth, metric pack and
     const w = readWorkspace();
     const t = TYPES[w.type];
     const out = { name: workspaceName() ?? 'default', type: w.type, title: t.title, reference: w.reference, referenceSet: w.referenceSet, referenceWhy: t.referenceWhy, sources: connectable(t.sources), pack: w.type };
-    emit(format(), out, () => [`Workspace: ${out.name} (${t.title})`, `Source of truth: ${REFERENCE_NAME[w.reference]}${w.referenceSet ? ' (set by hand)' : ''}. ${t.referenceWhy}`, `Usual sources: ${connectable(t.sources).join(', ')}`, `Metrics: cosmic metrics list --pack ${w.type}`].join('\n'));
+    emit(format(), out, () => [`Workspace: ${out.name} (${t.title})`, `Source of truth: ${w.reference === 'none' ? 'not set' : REFERENCE_NAME[w.reference]}${w.referenceSet ? ' (set by hand)' : ''}. ${t.referenceWhy}`, `Usual sources: ${connectable(t.sources).join(', ')}`, `Metrics: cosmic metrics list --pack ${w.type}`].join('\n'));
 }));
 workspaceCmd.command('list').description('Named workspaces on this machine, such as one per agency client').action(run(async () => {
     const dir = workspacesDir();
