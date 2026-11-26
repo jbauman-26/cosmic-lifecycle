@@ -89,7 +89,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_token",
         "label": "Admin API token",
-        "help": "Recharge merchant portal, Tools & apps, API tokens, then Create new in the Admin token section (not the Storefront token). Name it, and under scopes set Read access for Subscriptions, Orders (covers charges and orders) and Customers; leave every other scope at No access. Copy the token after saving."
+        "help": "Recharge merchant portal, Tools & apps, API tokens, then Create new in the Admin token section (not the Storefront token). Name it, and under scopes set Read access for Subscriptions, Orders (covers charges and orders) and Customers; leave every other scope at No access. Copy the token after saving. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -207,7 +207,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_key",
         "label": "REST API key (password)",
-        "help": "Gorgias helpdesk, Settings, You, REST API. Under API Access & Credentials click Create API Key (or copy the existing Password (API Key)). Gorgias keys have no scopes: the key acts with the permissions of the user who owns it, so create it from a user with the lowest role that can see all tickets. This connector only sends GET requests."
+        "help": "Gorgias helpdesk, Settings, You, REST API. Under API Access & Credentials click Create API Key (or copy the existing Password (API Key)). Gorgias keys have no scopes: the key acts with the permissions of the user who owns it, so create it from a user with the lowest role that can see all tickets. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [
@@ -310,7 +310,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_key",
         "label": "API key",
-        "help": "Triple Whale app, Data, APIs (app.triplewhale.com/api-keys), Generate API Key. Name it, set an expiration (90 days default; pick a longer one or rotate on schedule), and select no Write scopes. Summary Page: Read and Pixel Attribution: Read are the read scopes; the docs list no specific scope for the SQL endpoint this connector uses. Leave Customer PII: Read off. Copy the key from the popup; it is shown once. Keys stop working if the creating user loses access."
+        "help": "Triple Whale app, Data, APIs (app.triplewhale.com/api-keys), Generate API Key. Name it, set an expiration (90 days default; pick a longer one or rotate on schedule), and select no Write scopes. Summary Page: Read and Pixel Attribution: Read are the read scopes; the docs list no specific scope for the SQL endpoint this connector uses. Leave Customer PII: Read off. Copy the key from the popup; it is shown once. Keys stop working if the creating user loses access. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [
@@ -577,7 +577,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_key",
         "label": "Loop API key",
-        "help": "Loop Admin (admin.loopreturns.com), Returns Management > Tools & integrations > Developer Tools, Generate API key. Tick only the Returns scope, plus Happy Returns Shipments (Read) if the brand uses Happy Returns drop-off. Do not add Carts, Orders write actions or Destinations (Write). Name it Cosmic Lifecycle and click Generate."
+        "help": "Loop Admin (admin.loopreturns.com), Returns Management > Tools & integrations > Developer Tools, Generate API key. Tick only the Returns scope, plus Happy Returns Shipments (Read) if the brand uses Happy Returns drop-off. Do not add Carts, Orders write actions or Destinations (Write). Name it Cosmic Lifecycle and click Generate. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -777,7 +777,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_key",
         "label": "Smile API key",
-        "help": "Needs the Plus or Enterprise plan. Smile Admin > Settings > Developer tools (app.smile.io/settings/developer-tools); add a technical contact at the top if asked. In the Manage API keys card click Generate new API key, name it Cosmic Lifecycle, and select only the read scopes: customer:read, points_transaction:read, reward_fulfillment:read and vip_tier:read. Click Generate and copy the key (starts with api_); it is shown only once."
+        "help": "Needs the Plus or Enterprise plan. Smile Admin > Settings > Developer tools (app.smile.io/settings/developer-tools); add a technical contact at the top if asked. In the Manage API keys card click Generate new API key, name it Cosmic Lifecycle, and select only the read scopes: customer:read, points_transaction:read, reward_fulfillment:read and vip_tier:read. Click Generate and copy the key (starts with api_); it is shown only once. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -1037,7 +1037,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_key",
         "label": "Omnisend API key",
-        "help": "In Omnisend open Store settings > API keys (app.omnisend.com/integrations/api-keys) and click Create API key, named Cosmic Lifecycle. If the form lets you pick permissions, grant only contacts.read, campaigns.read and automations.read and leave every write permission off. Copy the key right away; Omnisend will not show it again."
+        "help": "In Omnisend open Store settings > API keys (app.omnisend.com/integrations/api-keys) and click Create API key, named Cosmic Lifecycle. If the form lets you pick permissions, grant only contacts.read, campaigns.read and automations.read and leave every write permission off. Copy the key right away; Omnisend will not show it again. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -1142,7 +1142,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_token",
         "label": "Data Export API token",
-        "help": "In Clarity open your project, then Settings, then Data Export, then Generate new API token, and copy it when shown. The token reads aggregate insights for that project only. This connector only sends GET requests."
+        "help": "In Clarity open your project, then Settings, then Data Export, then Generate new API token, and copy it when shown. The token reads aggregate insights for that project only. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [
@@ -1191,7 +1191,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_token",
         "label": "API token",
-        "help": "Zendesk Admin Center, Apps and integrations, APIs, Zendesk API (Settings tab): turn on Token access, click Add API token, copy it once. Zendesk API tokens are not scopable and act as the admin who owns the email you enter, so use an admin account dedicated to reporting. The incremental ticket export and satisfaction ratings endpoints are Admin only."
+        "help": "Zendesk Admin Center, Apps and integrations, APIs, Zendesk API (Settings tab): turn on Token access, click Add API token, copy it once. Zendesk API tokens are not scopable and act as the admin who owns the email you enter, so use an admin account dedicated to reporting. The incremental ticket export and satisfaction ratings endpoints are Admin only. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [
@@ -1316,7 +1316,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "pat",
         "label": "Personal Access Token",
-        "help": "Sign in to the ShipBob dashboard as the account root user, go to Integrations, API Tokens (https://web.shipbob.com/app/merchant/#/Integrations/token-management) and click Generate New Token. A PAT does not expire; revoke it there when you disconnect. ShipBob PATs are not scope-selectable in the UI: the auto-created PAT channel carries read scopes (orders_read, inventory_read, returns_read, billing_read and others) plus write scopes, and this connector only uses GET requests."
+        "help": "Sign in to the ShipBob dashboard as the account root user, go to Integrations, API Tokens (https://web.shipbob.com/app/merchant/#/Integrations/token-management) and click Generate New Token. A PAT does not expire; revoke it there when you disconnect. ShipBob PATs are not scope-selectable in the UI: the auto-created PAT channel carries read scopes (orders_read, inventory_read, returns_read, billing_read and others) plus write scopes, and this connector only uses GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -1424,7 +1424,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_token",
         "label": "Privy API token",
-        "help": "Needs a paid Privy plan; accounts without API access get a 403 api_access_required error. In the Privy dashboard (dashboard.privy.com) open Settings > API Tokens and click Create Token. Name it Cosmic Lifecycle and tick only the read scopes: contacts_read, campaigns_read, flows_read, displays_read, segments_read, coupons_read and reports_read. Leave contacts_write, orders_write and events_write off. Pick an expiration (30 days to 1 year, or none) and copy the token right away; it starts with privy_ and is shown only once. When it expires, renew it on the same page or create a new one."
+        "help": "Needs a paid Privy plan; accounts without API access get a 403 api_access_required error. In the Privy dashboard (dashboard.privy.com) open Settings > API Tokens and click Create Token. Name it Cosmic Lifecycle and tick only the read scopes: contacts_read, campaigns_read, flows_read, displays_read, segments_read, coupons_read and reports_read. Leave contacts_write, orders_write and events_write off. Pick an expiration (30 days to 1 year, or none) and copy the token right away; it starts with privy_ and is shown only once. When it expires, renew it on the same page or create a new one. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -1817,7 +1817,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "client_id",
         "label": "OpenAPI client ID",
-        "help": "In Tidio open Settings, then Developers, then API keys, and create an OpenAPI key pair. The client ID is the first half of the pair. This connector only sends GET requests."
+        "help": "In Tidio open Settings, then Developers, then API keys, and create an OpenAPI key pair. The client ID is the first half of the pair. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       },
       {
         "name": "client_secret",
@@ -1901,7 +1901,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_token",
         "label": "Merchant API token",
-        "help": "In the Seal Subscriptions app open Settings, then General Settings, then API, and copy the shop's API token. The token is unique to the shop, so treat it like a password. This connector only sends GET requests."
+        "help": "In the Seal Subscriptions app open Settings, then General Settings, then API, and copy the shop's API token. The token is unique to the shop, so treat it like a password. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -2390,7 +2390,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_key",
         "label": "API key",
-        "help": "LoyaltyLion admin, Manage, API keys, Create API key. Tick only the read scopes read_customers (customers, points, tiers, activities, transactions) and read_orders. Copy the token right away; it is shown once."
+        "help": "LoyaltyLion admin, Manage, API keys, Create API key. Tick only the read scopes read_customers (customers, points, tiers, activities, transactions) and read_orders. Copy the token right away; it is shown once. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -2624,7 +2624,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_key",
         "label": "API key",
-        "help": "As a Kustomer admin go to Settings, Security, API Keys and select Add API Key. Grant only the read roles org.permission.conversation.read, org.permission.message.read and org.permission.customer.read (roles cannot be edited later; create a new key to change them). Set an expiry if your policy requires one."
+        "help": "As a Kustomer admin go to Settings, Security, API Keys and select Add API Key. Grant only the read roles org.permission.conversation.read, org.permission.message.read and org.permission.customer.read (roles cannot be edited later; create a new key to change them). Set an expiry if your policy requires one. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [
@@ -2892,7 +2892,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_key",
         "label": "API key",
-        "help": "In UpPromote open Settings, then Integrations, scroll to API Key and choose Get API Key. Paste the whole key, since the connector sends it exactly as UpPromote issues it. This connector only sends GET requests."
+        "help": "In UpPromote open Settings, then Integrations, scroll to API Key and choose Get API Key. Paste the whole key, since the connector sends it exactly as UpPromote issues it. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -3018,7 +3018,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_token",
         "label": "API token (private token)",
-        "help": "In Printful open Settings, then Developers, then API tokens, and add a token. Choose the store it applies to and copy it. This connector only sends GET requests."
+        "help": "In Printful open Settings, then Developers, then API tokens, and add a token. Choose the store it applies to and copy it. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -3087,7 +3087,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_key",
         "label": "API key",
-        "help": "In the Freshdesk support portal, click your profile picture (top right), open Profile settings, and copy the API key shown below the change password section (you may have to click View API key). Freshdesk keys are personal and cannot be scoped, so the key carries that agent's permissions; use an agent with read access to all tickets, ideally a dedicated reporting agent."
+        "help": "In the Freshdesk support portal, click your profile picture (top right), open Profile settings, and copy the API key shown below the change password section (you may have to click View API key). Freshdesk keys are personal and cannot be scoped, so the key carries that agent's permissions; use an agent with read access to all tickets, ideally a dedicated reporting agent. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [
@@ -3227,7 +3227,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "access_token",
         "label": "API key",
-        "help": "In the Stay AI Merchant Portal open API Keys and click New API Key, then copy it. Grant only the read scope this connector needs. This connector only sends GET requests."
+        "help": "In the Stay AI Merchant Portal open API Keys and click New API Key, then copy it. Grant only the read scope this connector needs. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -3305,7 +3305,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_key",
         "label": "API key",
-        "help": "In the Ordergroove merchant portal open the API keys area and copy a key, or create one. Up to ten keys exist per store. For reporting across all customers the key needs the Bulk Operations permission, otherwise it only returns one customer's records. This connector only sends GET requests."
+        "help": "In the Ordergroove merchant portal open the API keys area and copy a key, or create one. Up to ten keys exist per store. For reporting across all customers the key needs the Bulk Operations permission, otherwise it only returns one customer's records. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -3766,7 +3766,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "consumer_key",
         "label": "Consumer key",
-        "help": "In WordPress open WooCommerce, Settings, Advanced, REST API, then Add key. Pick a user, set Permissions to Read, generate, and copy the consumer key (ck_...). This connector only sends GET requests over https."
+        "help": "In WordPress open WooCommerce, Settings, Advanced, REST API, then Add key. Pick a user, set Permissions to Read, generate, and copy the consumer key (ck_...). This connector only sends GET requests over https. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       },
       {
         "name": "consumer_secret",
@@ -3909,7 +3909,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "app_api_key",
         "label": "App API key",
-        "help": "In Customer.io open Account settings, API credentials, App API keys, and create a key. Customer.io App API keys are not scoped, so treat it as full access. This connector only sends GET requests to the campaign and newsletter lists, never to people."
+        "help": "In Customer.io open Account settings, API credentials, App API keys, and create a key. Customer.io App API keys are not scoped, so treat it as full access. This connector only sends GET requests to the campaign and newsletter lists, never to people. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [
@@ -4009,7 +4009,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_key",
         "label": "API key",
-        "help": "In ActiveCampaign open Settings, then the Developer tab, and copy the API key shown for your user. Each user has their own key and the key carries that user's permissions, so use a user whose role only needs to view contacts and automations. This connector only sends GET requests."
+        "help": "In ActiveCampaign open Settings, then the Developer tab, and copy the API key shown for your user. Each user has their own key and the key carries that user's permissions, so use a user whose role only needs to view contacts and automations. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [
@@ -4100,7 +4100,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_key",
         "label": "V4 API key",
-        "help": "Kit, Settings, then Developer, then API keys, and create a V4 key. Copy it when it is shown, because Kit does not show it again. The key carries the account's own access, so use an account whose role only needs to read subscribers. This connector only sends GET requests."
+        "help": "Kit, Settings, then Developer, then API keys, and create a V4 key. Copy it when it is shown, because Kit does not show it again. The key carries the account's own access, so use an account whose role only needs to read subscribers. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -4152,7 +4152,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_token",
         "label": "API key",
-        "help": "In beehiiv open Settings, then Integrations, then API, and create a key. Choose an API key with the read scopes for subscriptions and posts only. This connector only sends GET requests."
+        "help": "In beehiiv open Settings, then Integrations, then API, and create a key. Choose an API key with the read scopes for subscriptions and posts only. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [
@@ -4308,7 +4308,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "access_token",
         "label": "Access token",
-        "help": "In Intercom open Settings, then Integrations, then Developer Hub, open or create an app, then Authentication, and copy the Access Token. Scopes are set on the app: grant read on contacts and companies only. This connector only sends GET requests."
+        "help": "In Intercom open Settings, then Integrations, then Developer Hub, open or create an app, then Authentication, and copy the Access Token. Scopes are set on the app: grant read on contacts and companies only. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [],
@@ -4359,7 +4359,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
       {
         "name": "api_token",
         "label": "Personal access token",
-        "help": "Calendly, Integrations, then API and webhooks, then Personal access tokens, and create a token. Use a token owned by a user whose role only needs to read scheduled events. This connector only sends GET requests."
+        "help": "Calendly, Integrations, then API and webhooks, then Personal access tokens, and create a token. Use a token owned by a user whose role only needs to read scheduled events. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
       }
     ],
     "params": [

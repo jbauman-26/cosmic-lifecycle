@@ -6,7 +6,7 @@
     {
       "name": "consumer_key",
       "label": "Consumer key",
-      "help": "In WordPress open WooCommerce, Settings, Advanced, REST API, then Add key. Pick a user, set Permissions to Read, generate, and copy the consumer key (ck_...). This connector only sends GET requests over https."
+      "help": "In WordPress open WooCommerce, Settings, Advanced, REST API, then Add key. Pick a user, set Permissions to Read, generate, and copy the consumer key (ck_...). This connector only sends GET requests over https. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
     },
     {
       "name": "consumer_secret",

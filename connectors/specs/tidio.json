@@ -6,7 +6,7 @@
     {
       "name": "client_id",
       "label": "OpenAPI client ID",
-      "help": "In Tidio open Settings, then Developers, then API keys, and create an OpenAPI key pair. The client ID is the first half of the pair. This connector only sends GET requests."
+      "help": "In Tidio open Settings, then Developers, then API keys, and create an OpenAPI key pair. The client ID is the first half of the pair. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
     },
     {
       "name": "client_secret",

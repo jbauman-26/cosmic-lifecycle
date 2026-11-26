@@ -6,32 +6,63 @@
     {
       "name": "api_key",
       "label": "API key",
-      "help": "As a Kustomer admin go to Settings, Security, API Keys and select Add API Key. Grant only the read roles org.permission.conversation.read, org.permission.message.read and org.permission.customer.read (roles cannot be edited later; create a new key to change them). Set an expiry if your policy requires one."
+      "help": "As a Kustomer admin go to Settings, Security, API Keys and select Add API Key. Grant only the read roles org.permission.conversation.read, org.permission.message.read and org.permission.customer.read (roles cannot be edited later; create a new key to change them). Set an expiry if your policy requires one. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
     }
   ],
   "params": [
-    { "name": "org", "label": "Org name (the subdomain you sign in at, acme for acme.kustomerapp.com)", "example": "acme" }
+    {
+      "name": "org",
+      "label": "Org name (the subdomain you sign in at, acme for acme.kustomerapp.com)",
+      "example": "acme"
+    }
   ],
   "config": {
     "client": {
       "base_url": "https://{param:org}.api.kustomerapp.com/v1/",
-      "auth": { "type": "bearer", "token": "{secret:api_key}" },
-      "paginator": { "type": "json_link", "next_url_path": "links.next" }
+      "auth": {
+        "type": "bearer",
+        "token": "{secret:api_key}"
+      },
+      "paginator": {
+        "type": "json_link",
+        "next_url_path": "links.next"
+      }
     },
     "resource_defaults": {
       "primary_key": "id",
       "write_disposition": "merge",
-      "endpoint": { "data_selector": "data", "params": { "pageSize": 100 } }
+      "endpoint": {
+        "data_selector": "data",
+        "params": {
+          "pageSize": 100
+        }
+      }
     },
     "resources": [
-      { "name": "conversations", "endpoint": { "path": "conversations" } },
-      { "name": "messages", "endpoint": { "path": "messages" } },
+      {
+        "name": "conversations",
+        "endpoint": {
+          "path": "conversations"
+        }
+      },
+      {
+        "name": "messages",
+        "endpoint": {
+          "path": "messages"
+        }
+      },
       {
         "name": "customers",
         "endpoint": {
           "path": "customers",
-          "params": { "sort": "updatedAt" },
-          "incremental": { "start_param": "filter[updatedAt][gte]", "cursor_path": "attributes.updatedAt", "initial_value": "2015-01-01T00:00:00Z" }
+          "params": {
+            "sort": "updatedAt"
+          },
+          "incremental": {
+            "start_param": "filter[updatedAt][gte]",
+            "cursor_path": "attributes.updatedAt",
+            "initial_value": "2015-01-01T00:00:00Z"
+          }
         }
       }
     ]

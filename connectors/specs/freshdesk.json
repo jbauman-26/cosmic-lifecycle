@@ -3,18 +3,36 @@
   "name": "Freshdesk",
   "docs": "https://developers.freshdesk.com/api/",
   "credentials": [
-    { "name": "api_key", "label": "API key", "help": "In the Freshdesk support portal, click your profile picture (top right), open Profile settings, and copy the API key shown below the change password section (you may have to click View API key). Freshdesk keys are personal and cannot be scoped, so the key carries that agent's permissions; use an agent with read access to all tickets, ideally a dedicated reporting agent." }
+    {
+      "name": "api_key",
+      "label": "API key",
+      "help": "In the Freshdesk support portal, click your profile picture (top right), open Profile settings, and copy the API key shown below the change password section (you may have to click View API key). Freshdesk keys are personal and cannot be scoped, so the key carries that agent's permissions; use an agent with read access to all tickets, ideally a dedicated reporting agent. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
+    }
   ],
   "params": [
-    { "name": "domain", "label": "Freshdesk subdomain (the part before .freshdesk.com)", "example": "acmecoffee" }
+    {
+      "name": "domain",
+      "label": "Freshdesk subdomain (the part before .freshdesk.com)",
+      "example": "acmecoffee"
+    }
   ],
   "config": {
     "client": {
       "base_url": "https://{param:domain}.freshdesk.com/api/v2/",
-      "auth": { "type": "http_basic", "username": "{secret:api_key}", "password": "X" },
-      "paginator": { "type": "header_link", "links_next_key": "next" }
+      "auth": {
+        "type": "http_basic",
+        "username": "{secret:api_key}",
+        "password": "X"
+      },
+      "paginator": {
+        "type": "header_link",
+        "links_next_key": "next"
+      }
     },
-    "resource_defaults": { "primary_key": "id", "write_disposition": "merge" },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
     "resources": [
       {
         "name": "tickets",
@@ -26,7 +44,11 @@
             "order_by": "updated_at",
             "order_type": "asc",
             "include": "stats",
-            "updated_since": { "type": "incremental", "cursor_path": "updated_at", "initial_value": "2015-01-01T00:00:00Z" }
+            "updated_since": {
+              "type": "incremental",
+              "cursor_path": "updated_at",
+              "initial_value": "2015-01-01T00:00:00Z"
+            }
           }
         }
       },
@@ -37,7 +59,11 @@
           "data_selector": "$",
           "params": {
             "per_page": 100,
-            "updated_since": { "type": "incremental", "cursor_path": "updated_at", "initial_value": "2015-01-01T00:00:00Z" }
+            "updated_since": {
+              "type": "incremental",
+              "cursor_path": "updated_at",
+              "initial_value": "2015-01-01T00:00:00Z"
+            }
           }
         }
       },
@@ -48,9 +74,18 @@
           "data_selector": "$",
           "params": {
             "per_page": 100,
-            "created_since": { "type": "incremental", "cursor_path": "created_at", "initial_value": "2015-01-01T00:00:00Z" }
+            "created_since": {
+              "type": "incremental",
+              "cursor_path": "created_at",
+              "initial_value": "2015-01-01T00:00:00Z"
+            }
           },
-          "response_actions": [ { "status_code": 404, "action": "ignore" } ]
+          "response_actions": [
+            {
+              "status_code": 404,
+              "action": "ignore"
+            }
+          ]
         }
       },
       {
@@ -58,9 +93,19 @@
         "endpoint": {
           "path": "customer-satisfaction/surveys",
           "data_selector": "data",
-          "params": { "per_page": 100 },
-          "paginator": { "type": "json_link", "next_url_path": "paging.next" },
-          "response_actions": [ { "status_code": 404, "action": "ignore" } ]
+          "params": {
+            "per_page": 100
+          },
+          "paginator": {
+            "type": "json_link",
+            "next_url_path": "paging.next"
+          },
+          "response_actions": [
+            {
+              "status_code": 404,
+              "action": "ignore"
+            }
+          ]
         }
       },
       {
@@ -68,11 +113,23 @@
         "endpoint": {
           "path": "customer-satisfaction/surveys/{resources.csat_surveys.id}/responses",
           "data_selector": "data",
-          "params": { "per_page": 100 },
-          "paginator": { "type": "json_link", "next_url_path": "paging.next" },
-          "response_actions": [ { "status_code": 404, "action": "ignore" } ]
+          "params": {
+            "per_page": 100
+          },
+          "paginator": {
+            "type": "json_link",
+            "next_url_path": "paging.next"
+          },
+          "response_actions": [
+            {
+              "status_code": 404,
+              "action": "ignore"
+            }
+          ]
         },
-        "include_from_parent": ["id"]
+        "include_from_parent": [
+          "id"
+        ]
       }
     ]
   },

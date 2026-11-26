@@ -6,24 +6,38 @@
     {
       "name": "pat",
       "label": "Personal Access Token",
-      "help": "Sign in to the ShipBob dashboard as the account root user, go to Integrations, API Tokens (https://web.shipbob.com/app/merchant/#/Integrations/token-management) and click Generate New Token. A PAT does not expire; revoke it there when you disconnect. ShipBob PATs are not scope-selectable in the UI: the auto-created PAT channel carries read scopes (orders_read, inventory_read, returns_read, billing_read and others) plus write scopes, and this connector only uses GET requests."
+      "help": "Sign in to the ShipBob dashboard as the account root user, go to Integrations, API Tokens (https://web.shipbob.com/app/merchant/#/Integrations/token-management) and click Generate New Token. A PAT does not expire; revoke it there when you disconnect. ShipBob PATs are not scope-selectable in the UI: the auto-created PAT channel carries read scopes (orders_read, inventory_read, returns_read, billing_read and others) plus write scopes, and this connector only uses GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
     }
   ],
   "params": [],
   "config": {
     "client": {
       "base_url": "https://api.shipbob.com/2026-07/",
-      "auth": { "type": "bearer", "token": "{secret:pat}" }
+      "auth": {
+        "type": "bearer",
+        "token": "{secret:pat}"
+      }
     },
-    "resource_defaults": { "primary_key": "id", "write_disposition": "merge" },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
     "resources": [
       {
         "name": "orders",
         "endpoint": {
           "path": "order",
-          "params": { "Limit": 250, "SortOrder": "Oldest" },
+          "params": {
+            "Limit": 250,
+            "SortOrder": "Oldest"
+          },
           "data_selector": "$",
-          "paginator": { "type": "page_number", "page_param": "Page", "base_page": 1, "total_path": null }
+          "paginator": {
+            "type": "page_number",
+            "page_param": "Page",
+            "base_page": 1,
+            "total_path": null
+          }
         }
       },
       {
@@ -31,18 +45,29 @@
         "primary_key": "inventory_id",
         "endpoint": {
           "path": "inventory-level",
-          "params": { "PageSize": 100 },
+          "params": {
+            "PageSize": 100
+          },
           "data_selector": "items",
-          "paginator": { "type": "json_link", "next_url_path": "next" }
+          "paginator": {
+            "type": "json_link",
+            "next_url_path": "next"
+          }
         }
       },
       {
         "name": "returns",
         "endpoint": {
           "path": "return",
-          "params": { "Limit": 100, "SortOrder": "Asc" },
+          "params": {
+            "Limit": 100,
+            "SortOrder": "Asc"
+          },
           "data_selector": "items",
-          "paginator": { "type": "json_link", "next_url_path": "next" }
+          "paginator": {
+            "type": "json_link",
+            "next_url_path": "next"
+          }
         }
       },
       {
@@ -50,9 +75,17 @@
         "primary_key": "invoice_id",
         "endpoint": {
           "path": "invoices",
-          "params": { "PageSize": 100, "FromDate": "2015-01-01T00:00:00Z", "SortOrder": "Ascending" },
+          "params": {
+            "PageSize": 100,
+            "FromDate": "2015-01-01T00:00:00Z",
+            "SortOrder": "Ascending"
+          },
           "data_selector": "items",
-          "paginator": { "type": "cursor", "cursor_path": "next", "cursor_param": "Cursor" }
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "next",
+            "cursor_param": "Cursor"
+          }
         }
       }
     ]

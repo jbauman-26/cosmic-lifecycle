@@ -6,7 +6,7 @@
     {
       "name": "api_key",
       "label": "API key",
-      "help": "In UpPromote open Settings, then Integrations, scroll to API Key and choose Get API Key. Paste the whole key, since the connector sends it exactly as UpPromote issues it. This connector only sends GET requests."
+      "help": "In UpPromote open Settings, then Integrations, scroll to API Key and choose Get API Key. Paste the whole key, since the connector sends it exactly as UpPromote issues it. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
     }
   ],
   "params": [],

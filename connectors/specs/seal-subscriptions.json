@@ -6,7 +6,7 @@
     {
       "name": "api_token",
       "label": "Merchant API token",
-      "help": "In the Seal Subscriptions app open Settings, then General Settings, then API, and copy the shop's API token. The token is unique to the shop, so treat it like a password. This connector only sends GET requests."
+      "help": "In the Seal Subscriptions app open Settings, then General Settings, then API, and copy the shop's API token. The token is unique to the shop, so treat it like a password. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
     }
   ],
   "params": [],

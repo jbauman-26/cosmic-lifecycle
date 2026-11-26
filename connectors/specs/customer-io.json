@@ -6,7 +6,7 @@
     {
       "name": "app_api_key",
       "label": "App API key",
-      "help": "In Customer.io open Account settings, API credentials, App API keys, and create a key. Customer.io App API keys are not scoped, so treat it as full access. This connector only sends GET requests to the campaign and newsletter lists, never to people."
+      "help": "In Customer.io open Account settings, API credentials, App API keys, and create a key. Customer.io App API keys are not scoped, so treat it as full access. This connector only sends GET requests to the campaign and newsletter lists, never to people. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
     }
   ],
   "params": [
