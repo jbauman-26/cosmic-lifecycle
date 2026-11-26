@@ -670,7 +670,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://docs.klarna.com/api/settlements/",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "The Order Management read endpoint is real: GET https://api.klarna.com/ordermanagement/v1/orders answers 401 with a Basic challenge rather than 404. But Klarna publishes no readable contract for its list parameters or response bodies in the current docs index, so no fixture could be verified against a source (https://docs.klarna.com/api/)."
   },
   {
     "slug": "afterpay",
@@ -681,7 +681,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://developers.afterpay.com/",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "Afterpay is a checkout and settlement rail. Its merchant API drives payment sessions and settlements behind Afterpay or Cash App onboarding review, and no documented read list of a merchant's own orders is published for self serve access (https://developers.cash.app/afterpay)."
   },
   {
     "slug": "loox",
@@ -2197,7 +2197,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://api.goaffpro.com/docs/admin/",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "Its public documentation deployment is misconfigured: every spec path returns the Swagger UI page, and the bundled initializer points at the petstore example schema, so no readable contract for auth or response bodies exists (https://api.goaffpro.com/docs/admin/). The merchant access token is created under Settings, Developer, Access Tokens."
   },
   {
     "slug": "fairing",
@@ -2353,7 +2353,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://docs.nosto.com/techdocs/apis/graphql-an-introduction",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "Nosto exposes a GraphQL API for its product and session data, not a REST list surface, so it needs runner work first (https://docs.nosto.com/)."
   },
   {
     "slug": "aftership-returns",
@@ -2604,7 +2604,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://junip.co/docs/api",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "No official API documentation exists. Searches return only third party scrapers of the Junip widget, and Junip publishes no developer reference (https://junip.co/)."
   },
   {
     "slug": "re-amaze",
@@ -2876,7 +2876,7 @@ export const WAREHOUSE_CATALOG: WarehouseSource[] = [
     "docs": "https://developer.shiphero.com/",
     "credentials": [],
     "params": [],
-    "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+    "notes": "Shiphero exposes a GraphQL API only, at developer.shiphero.com. This runner builds dlt REST specs, so a GraphQL query surface needs runner work first (https://developer.shiphero.com/)."
   },
   {
     "slug": "shipmonk",
