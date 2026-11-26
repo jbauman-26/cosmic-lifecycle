@@ -159,7 +159,7 @@ export class CloudClient {
     if (res.status === 404 && (!code || code === 'not_found')) throw new CliError(`Cosmic Cloud does not have this yet (${route}).`, 'It is being built. Until then, run the command without --cloud to use the data on this machine.', 'not_built')
     if (res.status === 405) throw new CliError(`Cosmic Cloud does not take ${route} yet.`, 'It is being built. Until then, run the command without --cloud to use the data on this machine.', 'not_built')
     if (res.status === 429) throw new CliError(message || 'Cosmic Cloud is getting too many calls from this workspace token.', wait, 'rate_limited')
-    if (res.status === 503 && (!code || code === 'busy')) throw new CliError(message || 'Another change to this store is running on Cosmic Cloud.', wait, 'busy')
+    if (res.status === 503 && (!code || code === 'busy')) throw new CliError(message || 'Another change to this workspace is running on Cosmic Cloud.', wait, 'busy')
     if (code) throw new CliError(message || `Cosmic Cloud refused the request (${code}).`, res.status >= 500 ? 'Run this again in a moment.' : 'Fix the request, then run this again.', code)
     throw new CliError(`Cosmic Cloud answered with status ${res.status}.`, 'Run this again in a moment, then cosmic cloud status.', 'cloud_error')
   }

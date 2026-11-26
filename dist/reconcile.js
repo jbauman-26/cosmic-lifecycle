@@ -269,7 +269,7 @@ export async function runReferenceChecks(db, t, ws) {
     const has = ws.reference === 'none' ? false : await synced(db, ws.reference);
     // The reference itself: is there one, and has it synced?
     if (ws.reference === 'none') {
-        checks.push({ name: REFERENCE_CHECK, status: 'skipped', expected: null, actual: null, diffPct: null, detail: 'Not checked against a source of truth: this workspace has no reference source set, so each number is its own tool\'s count. Set one with cosmic config set workspace.reference stripe, hubspot, shopify or ga4.' });
+        checks.push({ name: REFERENCE_CHECK, status: 'skipped', expected: null, actual: null, diffPct: null, detail: 'Not checked against a source of truth: this workspace has no reference source set, so each number is its own tool\'s count. Set one with: cosmic config set workspace.reference stripe (or hubspot, shopify, ga4).' });
     }
     else if (!has) {
         checks.push({ name: REFERENCE_CHECK, status: 'skipped', expected: null, actual: null, diffPct: null, detail: `Not checked against a source of truth yet: ${name} is this workspace's reference and has not synced. Each number is its own tool's count until it does. Connect ${ws.reference}, then cosmic sync.` });

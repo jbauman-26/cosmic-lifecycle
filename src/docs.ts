@@ -849,7 +849,7 @@ Error codes (the "code" field with --format json, and in cosmic logs):
   cloud_unreachable  Cosmic Cloud did not answer. Check the network and cosmic cloud status.
   cloud_error      Cosmic Cloud answered with something this CLI does not understand. Try again in a moment.
   bad_url          The Cloud address is not a plain https address, or it answered with a redirect.
-  bad_token        The store token has a space, a line break or another character a token never has. Copy it again.
+  bad_token        The workspace token has a space, a line break or another character a token never has. Copy it again.
   unknown_table    schema --cloud named a table Cloud does not hold.
   too_large        skills push: the folder is over 200 KB.
   secret_found     skills push: a file looks like it holds a key. Nothing was sent.

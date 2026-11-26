@@ -222,15 +222,17 @@ program.command('init').description('Set up the database and say what kind of bu
   const t = TYPES[r.type]
   // 0.21.1: the next step is the workspace's own source of truth, whatever the type.
   const next = firstConnect(r.type)
-  const others = WORKSPACE_TYPES.filter((x) => x !== 'shopify')
+  const others = WORKSPACE_TYPES.filter((x) => x !== 'shopify' && x !== 'saas')
+  // The local database needs no mention; your own Postgres does.
+  const db = r.database === 'local' ? '' : ` Database: ${r.database}.`
   emit(format(), r, () => [
     // A new workspace set up with no type and no terminal to ask is a store. Say so, and how to change it.
     ...(isNew && !type
-      ? [`Ready. Set up as a Shopify store, because no --type was given. Database: ${r.database}.`, `Not a store? Run cosmic init --type ${others.slice(0, -1).join(', ')} or ${others.at(-1)}.`]
-      : [`Ready. Workspace: ${t.title}. Database: ${r.database}.`]),
-    `Source of truth: ${REFERENCE_NAME[r.reference]}. ${t.referenceWhy}`,
-    `Next: ${next}`,
+      ? [`Ready. This workspace is set up as a Shopify store, the default.${db}`, `Not a store? Run cosmic init --type saas (or ${others.join(', ')}).`]
+      : [`Ready. Workspace: ${t.title}.${db}`]),
+    r.reference === 'none' ? `Source of truth: not set. ${t.referenceWhy}` : `Source of truth: ${REFERENCE_NAME[r.reference]}. ${t.referenceWhy}`,
     EASY_SETUP,
+    `Or by hand: ${next}`,
   ].join('\n'))
 }))
 
@@ -699,14 +701,29 @@ program.command('disconnect').argument('<source>', `${NATIVE.join(', ')}, a ware
     }
   }))
 
-// 0.21.1: a check skipped only because its source is not connected or synced yet is counted, not listed, so a new
-// workspace sees one line and the next step instead of a column of SKIPs. --format json still lists every check.
-const WAITING = /not connected|has not been synced|has not finished a sync|has not synced|Nothing has synced|No Shopify orders stored|Needs .* synced/i
-function reconcileText(checks: { name: string; status: 'pass' | 'warn' | 'fail' | 'skipped'; detail: string }[], mark: Record<string, string>) {
-  const waiting = checks.filter((c) => c.status === 'skipped' && WAITING.test(c.detail))
+// 0.21.1: a new workspace, where no source has finished a sync, sees one block and the next step instead of a
+// column of SKIPs. Once anything has synced, every check is listed, except those skipped only because their source
+// is not connected (decided by reconcile from the connected list), which are counted on one line. The source of
+// truth line is never folded. --format json always lists every check.
+const NOT_CONNECTED = / is not connected\./
+function reconcileText(checks: { name: string; status: 'pass' | 'warn' | 'fail' | 'skipped'; detail: string }[], mark: Record<string, string>, anySynced: boolean) {
+  const ws = readWorkspace()
+  if (!anySynced) {
+    return [
+      'Nothing to check yet: no source has synced.',
+      'Next: connect a source, then sync:',
+      `  ${firstConnect(ws.type)}`,
+      '  cosmic sync',
+      ...(ws.reference === 'none' ? ['No source of truth is set for this workspace yet: cosmic config set workspace.reference stripe (or hubspot, shopify, ga4).'] : []),
+    ].join('\n')
+  }
+  const waiting = checks.filter((c) => c.status === 'skipped' && c.name !== 'reference' && NOT_CONNECTED.test(c.detail))
   const shown = checks.filter((c) => !waiting.includes(c))
-  if (!shown.length) return ['Nothing to check yet: no source has synced.', 'Next: connect a source, then sync:', `  ${firstConnect(readWorkspace().type)}`, '  cosmic sync'].join('\n')
-  return [...shown.map((c) => `${mark[c.status]} ${c.name}: ${c.detail}`), ...(waiting.length ? [`${waiting.length} more check${waiting.length === 1 ? '' : 's'} will run once their sources are connected and synced: ${waiting.map((c) => c.name).join(', ')}.`] : [])].join('\n')
+  const n = waiting.length
+  return [
+    ...shown.map((c) => `${mark[c.status]} ${c.name}: ${c.detail}`),
+    ...(n ? [`${n} more check${n === 1 ? ' runs once its source is' : 's run once their sources are'} connected and synced: ${waiting.map((c) => c.name).join(', ')}.`] : []),
+  ].join('\n')
 }
 
 program.command('reconcile').description('Prove the numbers agree across sources').action(write('reconcile', async () => {
@@ -715,7 +732,8 @@ program.command('reconcile').description('Prove the numbers agree across sources
     await migrate(db)
     const r = await reconcile(db)
     const mark = { pass: 'PASS', warn: 'WARN', fail: 'FAIL', skipped: 'SKIP' }
-    emit(format(), r, () => reconcileText(r.checks, mark))
+    const anySynced = (await db.query(`SELECT 1 FROM meta_sync_run WHERE status IN ('ok', 'warning') AND finished_at IS NOT NULL LIMIT 1`)).length > 0
+    emit(format(), r, () => reconcileText(r.checks, mark, anySynced))
     if (!r.passed) process.exitCode = 1
   } finally {
     await db.close()
@@ -1004,7 +1022,9 @@ sources
       ].join('\n')
     })
   }))
-sources.command('list', { isDefault: true }).description('Which sources are connected, and when each last synced. The default for cosmic sources').option('--cloud', CLOUD_FLAG).action(run(async (opts) => {
+sources.command('list', { isDefault: true }).description('Which sources are connected, and when each last synced. The default for cosmic sources').argument('[unknown]').option('--cloud', CLOUD_FLAG).action(run(async (unknown: string | undefined, opts) => {
+  // As the default subcommand, list also receives a mistyped subcommand: name it, and the real ones.
+  if (unknown) throw new CliError(`Unknown sources command: ${unknown}.`, 'Use cosmic sources catalog, cosmic sources list or cosmic sources import NAME --csv FILE', 'bad_value')
   if (opts.cloud) {
     const r = (await new CloudClient().store()).connections.map((c) => ({ slug: c.source_id, name: c.source_name ?? c.source_id, connected: true, lastSync: c.last_success_at ?? null, lastStatus: c.status ?? null, statusCode: c.status_code ?? null, freshness: c.freshness ?? null, nextSync: c.next_sync_at ?? null, next: null }))
     emit(format(), r, () => r.map((s) => `connected     ${s.name}, last good sync ${clock(s.lastSync)} (${s.lastStatus ?? 'unknown'}${s.statusCode ? `, ${s.statusCode}` : ''})`).join('\n') || 'No sources are connected on Cosmic Cloud yet.')

@@ -345,7 +345,7 @@ export const verdictExit = (v) => (v.kpis.length && !v.withheld ? 0 : VERDICT_WI
 export function formatVerdict(v, opts = {}) {
     const state = v.period_state === 'complete' ? (opts.defaulted ? 'the last finished month' : 'complete month') : v.period_state === 'in_progress' ? 'still running' : 'not started';
     if (!v.kpis.length) {
-        return [`Nothing to report for ${v.period} yet: no source is connected.`, ...(opts.connect ? ['Next: connect a source, then sync:', `  ${opts.connect}`, '  cosmic sync'] : ['Next: cosmic doctor'])].join('\n');
+        return [`Nothing to report for ${v.period}${opts.defaulted ? ' (the last finished month)' : ''} yet: no source with monthly KPIs has synced.`, ...(opts.connect ? ['Next: connect a source, then sync:', `  ${opts.connect}`, '  cosmic sync'] : ['Next: cosmic doctor'])].join('\n');
     }
     const lines = [`${v.workspace === 'default' ? '' : `${v.workspace}, `}${v.period} (${state}): ${v.reportable} reportable, ${v.withheld} withheld.`];
     for (const k of v.kpis) {

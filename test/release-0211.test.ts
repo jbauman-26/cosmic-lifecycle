@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -23,17 +23,18 @@ const lastMonth = () => {
 describe('first run, from the UX-99 audit', () => {
   it('init with no type says it set up a store, how to change that, and points at Shopify, not Klaviyo', () => {
     const r = cosmic(fresh(), 'init')
-    expect(r.out).toContain('Set up as a Shopify store, because no --type was given.')
-    expect(r.out).toContain('Not a store? Run cosmic init --type ecommerce, saas, b2b, agency or creator.')
-    expect(r.out).toContain('Next: cosmic connect shopify')
+    expect(r.out).toContain('Ready. This workspace is set up as a Shopify store, the default.')
+    expect(r.out).toContain('Not a store? Run cosmic init --type saas (or ecommerce, b2b, agency, creator).')
+    expect(r.out).toContain('Or by hand: cosmic connect shopify')
+    expect(r.out).not.toContain('Database: local')
     expect(r.out).not.toContain('connect klaviyo')
   })
 
   it('init --type saas points at Stripe, its source of truth, and never at PostHog', () => {
     const r = cosmic(fresh(), 'init', '--type', 'saas')
-    expect(r.out).toContain('Next: cosmic connect stripe')
+    expect(r.out).toContain('Or by hand: cosmic connect stripe')
     expect(r.out).not.toMatch(/posthog|klaviyo/i)
-    expect(r.out).not.toContain('Set up as a Shopify store')
+    expect(r.out).not.toContain('set up as a Shopify store')
   })
 
   it('init JSON is unchanged', () => {
@@ -58,7 +59,7 @@ describe('first run, from the UX-99 audit', () => {
     const j = JSON.parse(cosmic(home, '--format', 'json', 'verdict').out)
     expect(j.period).toBe(lastMonth())
     const t = cosmic(home, 'verdict')
-    expect(t.out).toContain(`Nothing to report for ${lastMonth()} yet: no source is connected.`)
+    expect(t.out).toContain(`Nothing to report for ${lastMonth()} (the last finished month) yet: no source with monthly KPIs has synced.`)
     expect(t.out).toContain('cosmic connect stripe')
     expect(t.code).toBe(3)
   })
@@ -75,6 +76,47 @@ describe('first run, from the UX-99 audit', () => {
     const r = cosmic(home, 'sources')
     expect(r.out).toMatch(/^not connected Stripe/)
     expect(r.out).not.toContain('Usage:')
+  })
+
+  it('a mistyped sources command names the real ones (review finding)', () => {
+    const r = cosmic(fresh(), 'sources', 'catlog')
+    expect(r.code).toBe(1)
+    expect(r.err).toContain('Unknown sources command: catlog.')
+    expect(r.err).toContain('cosmic sources catalog')
+  })
+
+  it('a store lists Shopify first, matching init (review finding)', () => {
+    const home = fresh()
+    cosmic(home, 'init')
+    expect(cosmic(home, 'sources').out).toMatch(/^not connected Shopify/)
+  })
+
+  it('an agency workspace with nothing synced gets the same block, and how to set its source of truth (review finding)', () => {
+    const home = fresh()
+    const i = cosmic(home, 'init', '--type', 'agency')
+    expect(i.out).toContain('Source of truth: not set.')
+    expect(i.out).not.toContain('Source of truth: nothing')
+    const r = cosmic(home, 'reconcile')
+    expect(r.out).not.toContain('SKIP')
+    expect(r.out).toContain('Nothing to check yet')
+    expect(r.out).toContain('cosmic config set workspace.reference stripe (or hubspot, shopify, ga4)')
+  })
+
+  it('once anything has synced, the source-of-truth warning is shown, never folded (review finding)', () => {
+    const home = fresh()
+    cosmic(home, 'init', '--type', 'creator')
+    const csv = join(home, 'sponsors.csv')
+    writeFileSync(csv, 'date,revenue\n2026-10-03,500\n')
+    cosmic(home, 'sources', 'import', 'sponsors', '--csv', csv)
+    const r = cosmic(home, 'reconcile')
+    expect(r.out).toContain('SKIP reference: Not checked against a source of truth yet')
+    expect(r.out).not.toContain('Nothing to check yet')
+    // The verdict does not claim nothing is connected: a CSV source has no monthly KPIs.
+    expect(cosmic(home, 'verdict').out).toContain('no source with monthly KPIs has synced')
+  })
+
+  it('b2b points at HubSpot', () => {
+    expect(cosmic(fresh(), 'init', '--type', 'b2b').out).toContain('Or by hand: cosmic connect hubspot')
   })
 
   it('--help says workspace token, never store token', () => {

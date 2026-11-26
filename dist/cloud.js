@@ -145,7 +145,7 @@ export class CloudClient {
         if (res.status === 429)
             throw new CliError(message || 'Cosmic Cloud is getting too many calls from this workspace token.', wait, 'rate_limited');
         if (res.status === 503 && (!code || code === 'busy'))
-            throw new CliError(message || 'Another change to this store is running on Cosmic Cloud.', wait, 'busy');
+            throw new CliError(message || 'Another change to this workspace is running on Cosmic Cloud.', wait, 'busy');
         if (code)
             throw new CliError(message || `Cosmic Cloud refused the request (${code}).`, res.status >= 500 ? 'Run this again in a moment.' : 'Fix the request, then run this again.', code);
         throw new CliError(`Cosmic Cloud answered with status ${res.status}.`, 'Run this again in a moment, then cosmic cloud status.', 'cloud_error');
