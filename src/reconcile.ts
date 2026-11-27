@@ -138,7 +138,7 @@ export async function runChecks(db: Tx, t: Tolerances = tolerances()): Promise<C
   let complete: Check
   if (!total || !pulled) complete = skip('orders_complete', 'Shopify has not been synced, or gave no exact count.')
   else {
-    complete = compare('orders_complete', num(total.value), num(pulled.value), 0, 'Orders pulled against Shopify’s own count')
+    complete = compare('orders_complete', num(total.value), num(pulled.value), 0, "Orders pulled against Shopify's own count")
     if (complete.status === 'pass') {
       const inDays = num(daily.orders)
       const expected = kept ? num(kept.value) : num(pulled.value)
@@ -209,7 +209,7 @@ export async function runChecks(db: Tx, t: Tolerances = tolerances()): Promise<C
   else if (w.recipients === null || w.recipients === undefined) checks.push(skip('flow_totals', 'No flow totals from Klaviyo yet.'))
   else {
     const f = await one(db, `SELECT sum(recipients) AS recipients FROM fact_flow_daily WHERE date >= $1 AND date <= $2`, [w.s, w.e])
-    checks.push(compare('flow_totals', num(w.recipients), num(f.recipients), 0.5, 'Daily flow recipients against Klaviyo’s flow totals'))
+    checks.push(compare('flow_totals', num(w.recipients), num(f.recipients), 0.5, "Daily flow recipients against Klaviyo's flow totals"))
   }
 
   // 7. Is anything stale?
