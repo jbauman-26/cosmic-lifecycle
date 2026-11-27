@@ -204,7 +204,7 @@ Install the skills once, then ask for a job by name:
 cosmic skills sync
 ```
 
-That adds `/lifecycle` and one skill per kit, such as `/lifecycle:kits:flow-audit`. It never overwrites a skill file you edited, and `cosmic skills uninstall` removes what it added.
+That adds `/lifecycle`, one skill per kit, such as `/lifecycle:kits:flow-audit`, and four growth skills that work from what you supply: `/lifecycle:icp-and-offer`, `/lifecycle:sales-page`, `/lifecycle:content-systems` and `/lifecycle:sales-call-review`. It never overwrites a skill file you edited, and `cosmic skills uninstall` removes what it added.
 
 ## Kits
 

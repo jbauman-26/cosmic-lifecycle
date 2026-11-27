@@ -6,6 +6,7 @@ import { readIndex, type IndexEntry, type Registry } from './registry.js'
 import { VERSION } from './version.js'
 import { CliError } from './errors.js'
 import type { CloudSkill, SkillFile } from './cloud.js'
+import { growthSkillFiles } from './growthSkills.js'
 
 // Installs one router skill plus one setup skill per kit:
 // /lifecycle is the router, /lifecycle:kits:<kit> sets up a kit.
@@ -61,6 +62,8 @@ Then, as the task needs:
 
 If \`lifecycle\` is not on PATH, stop and ask the user to install it from https://github.com/jbauman-26/cosmic-lifecycle.
 
+Growth skills that work from what the owner supplies: \`/${PLUGIN}:icp-and-offer\` (buyer profile and offer), \`/${PLUGIN}:sales-page\` (write or audit a page), \`/${PLUGIN}:content-systems\` (pillars, teardown, gaps, repurposing, carousels) and \`/${PLUGIN}:sales-call-review\` (calls, follow-ups, meeting actions).
+
 Rules:
 - Run \`cosmic reconcile\` before quoting any number. If a check failed, say so first. If the trust line says the numbers were not checked against a source of truth, say that first instead.
 - Nothing in this tool sends a message. Never claim attributed revenue proves causation.
@@ -105,6 +108,7 @@ export function buildFiles(kits: IndexEntry[], target: Target): Record<string, s
     'SKILL.md': routerSkill(kits),
     'README.md': `# Cosmic Lifecycle skills\n\nInstalled by \`cosmic skills sync\`. Files you edit here are kept on the next sync. Remove everything with \`cosmic skills uninstall\`.\n`,
     [target === 'claude' ? '.claude-plugin/plugin.json' : '.cursor-plugin/plugin.json']: pluginJson(),
+    ...growthSkillFiles,
   }
   for (const k of kits) files[`skills/kit-${k.name}/SKILL.md`] = kitSkill(k)
   return files
