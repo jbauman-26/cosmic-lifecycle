@@ -1154,8 +1154,8 @@ const targets = (t?: string): Target[] | undefined => {
   if (t === 'claude' || t === 'cursor') return [t]
   throw new CliError(`Unknown target ${t}.`, 'Use --target claude, cursor or all')
 }
-const skills = program.command('skills').description('Install kit skills into Claude Code and Cursor, and keep the workspace\'s own skills on Cosmic Cloud')
-withRegistry(skills.command('sync').description('Install or update /lifecycle and one /lifecycle:kits:<kit> skill per kit. When logged in to Cosmic Cloud, also the workspace\'s own skills'))
+const skills = program.command('skills').description('Install Cosmic skills into Claude Code and Cursor, and keep the workspace\'s own skills on Cosmic Cloud')
+withRegistry(skills.command('sync').description('Install /lifecycle, /lifecycle:brand-experience, kit skills, and any available Cosmic Cloud workspace skills'))
   .option('--target <target>', 'claude, cursor or all. Default: claude, plus cursor when it is installed')
   .option('--dry-run', 'show what would change')
   .option('--force', 'overwrite files you edited')
@@ -1203,7 +1203,17 @@ withRegistry(skills.command('status').description('Show installed skills and kit
     }
   }
   const r = skillsStatus(registry(opts)).map((t) => ({ ...t, account: onCloud }))
-  emit(format(), r, () => (onCloud.status === 'ok' ? `On Cosmic Cloud: ${onCloud.skills.join(', ') || 'no workspace skills'}\n` : '') + r.map((t) => `${t.target}: ${t.installed ? `installed (${t.installedVersion}), kits: ${t.kits.join(', ') || 'none'}${t.storeSkills.length ? `, store skills: ${t.storeSkills.join(', ')}` : ''}` : 'not installed'}${t.installed && t.newKits.length ? `\n  new: ${t.newKits.join(', ')}. Run cosmic skills sync` : ''}`).join('\n'))
+  emit(format(), r, () => {
+    const cloud = onCloud.status === 'ok' ? `On Cosmic Cloud: ${onCloud.skills.join(', ') || 'no workspace skills'}\n` : ''
+    const local = r.map((t) => {
+      if (!t.installed) return `${t.target}: not installed`
+      const store = t.storeSkills.length ? `, store skills: ${t.storeSkills.join(', ')}` : ''
+      const kits = t.newKits.length ? `\n  new: ${t.newKits.join(', ')}. Run cosmic skills sync` : ''
+      const brand = t.brandExperience ? '/lifecycle:brand-experience' : 'missing files (run cosmic skills sync)'
+      return `${t.target}: installed (${t.installedVersion}), kits: ${t.kits.join(', ') || 'none'}${store}\n  Brand Experience: ${brand}${kits}`
+    })
+    return cloud + local.join('\n')
+  })
 }))
 skills.command('uninstall').description('Remove the skills this CLI installed. Files you edited are kept').option('--target <target>', 'claude, cursor or all', 'all').action(run(async (opts) => {
   const r = uninstallSkills(targets(opts.target))

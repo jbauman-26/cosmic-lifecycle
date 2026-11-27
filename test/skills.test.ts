@@ -21,7 +21,7 @@ const reg = () => ensureRegistry({ uri: resolve('registry-snapshot') })
 const dir = () => targetDir('claude')
 
 describe('skills sync', () => {
-  it('installs a router, a plugin manifest and one skill per kit under the fake home', () => {
+  it('installs the router, plugin manifest, Brand Experience and one skill per kit', () => {
     const [r] = syncSkills(reg(), { targets: ['claude'] })
     expect(dir().startsWith(tmp)).toBe(true)
     expect(r!.written).toContain('SKILL.md')
@@ -29,7 +29,12 @@ describe('skills sync', () => {
     const kit = readFileSync(join(dir(), 'skills', 'kit-flow-audit', 'SKILL.md'), 'utf8')
     expect(kit).toMatch(/name: "kits:flow-audit"/)
     expect(kit).toMatch(/cosmic kits add flow-audit/)
-    expect(readFileSync(join(dir(), 'SKILL.md'), 'utf8')).toMatch(/\/lifecycle:kits:winback-segment/)
+    const router = readFileSync(join(dir(), 'SKILL.md'), 'utf8')
+    expect(router).toContain('/lifecycle:kits:winback-segment')
+    expect(router).toContain('/lifecycle:brand-experience')
+    const brand = join(dir(), 'skills', 'brand-experience')
+    expect(readFileSync(join(brand, 'SKILL.md'), 'utf8')).toContain('references/editing.md')
+    expect(readFileSync(join(brand, 'references', 'editing.md'), 'utf8')).toContain('16/20')
   })
 
   it('is a no-op the second time', () => {
@@ -78,9 +83,12 @@ describe('skills sync', () => {
 
 describe('status and uninstall', () => {
   it('reports new kits, then removes only what it installed', () => {
-    expect(skillsStatus(reg(), ['claude'])[0]).toMatchObject({ installed: false })
+    expect(skillsStatus(reg(), ['claude'])[0]).toMatchObject({ installed: false, brandExperience: false })
     syncSkills(reg(), { targets: ['claude'] })
-    expect(skillsStatus(reg(), ['claude'])[0]).toMatchObject({ installed: true, newKits: [] })
+    expect(skillsStatus(reg(), ['claude'])[0]).toMatchObject({ installed: true, brandExperience: true, newKits: [] })
+    rmSync(join(dir(), 'skills', 'brand-experience', 'references', 'editing.md'))
+    expect(skillsStatus(reg(), ['claude'])[0]).toMatchObject({ installed: true, brandExperience: false })
+    syncSkills(reg(), { targets: ['claude'] })
     writeFileSync(join(dir(), 'README.md'), 'edited')
     const [u] = uninstallSkills(['claude'])
     expect(u!.kept).toEqual(['README.md'])

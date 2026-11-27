@@ -6,13 +6,16 @@ import { readIndex, type IndexEntry, type Registry } from './registry.js'
 import { VERSION } from './version.js'
 import { CliError } from './errors.js'
 import type { CloudSkill, SkillFile } from './cloud.js'
+import { brandExperienceEditing, brandExperienceSkill } from './brandExperienceSkill.js'
 
-// Installs one router skill plus one setup skill per kit:
+// Installs a router, the Brand Experience skill, and one setup skill per kit:
 // /lifecycle is the router, /lifecycle:kits:<kit> sets up a kit.
 // The store's own skills, pushed to Cosmic Cloud with `skills push`, install beside them under skills/store-<slug>/.
 // Every file we write is recorded with its hash, so a file the user edited is never overwritten.
 export const PLUGIN = 'lifecycle'
 const MANAGED = '.lifecycle-managed.json'
+const BRAND_EXPERIENCE_PLAYBOOK = 'skills/brand-experience/SKILL.md'
+const BRAND_EXPERIENCE_EDITING = 'skills/brand-experience/references/editing.md'
 
 export type Target = 'claude' | 'cursor'
 export const targetDir = (t: Target) => (t === 'claude' ? join(homedir(), '.claude', 'skills', PLUGIN) : join(homedir(), '.cursor', 'plugins', 'local', PLUGIN))
@@ -64,6 +67,7 @@ If \`lifecycle\` is not on PATH, stop and ask the user to install it from https:
 Rules:
 - Run \`cosmic reconcile\` before quoting any number. If a check failed, say so first. If the trust line says the numbers were not checked against a source of truth, say that first instead.
 - Nothing in this tool sends a message. Never claim attributed revenue proves causation.
+- For brand positioning, content packaging, onboarding or service recovery, use \`/lifecycle:brand-experience\`. It works with the facts and evidence the owner supplies.
 - "Audit my flows", "rank my flows" or "build a win-back segment" is a kit task. Prefer the kit skill:
 ${kits.map((k) => `  - \`/${PLUGIN}:kits:${k.name}\`: ${k.summary}`).join('\n')}
 `
@@ -103,6 +107,8 @@ What it changes: ${k.writes}
 export function buildFiles(kits: IndexEntry[], target: Target): Record<string, string> {
   const files: Record<string, string> = {
     'SKILL.md': routerSkill(kits),
+    [BRAND_EXPERIENCE_PLAYBOOK]: brandExperienceSkill,
+    [BRAND_EXPERIENCE_EDITING]: brandExperienceEditing,
     'README.md': `# Cosmic Lifecycle skills\n\nInstalled by \`cosmic skills sync\`. Files you edit here are kept on the next sync. Remove everything with \`cosmic skills uninstall\`.\n`,
     [target === 'claude' ? '.claude-plugin/plugin.json' : '.cursor-plugin/plugin.json']: pluginJson(),
   }
@@ -294,6 +300,7 @@ export function skillsStatus(reg: Registry, targets: Target[] = ['claude', 'curs
       dir,
       installed,
       installedVersion: installed ? managed.version : null,
+      brandExperience: installed && existsSync(join(dir, BRAND_EXPERIENCE_PLAYBOOK)) && existsSync(join(dir, BRAND_EXPERIENCE_EDITING)),
       kits: have,
       newKits: kits.map((k) => k.name).filter((n) => !have.includes(n)),
       storeSkills: [...new Set(Object.keys(managed.files).filter((f) => f.startsWith(STORE_PREFIX)).map((f) => f.slice(STORE_PREFIX.length).split('/')[0]!))],
