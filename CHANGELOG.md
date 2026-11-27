@@ -2,6 +2,17 @@
 
 Every release of Cosmic Lifecycle from 0.13.0 on. Earlier releases are described in their GitHub release notes.
 
+## 0.22.0 (2026-11-27)
+
+### Added
+
+- 20 warehouse connectors, for 50 in all: ActiveCampaign, AfterShip Returns, Avalara AvaTax, beehiiv, Calendly, Cin7 Omni, impact.com, Intercom, Inventory Planner, Kit, Microsoft Clarity, Ordergroove, Paddle, Printful, Richpanel, Seal Subscriptions, Stay AI, Tidio, UpPromote, Yotpo Loyalty. Each was written from the vendor's API docs and is tested against recorded answers only, not yet on a real account. `cosmic sources catalog` lists them as built.
+
+### Changed
+
+- Every connector's setup help asks for a read-only key where the provider offers one. Where a provider offers no read-only key, the help says so and suggests a dedicated account or deleting the key after use.
+- Personal-data rules cover the new connectors' fields.
+
 ## 0.21.3 (2026-11-26)
 
 ### Changed

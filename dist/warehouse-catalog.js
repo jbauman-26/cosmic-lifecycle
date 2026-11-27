@@ -1,4 +1,4 @@
-export const READINESS_LEGEND = 'Readiness: native = built in with reconcile checks. tested = warehouse connector run on a real account. built = connector written from the vendor API docs, not yet run on a real account. planned = no connector yet; use lifecycle sources import meanwhile.';
+export const READINESS_LEGEND = 'Readiness: native = built in with reconcile checks. tested = warehouse connector run on a real account. built = connector written from the vendor API docs, not yet run on a real account. planned = no connector yet; use cosmic sources import meanwhile.';
 export const WAREHOUSE_CATALOG = [
     {
         "slug": "judge-me",
@@ -664,7 +664,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.klarna.com/api/settlements/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "The Order Management read endpoint is real: GET https://api.klarna.com/ordermanagement/v1/orders answers 401 with a Basic challenge rather than 404. But Klarna publishes no readable contract for its list parameters or response bodies in the current docs index, so no fixture could be verified against a source (https://docs.klarna.com/api/)."
     },
     {
         "slug": "afterpay",
@@ -675,7 +675,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://developers.afterpay.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "Afterpay is a checkout and settlement rail. Its merchant API drives payment sessions and settlements behind Afterpay or Cash App onboarding review, and no documented read list of a merchant's own orders is published for self serve access (https://developers.cash.app/afterpay)."
     },
     {
         "slug": "loox",
@@ -1840,7 +1840,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+        "notes": "No public data API. Bring daily totals in with cosmic sources import."
     },
     {
         "slug": "tidio",
@@ -1924,7 +1924,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://developers.appstle.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "The only public surface is a Swagger UI for subscription-admin endpoints that look internal to Appstle's own partner integrations, with no documented merchant API key flow (https://subscription-admin.appstle.com/)."
     },
     {
         "slug": "seal-subscriptions",
@@ -2180,7 +2180,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://www.refersion.dev/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
     },
     {
         "slug": "goaffpro",
@@ -2191,7 +2191,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://api.goaffpro.com/docs/admin/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "Its public documentation deployment is misconfigured: every spec path returns the Swagger UI page, and the bundled initializer points at the petstore example schema, so no readable contract for auth or response bodies exists (https://api.goaffpro.com/docs/admin/). The merchant access token is created under Settings, Developer, Access Tokens."
     },
     {
         "slug": "fairing",
@@ -2325,7 +2325,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+        "notes": "No public data API. Bring daily totals in with cosmic sources import."
     },
     {
         "slug": "searchspring",
@@ -2336,7 +2336,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.searchspring.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
     },
     {
         "slug": "nosto",
@@ -2347,7 +2347,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.nosto.com/techdocs/apis/graphql-an-introduction",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "Nosto exposes a GraphQL API for its product and session data, not a REST list surface, so it needs runner work first (https://docs.nosto.com/)."
     },
     {
         "slug": "aftership-returns",
@@ -2420,7 +2420,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://developer.avalara.com/api-reference/avatax/rest/v2/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
     },
     {
         "slug": "amazon-ads",
@@ -2442,7 +2442,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+        "notes": "No public data API. Bring daily totals in with cosmic sources import."
     },
     {
         "slug": "reconvert",
@@ -2453,7 +2453,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+        "notes": "No public data API. Bring daily totals in with cosmic sources import."
     },
     {
         "slug": "zipify-ocu",
@@ -2464,7 +2464,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+        "notes": "No public data API. Bring daily totals in with cosmic sources import."
     },
     {
         "slug": "loyaltylion",
@@ -2598,7 +2598,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://junip.co/docs/api",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "No official API documentation exists. Searches return only third party scrapers of the Junip widget, and Junip publishes no developer reference (https://junip.co/)."
     },
     {
         "slug": "re-amaze",
@@ -2693,12 +2693,55 @@ export const WAREHOUSE_CATALOG = [
         "slug": "richpanel",
         "name": "Richpanel",
         "category": "helpdesk",
-        "readiness": "planned",
+        "readiness": "built",
         "why": "#67 of 100 tools Shopify stores use. Ranking position is judgment. No StoreLeads count checked. DTC-focused Gorgias alternative. Source: https://www.richpanel.com/",
-        "docs": "https://developer.richpanel.com/",
-        "credentials": [],
+        "docs": "https://developer.richpanel.com/reference/list-tasks",
+        "credentials": [
+            {
+                "name": "api_key",
+                "label": "Helpdesk API key",
+                "help": "In Richpanel open Settings, then API, and generate a helpdesk API key. It goes in the x-richpanel-key header. A Returns API key is a different credential and will not work here. Create the key with read-only scope where Richpanel offers it, so this connection can read your data but never change it."
+            }
+        ],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "config": {
+            "client": {
+                "base_url": "https://api.richpanel.com/v1/",
+                "headers": {
+                    "Accept": "application/json"
+                },
+                "auth": {
+                    "type": "api_key",
+                    "name": "x-richpanel-key",
+                    "api_key": "{secret:api_key}",
+                    "location": "header"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "task_id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "tasks",
+                    "endpoint": {
+                        "path": "tasks",
+                        "params": {
+                            "limit": 100
+                        },
+                        "data_selector": "tasks",
+                        "paginator": {
+                            "type": "page_number",
+                            "page_param": "page",
+                            "base_page": 1,
+                            "total_path": null,
+                            "stop_after_empty_page": true
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Base https://api.richpanel.com/v1, from the servers block in the OpenAPI definition on the reference pages. Auth is the x-richpanel-key header carrying a helpdesk API key, which the authentication page states. The Returns API is a separate product with its own key and is GraphQL only, so it is not part of this connector. Tasks list at GET /tasks, take page, limit, sort_by and sort_order, and return the rows in a tasks array with the page number beside it, so the page number pager walks forward until a page comes back empty. One resource is built, tasks. Metrics, teams, macros and scenarios are documented and left out because only the tasks reference was read in full. A task carries an assignee, which is a member of staff, and staff names are stripped the same way customer names are. Fixture values are illustrative, built from the documented response example."
     },
     {
         "slug": "kustomer",
@@ -2827,7 +2870,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://developer.shiphero.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "Shiphero exposes a GraphQL API only, at developer.shiphero.com. This runner builds dlt REST specs, so a GraphQL query surface needs runner work first (https://developer.shiphero.com/)."
     },
     {
         "slug": "shipmonk",
@@ -2995,12 +3038,55 @@ export const WAREHOUSE_CATALOG = [
         "slug": "inventory-planner",
         "name": "Inventory Planner",
         "category": "ops-erp",
-        "readiness": "planned",
+        "readiness": "built",
         "why": "#78 of 100 tools Shopify stores use. Ranking position is judgment. No count. Common demand planning add-on for $1M-$10M Shopify brands. Source: https://www.inventory-planner.com/",
-        "docs": "https://help.inventory-planner.com/en/articles/2565547-public-api",
-        "credentials": [],
+        "docs": "https://help.inventory-planner.com/en/articles/674662-inventory-planner-public-apis",
+        "credentials": [
+            {
+                "name": "api_key",
+                "label": "API key",
+                "help": "In Inventory Planner open Settings, then API, and choose Generate key. The key is sent in the Authorization header exactly as issued, with no Bearer prefix. Create the key with read-only scope where Inventory Planner offers it, so this connection can read your data but never change it. This connector only sends GET requests."
+            }
+        ],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "config": {
+            "client": {
+                "base_url": "https://app.inventory-planner.com/",
+                "headers": {
+                    "Accept": "application/json"
+                },
+                "auth": {
+                    "type": "api_key",
+                    "name": "Authorization",
+                    "api_key": "{secret:api_key}",
+                    "location": "header"
+                }
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge"
+            },
+            "resources": [
+                {
+                    "name": "variants",
+                    "endpoint": {
+                        "path": "api/v1/variants",
+                        "params": {
+                            "limit": 100
+                        },
+                        "data_selector": "variants",
+                        "paginator": {
+                            "type": "page_number",
+                            "page_param": "page",
+                            "base_page": 0,
+                            "total_path": null,
+                            "stop_after_empty_page": true
+                        }
+                    }
+                }
+            ]
+        },
+        "notes": "Base https://app.inventory-planner.com/, stated on the public API article. Auth is the Authorization header carrying the account API key on its own, with no Bearer prefix, and the key is generated per user under Settings then API. Collection responses wrap the rows in a meta document and an entity array named after the resource, so variants sit at variants and meta carries name, total, count, limit and page. Paging is limit and page, and page starts at 0, so the page number pager begins at zero and walks until a page comes back empty. One resource is built, variants, which the Reports API article uses as its example with fields, limit and page. The stock orders API is POST only and is not readable here, and the other report collections are documented per endpoint and were not read. Variant rows are product and replenishment data, not consumer personal data, so this fixture carries no personal list. Fixture values are illustrative, built from the documented response example."
     },
     {
         "slug": "a2x",
@@ -3011,7 +3097,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+        "notes": "No public data API. Bring daily totals in with cosmic sources import."
     },
     {
         "slug": "taxjar",
@@ -3033,7 +3119,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://integrations.impact.com/impact-brand/reference",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
     },
     {
         "slug": "social-snowball",
@@ -3148,7 +3234,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+        "notes": "No public data API. Bring daily totals in with cosmic sources import."
     },
     {
         "slug": "gempages",
@@ -3159,7 +3245,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+        "notes": "No public data API. Bring daily totals in with cosmic sources import."
     },
     {
         "slug": "shogun",
@@ -3170,7 +3256,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+        "notes": "No public data API. Bring daily totals in with cosmic sources import."
     },
     {
         "slug": "printful",
@@ -3545,7 +3631,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+        "notes": "No public data API. Bring daily totals in with cosmic sources import."
     },
     {
         "slug": "replo",
@@ -3556,7 +3642,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+        "notes": "No public data API. Bring daily totals in with cosmic sources import."
     },
     {
         "slug": "tapcart",
@@ -3578,7 +3664,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "https://docs.wonderment.com/",
         "credentials": [],
         "params": [],
-        "notes": "Public API; connector not written yet. Describe it with lifecycle warehouse add-api, or use CSV import."
+        "notes": "Public API; connector not written yet. Describe it with cosmic warehouse add-api, or use CSV import."
     },
     {
         "slug": "littledata",
@@ -3589,7 +3675,7 @@ export const WAREHOUSE_CATALOG = [
         "docs": "",
         "credentials": [],
         "params": [],
-        "notes": "No public data API. Bring daily totals in with lifecycle sources import."
+        "notes": "No public data API. Bring daily totals in with cosmic sources import."
     },
     {
         "slug": "brevo",
@@ -3815,7 +3901,7 @@ export const WAREHOUSE_CATALOG = [
                 }
             ]
         },
-        "notes": "One row per deal and per contact with its HubSpot id, stage, original source, dates and amount. HubSpot returns only the properties named in the request, so no name, email, phone or company is ever asked for. hs_analytics_source_data_1 is HubSpot's source detail, such as a campaign or referring site; on some portals it holds a page URL. Full refresh merged on id every run. The built-in hubspot source (lifecycle connect hubspot) keeps daily counts with reconcile checks; use this one when you want row-level pipeline analysis in SQL.",
+        "notes": "One row per deal and per contact with its HubSpot id, stage, original source, dates and amount. HubSpot returns only the properties named in the request, so no name, email, phone or company is ever asked for. hs_analytics_source_data_1 is HubSpot's source detail, such as a campaign or referring site; on some portals it holds a page URL. Full refresh merged on id every run. The built-in hubspot source (cosmic connect hubspot) keeps daily counts with reconcile checks; use this one when you want row-level pipeline analysis in SQL.",
         "stripFields": [
             "dealname",
             "company",
@@ -4068,7 +4154,7 @@ export const WAREHOUSE_CATALOG = [
         "name": "Customer.io",
         "category": "email-sms",
         "readiness": "built",
-        "why": "Added in 0.14.0 for SaaS workspaces, as the lifecycle email tool many of them use instead of Klaviyo. No usage count on file.",
+        "why": "Added in 0.14.0 for SaaS workspaces, as the cosmic email tool many of them use instead of Klaviyo. No usage count on file.",
         "docs": "https://docs.customer.io/api/app/",
         "credentials": [
             {
