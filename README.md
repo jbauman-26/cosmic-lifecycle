@@ -204,7 +204,7 @@ Install the skills once, then ask for a job by name:
 cosmic skills sync
 ```
 
-That adds `/lifecycle` and one skill per kit, such as `/lifecycle:kits:flow-audit`. It never overwrites a skill file you edited, and `cosmic skills uninstall` removes what it added.
+That adds `/lifecycle`, one skill per kit, and `/lifecycle:brand-experience` for brand positioning, content packaging and the first customer experience. Brand Experience works from the evidence you give your agent in chat. The installer preserves your edited skill files, and `cosmic skills uninstall` removes the unedited files it added.
 
 ## Kits
 

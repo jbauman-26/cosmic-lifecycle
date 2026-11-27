@@ -1154,8 +1154,8 @@ const targets = (t?: string): Target[] | undefined => {
   if (t === 'claude' || t === 'cursor') return [t]
   throw new CliError(`Unknown target ${t}.`, 'Use --target claude, cursor or all')
 }
-const skills = program.command('skills').description('Install kit skills into Claude Code and Cursor, and keep the workspace\'s own skills on Cosmic Cloud')
-withRegistry(skills.command('sync').description('Install or update /lifecycle and one /lifecycle:kits:<kit> skill per kit. When logged in to Cosmic Cloud, also the workspace\'s own skills'))
+const skills = program.command('skills').description('Install Cosmic skills into Claude Code and Cursor, and keep the workspace\'s own skills on Cosmic Cloud')
+withRegistry(skills.command('sync').description('Install /lifecycle, /lifecycle:brand-experience, kit skills, and any available Cosmic Cloud workspace skills'))
   .option('--target <target>', 'claude, cursor or all. Default: claude, plus cursor when it is installed')
   .option('--dry-run', 'show what would change')
   .option('--force', 'overwrite files you edited')

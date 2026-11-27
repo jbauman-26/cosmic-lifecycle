@@ -5,7 +5,8 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { readIndex } from './registry.js';
 import { VERSION } from './version.js';
 import { CliError } from './errors.js';
-// Installs one router skill plus one setup skill per kit:
+import { brandExperienceEditing, brandExperienceSkill } from './brandExperienceSkill.js';
+// Installs a router, the Brand Experience skill, and one setup skill per kit:
 // /lifecycle is the router, /lifecycle:kits:<kit> sets up a kit.
 // The store's own skills, pushed to Cosmic Cloud with `skills push`, install beside them under skills/store-<slug>/.
 // Every file we write is recorded with its hash, so a file the user edited is never overwritten.
@@ -51,6 +52,7 @@ If \`lifecycle\` is not on PATH, stop and ask the user to install it from https:
 Rules:
 - Run \`cosmic reconcile\` before quoting any number. If a check failed, say so first. If the trust line says the numbers were not checked against a source of truth, say that first instead.
 - Nothing in this tool sends a message. Never claim attributed revenue proves causation.
+- For brand positioning, content packaging, onboarding or service recovery, use \`/lifecycle:brand-experience\`. It works with the facts and evidence the owner supplies.
 - "Audit my flows", "rank my flows" or "build a win-back segment" is a kit task. Prefer the kit skill:
 ${kits.map((k) => `  - \`/${PLUGIN}:kits:${k.name}\`: ${k.summary}`).join('\n')}
 `;
@@ -88,6 +90,8 @@ What it changes: ${k.writes}
 export function buildFiles(kits, target) {
     const files = {
         'SKILL.md': routerSkill(kits),
+        'skills/brand-experience/SKILL.md': brandExperienceSkill,
+        'skills/brand-experience/references/editing.md': brandExperienceEditing,
         'README.md': `# Cosmic Lifecycle skills\n\nInstalled by \`cosmic skills sync\`. Files you edit here are kept on the next sync. Remove everything with \`cosmic skills uninstall\`.\n`,
         [target === 'claude' ? '.claude-plugin/plugin.json' : '.cursor-plugin/plugin.json']: pluginJson(),
     };
