@@ -387,8 +387,9 @@ Flow:
   Then: "Follow lifecycle-kits/winback-segment/AGENT.md"
 
 Skills for Claude Code and Cursor:
-  cosmic skills sync installs /lifecycle and one /lifecycle:kits:NAME skill
-  per kit. It never overwrites a file you edited. cosmic skills uninstall
+  cosmic skills sync installs /lifecycle, four growth skills
+  (/lifecycle:icp-and-offer, /lifecycle:sales-page, /lifecycle:content-systems,
+  /lifecycle:sales-call-review) and one /lifecycle:kits:NAME skill per kit. It never overwrites a file you edited. cosmic skills uninstall
   removes what it installed. When logged in to Cosmic Cloud it also installs
   the store's own skills, pushed with cosmic skills push DIRECTORY.
   See cosmic docs cloud.

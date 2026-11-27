@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ensureRegistry, validateRegistry } from '../src/registry.js'
 import { skillsStatus, syncSkills, targetDir, uninstallSkills } from '../src/skills.js'
+import { GROWTH_SKILLS, growthSkillFiles } from '../src/growthSkills.js'
 
 let tmp: string
 const realHome = process.env.HOME
@@ -86,5 +87,27 @@ describe('status and uninstall', () => {
     expect(u!.kept).toEqual(['README.md'])
     expect(existsSync(join(dir(), 'README.md'))).toBe(true)
     expect(existsSync(join(dir(), 'SKILL.md'))).toBe(false)
+  })
+})
+
+describe('growth skills', () => {
+  it('installs each growth skill with valid frontmatter, working reference links and the router entry', () => {
+    syncSkills(reg(), { targets: ['claude'] })
+    const router = readFileSync(join(dir(), 'SKILL.md'), 'utf8')
+    for (const name of GROWTH_SKILLS) {
+      const body = readFileSync(join(dir(), 'skills', name, 'SKILL.md'), 'utf8')
+      const fm = /^---\nname: ([a-z-]+)\ndescription: (.+)\n---\n/.exec(body)
+      expect(fm?.[1]).toBe(name)
+      expect(fm![2]!.length).toBeGreaterThan(60)
+      expect(router).toContain(`/lifecycle:${name}`)
+      for (const [, ref] of body.matchAll(/\]\((references\/[a-z-]+\.md)\)/g)) expect(existsSync(join(dir(), 'skills', name, ref!))).toBe(true)
+    }
+  })
+
+  it('ships no long dashes, backticks or third-party names', () => {
+    for (const [path, text] of Object.entries(growthSkillFiles)) {
+      expect(text, path).not.toMatch(/[\u2013\u2014`]/)
+      expect(text, path).not.toMatch(/hormozi|gap selling|\$100m|brunson|godin|poppy/i)
+    }
   })
 })
