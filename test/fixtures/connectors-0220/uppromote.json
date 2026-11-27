@@ -1,0 +1,79 @@
+{
+  "source": "https://aff-api.uppromote.com/docs/v2/get-affiliates-21170049e0",
+  "note": "Illustrative rows following the documented status, message and data envelope, not vendor sample records.",
+  "resources": {
+    "affiliates": {
+      "response": {
+        "status": 200,
+        "message": "ok",
+        "data": [
+          {
+            "id": 501,
+            "email": "priya@natarajan.example",
+            "first_name": "Priya",
+            "last_name": "Natarajan",
+            "status": "approved",
+            "program_id": 12,
+            "ref_id": "PR-77",
+            "created_at": "2026-09-01T10:00:00Z",
+            "total_sale": "1840.00",
+            "total_commission": "184.00"
+          },
+          {
+            "id": 502,
+            "email": "sam.okafor@northfield.example",
+            "first_name": "Sam",
+            "last_name": "Okafor",
+            "status": "pending",
+            "program_id": 12,
+            "ref_id": "SO-19",
+            "created_at": "2026-09-08T10:00:00Z",
+            "total_sale": "0.00",
+            "total_commission": "0.00"
+          }
+        ]
+      }
+    },
+    "programs": {
+      "response": {
+        "status": 200,
+        "message": "ok",
+        "data": [
+          {
+            "id": 12,
+            "name": "Northfield Referrals",
+            "status": "active",
+            "commission_type": "percentage",
+            "commission_rate": "10.00",
+            "created_at": "2026-01-05T08:00:00Z"
+          },
+          {
+            "id": 13,
+            "name": "Cedarline Partners",
+            "status": "active",
+            "commission_type": "fixed",
+            "commission_rate": "15.00",
+            "created_at": "2026-02-11T08:00:00Z"
+          }
+        ]
+      }
+    }
+  },
+  "personal": [
+    "priya@natarajan.example",
+    "Priya",
+    "Natarajan",
+    "sam.okafor@northfield.example",
+    "Sam",
+    "Okafor"
+  ],
+  "kept": [
+    "\"id\": 501",
+    "approved",
+    "PR-77",
+    "1840.00",
+    "2026-09-01T10:00:00Z",
+    "\"id\": 12",
+    "Northfield Referrals"
+  ]
+}

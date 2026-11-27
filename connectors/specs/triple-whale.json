@@ -6,7 +6,7 @@
     {
       "name": "api_key",
       "label": "API key",
-      "help": "Triple Whale app, Data, APIs (app.triplewhale.com/api-keys), Generate API Key. Name it, set an expiration (90 days default; pick a longer one or rotate on schedule), and select no Write scopes. Summary Page: Read and Pixel Attribution: Read are the read scopes; the docs list no specific scope for the SQL endpoint this connector uses. Leave Customer PII: Read off. Copy the key from the popup; it is shown once. Keys stop working if the creating user loses access."
+      "help": "Triple Whale app, Data, APIs (app.triplewhale.com/api-keys), Generate API Key. Name it, set an expiration (90 days default; pick a longer one or rotate on schedule), and select no Write scopes. Summary Page: Read and Pixel Attribution: Read are the read scopes; the docs list no specific scope for the SQL endpoint this connector uses. Leave Customer PII: Read off. Copy the key from the popup; it is shown once. Keys stop working if the creating user loses access. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
     }
   ],
   "params": [

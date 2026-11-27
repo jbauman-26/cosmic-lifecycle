@@ -1,0 +1,86 @@
+{
+  "source": "https://developers.tidio.com/reference/get_contacts",
+  "note": "Illustrative rows following the documented contacts plus meta envelope, not vendor sample records.",
+  "resources": {
+    "contacts": {
+      "response": {
+        "contacts": [
+          {
+            "id": "a1b4ca4c-1108-4432-b256-1e4cf2bf6f9e",
+            "name": "Priya Natarajan",
+            "email": "priya@natarajan.example",
+            "phone": "+14155550142",
+            "country_code": "US",
+            "city": "Austin",
+            "created_at": "2026-09-01T10:00:00Z",
+            "updated_at": "2026-09-02T10:00:00Z",
+            "tags": [
+              "vip"
+            ],
+            "distinct_id": "d-1001"
+          },
+          {
+            "id": "b2c5db5d-2219-5543-c367-2f5d3gc7g7af",
+            "name": "Sam Okafor",
+            "email": "sam.okafor@northfield.example",
+            "phone": "+14155550188",
+            "country_code": "US",
+            "city": "Denver",
+            "created_at": "2026-09-03T10:00:00Z",
+            "updated_at": "2026-09-04T10:00:00Z",
+            "tags": [],
+            "distinct_id": "d-1002"
+          }
+        ],
+        "meta": {
+          "cursor": null,
+          "limit": 1000
+        }
+      }
+    },
+    "operators": {
+      "response": {
+        "operators": [
+          {
+            "id": "op-1",
+            "name": "Dana Reyes",
+            "email": "dana@natarajan.example",
+            "role": "admin",
+            "created_at": "2026-01-05T08:00:00Z"
+          },
+          {
+            "id": "op-2",
+            "name": "Luis Moreno",
+            "email": "luis@northfield.example",
+            "role": "agent",
+            "created_at": "2026-02-11T08:00:00Z"
+          }
+        ],
+        "meta": {
+          "cursor": null,
+          "limit": 1000
+        }
+      }
+    }
+  },
+  "personal": [
+    "Priya Natarajan",
+    "priya@natarajan.example",
+    "+14155550142",
+    "Sam Okafor",
+    "sam.okafor@northfield.example",
+    "+14155550188",
+    "Dana Reyes",
+    "dana@natarajan.example",
+    "Luis Moreno",
+    "luis@northfield.example"
+  ],
+  "kept": [
+    "\"id\": \"a1b4ca4c-1108-4432-b256-1e4cf2bf6f9e\"",
+    "vip",
+    "d-1001",
+    "2026-09-01T10:00:00Z",
+    "\"role\": \"admin\"",
+    "\"id\": \"op-1\""
+  ]
+}

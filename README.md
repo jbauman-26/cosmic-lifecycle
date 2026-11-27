@@ -294,7 +294,7 @@ cosmic tools providers                        # Kie, fal, Apify and ScrapeCreato
 cosmic tools run kie:gpt-image-2-text-to-image --input '{"prompt":"A red running shoe"}' --wait
 cosmic exec -- node my-report.js              # run a script with your keys in its environment
 cosmic sources import meta_ads --csv ads.csv  # any other tool's daily totals
-cosmic sources catalog --category reviews      # 100 tools Shopify stores use, 30 with connectors
+cosmic sources catalog --category reviews      # 110 tools Shopify stores use, 50 with connectors
 cosmic warehouse connect gorgias --secret api_key=GORGIAS_KEY --set subdomain=you --set username=you@store.com
 cosmic warehouse sync && cosmic warehouse query "select status, count(*) from src_gorgias.tickets group by 1"
 cosmic files ls                               # every saved report, dashboard and plan
@@ -366,7 +366,7 @@ Here is what has and has not been tested. Three sources have synced against real
 - Stripe on a live account. Refunds, several currencies and tiered prices are covered by unit tests only.
 - `deploy` running for days on end.
 - The personal data rules on a real account. They were written from the vendors' API docs and are tested against made-up rows in each vendor's documented shape (`docs/PERSONAL-DATA.md`).
-- Any of the 25 warehouse connectors on a real account. All were written from the vendors' API docs. The five added in 0.12.0 (Brevo, Privy, Okendo, Loox, Fairing) load in dlt and strip personal data from recorded responses, and that is all. Okendo's paging was run against a local stand-in, never Okendo.
+- Any of the 50 warehouse connectors on a real account. All were written from the vendors' API docs and are covered by tests against recorded answers only. The 20 added in 0.22.0 are listed in CHANGELOG.md. The five added in 0.12.0 (Brevo, Privy, Okendo, Loox, Fairing) load in dlt and strip personal data from recorded responses, and that is all. Okendo's paging was run against a local stand-in, never Okendo.
 - `LIFECYCLE_DB_SCHEMA` on Cosmic Cloud's hosted database, or behind a connection pooler.
 - A bundled uv set with `LIFECYCLE_UV_PATH` inside the packaged Mac app. Here it was run with a stand-in binary and with Homebrew's uv.
 - `connect --key-env` without a keychain against a live account. It was tested against recorded answers.

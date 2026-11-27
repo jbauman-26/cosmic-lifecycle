@@ -1,0 +1,89 @@
+{
+  "source": "https://www.aftership.com/docs/tracking/jh865r66gc6hi-get-trackings",
+  "note": "Illustrative rows following the documented meta and data envelope, not vendor sample records. These resources carry shipment metadata, not consumer personal data.",
+  "resources": {
+    "trackings": {
+      "response": {
+        "meta": {
+          "code": 200
+        },
+        "data": {
+          "pagination": {
+            "total": 2,
+            "next_cursor": null,
+            "has_next_page": false
+          },
+          "trackings": [
+            {
+              "id": "0b02015fc7fd4f3c8d5490cece4d124d",
+              "legacy_id": "my2uktymyz72xld1f7l3h01z",
+              "tracking_number": "1Z999AA10123456784",
+              "slug": "ups",
+              "order_id": "SO-9001",
+              "tag": "Delivered",
+              "subtag": "Delivered_001",
+              "destination_country_region": "US",
+              "created_at": "2026-09-01T10:00:00Z",
+              "updated_at": "2026-09-04T16:00:00Z"
+            },
+            {
+              "id": "1c13126ad8ge5g4d9e65d1df5e125e",
+              "legacy_id": "nz3vluznza83yme2g8m4i1y0",
+              "tracking_number": "9400111899223197428490",
+              "slug": "usps",
+              "order_id": "SO-9002",
+              "tag": "InTransit",
+              "subtag": "InTransit_004",
+              "destination_country_region": "US",
+              "created_at": "2026-09-03T10:00:00Z",
+              "updated_at": "2026-09-05T09:00:00Z"
+            }
+          ]
+        }
+      }
+    },
+    "couriers": {
+      "response": {
+        "meta": {
+          "code": 200
+        },
+        "data": {
+          "couriers": [
+            {
+              "slug": "ups",
+              "name": "UPS",
+              "phone": "1-800-742-5877",
+              "other_name": "United Parcel Service",
+              "web_url": "https://www.ups.com",
+              "required_fields": [
+                "tracking_number"
+              ],
+              "optional_fields": []
+            },
+            {
+              "slug": "usps",
+              "name": "USPS",
+              "phone": "1-800-275-8777",
+              "other_name": "United States Postal Service",
+              "web_url": "https://www.usps.com",
+              "required_fields": [
+                "tracking_number"
+              ],
+              "optional_fields": []
+            }
+          ]
+        }
+      }
+    }
+  },
+  "personal": [],
+  "kept": [
+    "\"id\": \"0b02015fc7fd4f3c8d5490cece4d124d\"",
+    "1Z999AA10123456784",
+    "Delivered",
+    "SO-9001",
+    "2026-09-01T10:00:00Z",
+    "\"slug\": \"ups\"",
+    "United Parcel Service"
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "source": "https://help.inventory-planner.com/en/articles/674662-inventory-planner-public-apis",
+  "note": "Illustrative rows following the documented meta plus variants envelope, not vendor sample records. Variant rows carry product data, not consumer personal data.",
+  "resources": {
+    "variants": {
+      "response": {
+        "meta": {
+          "name": "variants",
+          "total": 2,
+          "count": 2,
+          "limit": "100",
+          "page": 0
+        },
+        "variants": [
+          {
+            "id": 17948565252,
+            "sku": "MATTE-POSTER-A2",
+            "title": "Matte Poster A2",
+            "replenishment": 240,
+            "under_value": 60,
+            "on_hand": 180,
+            "committed": 20,
+            "vendor": "Cedarline Goods",
+            "lead_time": 14,
+            "created_at": "2026-01-05T08:00:00Z"
+          },
+          {
+            "id": 17948565253,
+            "sku": "UNISEX-TEE-M",
+            "title": "Unisex Tee Medium",
+            "replenishment": 96,
+            "under_value": 24,
+            "on_hand": 72,
+            "committed": 12,
+            "vendor": "Northfield Supply",
+            "lead_time": 21,
+            "created_at": "2026-02-11T08:00:00Z"
+          }
+        ]
+      }
+    }
+  },
+  "personal": [],
+  "kept": [
+    "\"id\": 17948565252",
+    "MATTE-POSTER-A2",
+    "240",
+    "Cedarline Goods",
+    "180",
+    "2026-01-05T08:00:00Z"
+  ]
+}

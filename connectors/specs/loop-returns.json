@@ -6,24 +6,39 @@
     {
       "name": "api_key",
       "label": "Loop API key",
-      "help": "Loop Admin (admin.loopreturns.com), Returns Management > Tools & integrations > Developer Tools, Generate API key. Tick only the Returns scope, plus Happy Returns Shipments (Read) if the brand uses Happy Returns drop-off. Do not add Carts, Orders write actions or Destinations (Write). Name it Cosmic Lifecycle and click Generate."
+      "help": "Loop Admin (admin.loopreturns.com), Returns Management > Tools & integrations > Developer Tools, Generate API key. Tick only the Returns scope, plus Happy Returns Shipments (Read) if the brand uses Happy Returns drop-off. Do not add Carts, Orders write actions or Destinations (Write). Name it Cosmic Lifecycle and click Generate. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
     }
   ],
   "params": [],
   "config": {
     "client": {
       "base_url": "https://api.loopreturns.com/api/2026-10/",
-      "auth": { "type": "api_key", "name": "X-Authorization", "api_key": "{secret:api_key}", "location": "header" }
+      "auth": {
+        "type": "api_key",
+        "name": "X-Authorization",
+        "api_key": "{secret:api_key}",
+        "location": "header"
+      }
     },
-    "resource_defaults": { "primary_key": "id", "write_disposition": "merge" },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
     "resources": [
       {
         "name": "returns",
         "endpoint": {
           "path": "warehouse/return/list",
-          "params": { "paginate": "true", "pageSize": 750, "filter": "updated_at" },
+          "params": {
+            "paginate": "true",
+            "pageSize": 750,
+            "filter": "updated_at"
+          },
           "data_selector": "returns",
-          "paginator": { "type": "json_link", "next_url_path": "nextPageUrl" }
+          "paginator": {
+            "type": "json_link",
+            "next_url_path": "nextPageUrl"
+          }
         }
       },
       {
@@ -32,7 +47,10 @@
         "endpoint": {
           "path": "happy-returns/shipments",
           "data_selector": "data",
-          "paginator": { "type": "json_link", "next_url_path": "next_page_url" }
+          "paginator": {
+            "type": "json_link",
+            "next_url_path": "next_page_url"
+          }
         }
       }
     ]

@@ -1,0 +1,96 @@
+{
+  "source": "https://api.cin7.com/api/swagger/v1/swagger.json",
+  "note": "Illustrative rows following the documented bare array response, not vendor sample records.",
+  "resources": {
+    "products": {
+      "response": [
+        {
+          "id": "p-1001",
+          "sku": "MATTE-POSTER-A2",
+          "name": "Matte Poster A2",
+          "category": "Print",
+          "brand": "Cedarline",
+          "uom": "EA",
+          "cost": 6.4,
+          "priceTier1": 18,
+          "isActive": true,
+          "createdDate": "2026-01-05T08:00:00Z"
+        },
+        {
+          "id": "p-1002",
+          "sku": "UNISEX-TEE-M",
+          "name": "Unisex Tee Medium",
+          "category": "Apparel",
+          "brand": "Cedarline",
+          "uom": "EA",
+          "cost": 7.25,
+          "priceTier1": 24,
+          "isActive": true,
+          "createdDate": "2026-02-11T08:00:00Z"
+        }
+      ]
+    },
+    "sales_orders": {
+      "response": [
+        {
+          "id": "so-9001",
+          "orderNumber": "SO-9001",
+          "status": "AUTHORISED",
+          "customer": "Cedarline Goods",
+          "total": 42,
+          "baseCurrency": "USD",
+          "orderDate": "2026-09-01T10:00:00Z"
+        },
+        {
+          "id": "so-9002",
+          "orderNumber": "SO-9002",
+          "status": "PACKED",
+          "customer": "Northfield Supply",
+          "total": 96.5,
+          "baseCurrency": "USD",
+          "orderDate": "2026-09-03T10:00:00Z"
+        }
+      ]
+    },
+    "contacts": {
+      "response": [
+        {
+          "id": "c-1",
+          "name": "Priya Natarajan",
+          "email": "priya@natarajan.example",
+          "phone": "+14155550142",
+          "company": "Cedarline Goods",
+          "type": "Customer",
+          "createdDate": "2026-08-01T09:00:00Z"
+        },
+        {
+          "id": "c-2",
+          "name": "Sam Okafor",
+          "email": "sam.okafor@northfield.example",
+          "phone": "+14155550188",
+          "company": "Northfield Supply",
+          "type": "Customer",
+          "createdDate": "2026-08-08T09:00:00Z"
+        }
+      ]
+    }
+  },
+  "personal": [
+    "Priya Natarajan",
+    "priya@natarajan.example",
+    "+14155550142",
+    "Sam Okafor",
+    "sam.okafor@northfield.example",
+    "+14155550188"
+  ],
+  "kept": [
+    "\"id\": \"p-1001\"",
+    "MATTE-POSTER-A2",
+    "18",
+    "AUTHORISED",
+    "SO-9001",
+    "42",
+    "2026-09-01T10:00:00Z",
+    "\"type\": \"Customer\""
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "source": "https://docs.yotpo.com/reference/fetch-all-recently-updated-customers",
+  "note": "Illustrative rows following the documented customers plus pagination envelope, not vendor sample records.",
+  "resources": {
+    "recent_customers": {
+      "response": {
+        "customers": [
+          {
+            "yotpo_customer_id": 123456789,
+            "email": "priya@natarajan.example",
+            "first_name": "Priya",
+            "last_name": "Natarajan",
+            "phone_number": "+14155550142",
+            "third_party_id": "3698392793225",
+            "points_balance": 420,
+            "referral_code": "PR-77",
+            "points_expire_at": "2027-10-25T08:23:33.000Z",
+            "joined_at": "2026-01-05T08:00:00.000Z"
+          },
+          {
+            "yotpo_customer_id": 123456790,
+            "email": "sam.okafor@northfield.example",
+            "first_name": "Sam",
+            "last_name": "Okafor",
+            "phone_number": "+14155550188",
+            "third_party_id": "3698392793226",
+            "points_balance": 85,
+            "referral_code": null,
+            "points_expire_at": null,
+            "joined_at": "2026-02-11T08:00:00.000Z"
+          }
+        ],
+        "pagination": {
+          "page_info": null
+        }
+      }
+    }
+  },
+  "personal": [
+    "priya@natarajan.example",
+    "Priya",
+    "Natarajan",
+    "+14155550142",
+    "sam.okafor@northfield.example",
+    "Sam",
+    "Okafor"
+  ],
+  "kept": [
+    "\"yotpo_customer_id\": 123456789",
+    "420",
+    "PR-77",
+    "2027-10-25T08:23:33.000Z",
+    "3698392793225"
+  ]
+}

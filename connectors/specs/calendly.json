@@ -1,0 +1,58 @@
+{
+  "slug": "calendly",
+  "name": "Calendly",
+  "docs": "https://developer.calendly.com/api-docs/calendly-api/scheduled-events/list-scheduled-events",
+  "credentials": [
+    {
+      "name": "api_token",
+      "label": "Personal access token",
+      "help": "Calendly, Integrations, then API and webhooks, then Personal access tokens, and create a token. Use a token owned by a user whose role only needs to read scheduled events. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
+    }
+  ],
+  "params": [
+    {
+      "name": "organization",
+      "label": "Organization URI from GET /users/me",
+      "example": "https://api.calendly.com/organizations/AAAAAAAAAAAAAAAA"
+    }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://api.calendly.com/",
+      "headers": {
+        "Accept": "application/json"
+      },
+      "auth": {
+        "type": "bearer",
+        "token": "{secret:api_token}"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "uri",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "scheduled_events",
+        "endpoint": {
+          "path": "scheduled_events",
+          "params": {
+            "organization": "{param:organization}",
+            "count": 100
+          },
+          "data_selector": "collection",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "pagination.next_page_token",
+            "cursor_param": "page_token"
+          }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developer.calendly.com/api-docs/calendly-api/scheduled-events/list-scheduled-events",
+    "https://developer.calendly.com/llms.txt"
+  ],
+  "notes": "Base https://api.calendly.com/. Auth is the Authorization Bearer header, shown on the endpoint page as either OAuth 2.0 or a Personal Access Token. The organization parameter is required for an organization-wide list and the page notes it needs admin or owner rights; the value comes from GET /users/me. Paging uses count (1 to 100, default 20) and page_token, and the body returns collection plus pagination. One resource is built. Invitees are only reachable per event uri, so they cannot be listed from the top level and were left out. Fixture values are illustrative, built from documented field names."
+}

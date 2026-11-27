@@ -6,7 +6,7 @@
     {
       "name": "api_token",
       "label": "Privy API token",
-      "help": "Needs a paid Privy plan; accounts without API access get a 403 api_access_required error. In the Privy dashboard (dashboard.privy.com) open Settings > API Tokens and click Create Token. Name it Cosmic Lifecycle and tick only the read scopes: contacts_read, campaigns_read, flows_read, displays_read, segments_read, coupons_read and reports_read. Leave contacts_write, orders_write and events_write off. Pick an expiration (30 days to 1 year, or none) and copy the token right away; it starts with privy_ and is shown only once. When it expires, renew it on the same page or create a new one."
+      "help": "Needs a paid Privy plan; accounts without API access get a 403 api_access_required error. In the Privy dashboard (dashboard.privy.com) open Settings > API Tokens and click Create Token. Name it Cosmic Lifecycle and tick only the read scopes: contacts_read, campaigns_read, flows_read, displays_read, segments_read, coupons_read and reports_read. Leave contacts_write, orders_write and events_write off. Pick an expiration (30 days to 1 year, or none) and copy the token right away; it starts with privy_ and is shown only once. When it expires, renew it on the same page or create a new one. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
     }
   ],
   "params": [],

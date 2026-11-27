@@ -5,3 +5,4 @@ spike/out
 spike
 *.tgz
 winback-plan.json
+__pycache__ .pyc

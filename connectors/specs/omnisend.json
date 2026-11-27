@@ -6,7 +6,7 @@
     {
       "name": "api_key",
       "label": "Omnisend API key",
-      "help": "In Omnisend open Store settings > API keys (app.omnisend.com/integrations/api-keys) and click Create API key, named Cosmic Lifecycle. If the form lets you pick permissions, grant only contacts.read, campaigns.read and automations.read and leave every write permission off. Copy the key right away; Omnisend will not show it again."
+      "help": "In Omnisend open Store settings > API keys (app.omnisend.com/integrations/api-keys) and click Create API key, named Cosmic Lifecycle. If the form lets you pick permissions, grant only contacts.read, campaigns.read and automations.read and leave every write permission off. Copy the key right away; Omnisend will not show it again. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
     }
   ],
   "params": [],

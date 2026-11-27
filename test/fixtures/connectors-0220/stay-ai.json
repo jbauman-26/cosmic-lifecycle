@@ -1,0 +1,76 @@
+{
+  "source": "https://docs.stay.ai/reference/query-all-subscriptions",
+  "note": "Illustrative rows following the documented total, page, pageSize and data envelope, not vendor sample records.",
+  "resources": {
+    "subscriptions": {
+      "response": {
+        "total": 2,
+        "page": 1,
+        "pageSize": 100,
+        "data": [
+          {
+            "id": 9001,
+            "status": "ACTIVE",
+            "customer_id": 4401,
+            "customer_email": "priya@natarajan.example",
+            "customer_first_name": "Priya",
+            "customer_last_name": "Natarajan",
+            "next_billing_date": "2026-12-04T00:00:00Z",
+            "price": 42.5,
+            "created_at": "2026-08-04T10:00:00Z"
+          },
+          {
+            "id": 9002,
+            "status": "PAUSED",
+            "customer_id": 4402,
+            "customer_email": "sam.okafor@northfield.example",
+            "customer_first_name": "Sam",
+            "customer_last_name": "Okafor",
+            "next_billing_date": "2026-12-11T00:00:00Z",
+            "price": 28,
+            "created_at": "2026-08-11T10:00:00Z"
+          }
+        ]
+      }
+    },
+    "customers": {
+      "response": {
+        "total": 2,
+        "page": 1,
+        "pageSize": 100,
+        "data": [
+          {
+            "id": 4401,
+            "email": "priya@natarajan.example",
+            "first_name": "Priya",
+            "last_name": "Natarajan",
+            "created_at": "2026-08-04T10:00:00Z",
+            "subscription_count": 1
+          },
+          {
+            "id": 4402,
+            "email": "sam.okafor@northfield.example",
+            "first_name": "Sam",
+            "last_name": "Okafor",
+            "created_at": "2026-08-11T10:00:00Z",
+            "subscription_count": 1
+          }
+        ]
+      }
+    }
+  },
+  "personal": [
+    "priya@natarajan.example",
+    "Priya",
+    "Natarajan",
+    "sam.okafor@northfield.example",
+    "Sam",
+    "Okafor"
+  ],
+  "kept": [
+    "\"id\": 9001",
+    "ACTIVE",
+    "42.5",
+    "2026-12-04T00:00:00Z"
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "source": "https://developers.activecampaign.com/reference/list-all-contacts",
+  "note": "Illustrative rows built from the documented field names on each list endpoint. Not vendor sample records. Bodies are wrapped as the API returns them so the data_selector and the meta.total pager are exercised. Account names use distinct words so a person surname cannot collide with a kept company name.",
+  "resources": {
+    "contacts": {
+      "response": {
+        "contacts": [
+          {
+            "id": "12",
+            "email": "priya@natarajan.example",
+            "first_name": "Priya",
+            "last_name": "Natarajan",
+            "phone": "+14155550142",
+            "cdate": "2026-11-01T09:12:44-05:00",
+            "udate": "2026-11-20T11:02:10-05:00",
+            "orgid": "3",
+            "deleted": "0"
+          },
+          {
+            "id": "13",
+            "email": "sam.okafor@northfield.example",
+            "first_name": "Sam",
+            "last_name": "Okafor",
+            "phone": "+14155550188",
+            "cdate": "2026-11-02T10:00:00-05:00",
+            "udate": "2026-11-21T08:30:00-05:00",
+            "orgid": "3",
+            "deleted": "0"
+          }
+        ],
+        "meta": {
+          "total": "2",
+          "limit": 100,
+          "offset": 0
+        }
+      }
+    },
+    "automations": {
+      "response": {
+        "automations": [
+          {
+            "id": "41",
+            "name": "Welcome series",
+            "cdate": "2026-10-04T12:00:00-05:00",
+            "status": "1",
+            "entered": "128"
+          },
+          {
+            "id": "42",
+            "name": "Win back 60 days",
+            "cdate": "2026-10-11T12:00:00-05:00",
+            "status": "1",
+            "entered": "64"
+          }
+        ],
+        "meta": {
+          "total": "2",
+          "limit": 100,
+          "offset": 0
+        }
+      }
+    },
+    "accounts": {
+      "response": {
+        "accounts": [
+          {
+            "id": "3",
+            "name": "Northfield Supply",
+            "accountUrl": "northfield.example",
+            "createdTimestamp": "2026-09-01T09:00:00-05:00"
+          },
+          {
+            "id": "4",
+            "name": "Cedarline Goods",
+            "accountUrl": "cedarline.example",
+            "createdTimestamp": "2026-09-14T09:00:00-05:00"
+          }
+        ],
+        "meta": {
+          "total": "2",
+          "limit": 100,
+          "offset": 0
+        }
+      }
+    }
+  },
+  "personal": [
+    "priya@natarajan.example",
+    "Priya",
+    "Natarajan",
+    "+14155550142",
+    "sam.okafor@northfield.example",
+    "Sam",
+    "Okafor",
+    "+14155550188"
+  ],
+  "kept": [
+    "\"id\": \"12\"",
+    "Welcome series",
+    "128",
+    "Northfield Supply",
+    "2026-11-01T09:12:44-05:00"
+  ]
+}

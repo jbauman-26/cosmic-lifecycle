@@ -6,7 +6,7 @@
     {
       "name": "api_key",
       "label": "REST API key (password)",
-      "help": "Gorgias helpdesk, Settings, You, REST API. Under API Access & Credentials click Create API Key (or copy the existing Password (API Key)). Gorgias keys have no scopes: the key acts with the permissions of the user who owns it, so create it from a user with the lowest role that can see all tickets. This connector only sends GET requests."
+      "help": "Gorgias helpdesk, Settings, You, REST API. Under API Access & Credentials click Create API Key (or copy the existing Password (API Key)). Gorgias keys have no scopes: the key acts with the permissions of the user who owns it, so create it from a user with the lowest role that can see all tickets. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
     }
   ],
   "params": [

@@ -1,0 +1,65 @@
+{
+  "source": "https://integrations.impact.com/brand-api-reference/reference/deals/deals.md",
+  "note": "Illustrative rows following the documented named-array envelopes, not vendor sample records. These two resources carry no consumer personal data.",
+  "resources": {
+    "deals": {
+      "response": {
+        "Deals": [
+          {
+            "Id": "1001",
+            "Name": "Q4 Creator Bundle",
+            "CampaignId": "5001",
+            "State": "ACTIVE",
+            "Type": "CPS",
+            "Scope": "PRODUCT",
+            "Payout": "12.50",
+            "Currency": "USD",
+            "CreatedDate": "2026-09-01T10:00:00Z"
+          },
+          {
+            "Id": "1002",
+            "Name": "Launch Moment",
+            "CampaignId": "5001",
+            "State": "PAUSED",
+            "Type": "CPA",
+            "Scope": "PRODUCT",
+            "Payout": "8.00",
+            "Currency": "USD",
+            "CreatedDate": "2026-09-08T10:00:00Z"
+          }
+        ]
+      }
+    },
+    "catalogs": {
+      "response": {
+        "Catalogs": [
+          {
+            "Id": "7001",
+            "Name": "Cedarline Core Catalog",
+            "CatalogType": "PRODUCT",
+            "ItemCount": 184,
+            "State": "ACTIVE",
+            "LastUploadDate": "2026-09-02T09:00:00Z"
+          },
+          {
+            "Id": "7002",
+            "Name": "Northfield Seasonal",
+            "CatalogType": "PRODUCT",
+            "ItemCount": 62,
+            "State": "ACTIVE",
+            "LastUploadDate": "2026-09-09T09:00:00Z"
+          }
+        ]
+      }
+    }
+  },
+  "personal": [],
+  "kept": [
+    "\"Id\": \"1001\"",
+    "CPS",
+    "12.50",
+    "2026-09-01T10:00:00Z",
+    "\"Id\": \"7001\"",
+    "184"
+  ]
+}

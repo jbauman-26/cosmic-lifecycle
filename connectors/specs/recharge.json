@@ -6,7 +6,7 @@
     {
       "name": "api_token",
       "label": "Admin API token",
-      "help": "Recharge merchant portal, Tools & apps, API tokens, then Create new in the Admin token section (not the Storefront token). Name it, and under scopes set Read access for Subscriptions, Orders (covers charges and orders) and Customers; leave every other scope at No access. Copy the token after saving."
+      "help": "Recharge merchant portal, Tools & apps, API tokens, then Create new in the Admin token section (not the Storefront token). Name it, and under scopes set Read access for Subscriptions, Orders (covers charges and orders) and Customers; leave every other scope at No access. Copy the token after saving. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
     }
   ],
   "params": [],

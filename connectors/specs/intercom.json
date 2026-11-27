@@ -1,0 +1,52 @@
+{
+  "slug": "intercom",
+  "name": "Intercom",
+  "docs": "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/contacts/listcontacts",
+  "credentials": [
+    {
+      "name": "access_token",
+      "label": "Access token",
+      "help": "In Intercom open Settings, then Integrations, then Developer Hub, open or create an app, then Authentication, and copy the Access Token. Scopes are set on the app: grant read on contacts and companies only. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
+    }
+  ],
+  "params": [],
+  "config": {
+    "client": {
+      "base_url": "https://api.intercom.io/",
+      "headers": {
+        "Accept": "application/json",
+        "Intercom-Version": "2.18"
+      },
+      "auth": {
+        "type": "bearer",
+        "token": "{secret:access_token}"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "contacts",
+        "endpoint": {
+          "path": "contacts",
+          "params": {
+            "per_page": 150
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "pages.next.starting_after",
+            "cursor_param": "starting_after"
+          }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/contacts/listcontacts",
+    "https://developers.intercom.com/docs/build-an-integration/learn-more/rest-apis/pagination/"
+  ],
+  "notes": "Base https://api.intercom.io/. Auth is the Authorization Bearer header plus an Intercom-Version header; 2.18 is the version the contact pages are written against. Paging is cursor based: per_page defaults to 10 with a maximum of 150, and starting_after takes the value from pages.next.starting_after in the previous response, so that value is sent back as starting_after. A response carries type, data, total_count and pages. One resource is built, contacts. Companies and conversations were left out because their list endpoints and cursors were not read during this pass; they are the obvious next additions. Contacts carry email, name, phone and location, which the shared rules remove; company names on a contact are part of the person object and are removed with it. Fixture values are illustrative, built from documented field names."
+}

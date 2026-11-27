@@ -1,0 +1,94 @@
+{
+  "source": "https://developer.paddle.com/api-reference/transactions/list-transactions",
+  "note": "Illustrative rows following the documented data plus meta.pagination envelope, not vendor sample records.",
+  "resources": {
+    "transactions": {
+      "response": {
+        "data": [
+          {
+            "id": "txn_01h8",
+            "status": "completed",
+            "customer_id": "ctm_01h8",
+            "currency_code": "USD",
+            "details": {
+              "totals": {
+                "total": "4200",
+                "grand_total": "4200",
+                "fee": "120",
+                "earnings": "4080"
+              }
+            },
+            "billed_at": "2026-11-04T10:00:00Z",
+            "created_at": "2026-11-04T09:59:00Z"
+          },
+          {
+            "id": "txn_01h9",
+            "status": "billed",
+            "customer_id": "ctm_01h9",
+            "currency_code": "USD",
+            "details": {
+              "totals": {
+                "total": "1800",
+                "grand_total": "1800",
+                "fee": "60",
+                "earnings": "1740"
+              }
+            },
+            "billed_at": "2026-11-11T10:00:00Z",
+            "created_at": "2026-11-11T09:59:00Z"
+          }
+        ],
+        "meta": {
+          "pagination": {
+            "per_page": 200,
+            "next": null,
+            "has_more": false,
+            "estimated_total": 2
+          }
+        }
+      }
+    },
+    "customers": {
+      "response": {
+        "data": [
+          {
+            "id": "ctm_01h8",
+            "email": "priya@natarajan.example",
+            "name": "Priya Natarajan",
+            "locale": "en",
+            "status": "active",
+            "created_at": "2026-08-01T09:00:00Z"
+          },
+          {
+            "id": "ctm_01h9",
+            "email": "sam.okafor@northfield.example",
+            "name": "Sam Okafor",
+            "locale": "en",
+            "status": "active",
+            "created_at": "2026-08-08T09:00:00Z"
+          }
+        ],
+        "meta": {
+          "pagination": {
+            "per_page": 200,
+            "next": null,
+            "has_more": false,
+            "estimated_total": 2
+          }
+        }
+      }
+    }
+  },
+  "personal": [
+    "priya@natarajan.example",
+    "Priya Natarajan",
+    "sam.okafor@northfield.example",
+    "Sam Okafor"
+  ],
+  "kept": [
+    "\"id\": \"txn_01h8\"",
+    "completed",
+    "4080",
+    "2026-11-04T10:00:00Z"
+  ]
+}

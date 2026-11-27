@@ -1,0 +1,73 @@
+{
+  "slug": "beehiiv",
+  "name": "beehiiv",
+  "docs": "https://developers.beehiiv.com/api-reference/subscriptions/index",
+  "credentials": [
+    {
+      "name": "api_token",
+      "label": "API key",
+      "help": "In beehiiv open Settings, then Integrations, then API, and create a key. Choose an API key with the read scopes for subscriptions and posts only. This connector only sends GET requests. Create the key with read-only scope where the provider offers it, so this connection can read your data but never change it."
+    }
+  ],
+  "params": [
+    {
+      "name": "publication_id",
+      "label": "Publication ID (starts pub_)",
+      "example": "pub_00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  "config": {
+    "client": {
+      "base_url": "https://api.beehiiv.com/v2/",
+      "headers": {
+        "Accept": "application/json"
+      },
+      "auth": {
+        "type": "bearer",
+        "token": "{secret:api_token}"
+      }
+    },
+    "resource_defaults": {
+      "primary_key": "id",
+      "write_disposition": "merge"
+    },
+    "resources": [
+      {
+        "name": "subscriptions",
+        "endpoint": {
+          "path": "publications/{param:publication_id}/subscriptions",
+          "params": {
+            "limit": 100
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "next_cursor",
+            "cursor_param": "cursor"
+          }
+        }
+      },
+      {
+        "name": "posts",
+        "endpoint": {
+          "path": "publications/{param:publication_id}/posts",
+          "params": {
+            "limit": 100
+          },
+          "data_selector": "data",
+          "paginator": {
+            "type": "cursor",
+            "cursor_path": "next_cursor",
+            "cursor_param": "cursor"
+          }
+        }
+      }
+    ]
+  },
+  "verified_against": [
+    "https://developers.beehiiv.com/api-reference/subscriptions/index",
+    "https://developers.beehiiv.com/api-reference/posts/index",
+    "https://developers.beehiiv.com/llms.txt"
+  ],
+  "notes": "Base https://api.beehiiv.com/v2/. Auth is the Authorization Bearer header, described on the endpoint pages. Both list endpoints take a publication id in the path. Paging is cursor based (recommended, and the offset page parameter is marked deprecated): limit is 1 to 100 with a default of 10, the request takes cursor, and the body returns has_more and next_cursor, so next_cursor is sent back as cursor. Both resources are full refresh merged on id: the pages document filters but not an updated-since parameter that was confirmed. Fixture values are illustrative, built from documented field names."
+}
