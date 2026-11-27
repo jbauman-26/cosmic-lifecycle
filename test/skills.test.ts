@@ -83,9 +83,12 @@ describe('skills sync', () => {
 
 describe('status and uninstall', () => {
   it('reports new kits, then removes only what it installed', () => {
-    expect(skillsStatus(reg(), ['claude'])[0]).toMatchObject({ installed: false })
+    expect(skillsStatus(reg(), ['claude'])[0]).toMatchObject({ installed: false, brandExperience: false })
     syncSkills(reg(), { targets: ['claude'] })
-    expect(skillsStatus(reg(), ['claude'])[0]).toMatchObject({ installed: true, newKits: [] })
+    expect(skillsStatus(reg(), ['claude'])[0]).toMatchObject({ installed: true, brandExperience: true, newKits: [] })
+    rmSync(join(dir(), 'skills', 'brand-experience', 'references', 'editing.md'))
+    expect(skillsStatus(reg(), ['claude'])[0]).toMatchObject({ installed: true, brandExperience: false })
+    syncSkills(reg(), { targets: ['claude'] })
     writeFileSync(join(dir(), 'README.md'), 'edited')
     const [u] = uninstallSkills(['claude'])
     expect(u!.kept).toEqual(['README.md'])
